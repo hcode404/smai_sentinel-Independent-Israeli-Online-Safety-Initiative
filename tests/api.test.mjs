@@ -3,11 +3,21 @@ import assert from 'node:assert/strict';
 import {localDatabase} from '../scripts/local-db.mjs';
 import {api,database} from '../server/index.js';
 import {authorizeWrite} from '../server/policy.js';
+import {SignJWT,exportJWK,generateKeyPair} from 'jose';
+const project='smai-support';
+const {publicKey,privateKey}=await generateKeyPair('RS256');
+const jwk={...(await exportJWK(publicKey)),kid:'smai-test',alg:'RS256',use:'sig'};
+const nativeFetch=globalThis.fetch;
+globalThis.fetch=(input,init)=>String(input).includes('securetoken@system.gserviceaccount.com')
+ ? Promise.resolve(Response.json({keys:[jwk]})) : nativeFetch(input,init);
+const tokenFor=user=>new SignJWT({email:user+'@example.test',email_verified:true,name:user,firebase:{sign_in_provider:'password'}})
+ .setProtectedHeader({alg:'RS256',kid:jwk.kid}).setSubject(user).setIssuer(`https://securetoken.google.com/${project}`)
+ .setAudience(project).setIssuedAt().setExpirationTime('10m').sign(privateKey);
 function fixture(){
- const DB=localDatabase(),env={DB,ADMIN_EMAILS:'owner@example.test'};
+ const DB=localDatabase(),env={DB,ADMIN_EMAILS:'owner@example.test',FIREBASE_PROJECT_ID:project};
  const call=async(path,method='GET',body,user='alice',origin='https://sentinel.test')=>{
  const headers={'Content-Type':'application/json',Origin:origin};
- if(user){headers['oai-authenticated-user-id']=user;headers['oai-authenticated-user-email']=user+'@example.test';}
+ if(user)headers.Authorization='Bearer '+await tokenFor(user);
  const r=await api(new Request('https://sentinel.test/api/'+path,{method,headers,...(body?{body:JSON.stringify(body)}:{})}),env);
  return {status:r.status,data:await r.json()};};
  return {DB,env,call,db:database(env)};

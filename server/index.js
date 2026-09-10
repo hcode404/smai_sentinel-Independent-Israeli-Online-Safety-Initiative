@@ -1,4 +1,5 @@
 import {HttpError,requireThat,pick,rank,banned,collections,officialIds,canRead,safeRecord,authorizeWrite} from './policy.js';
+import {createRemoteJWKSet,jwtVerify} from 'jose';
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const nonce=()=>crypto.randomUUID().replaceAll('-','');
@@ -21,22 +22,25 @@ export function database(env){
   const list=async col=>{const r=await env.DB.prepare('SELECT data,id,version FROM records WHERE collection=? ORDER BY created_at DESC LIMIT 10000').bind(col).all();return r.results.map(x=>({...JSON.parse(x.data),id:x.id,_version:x.version}));};
   return {get,put,list,statement};
 }
+const firebaseKeys=createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 async function identity(req,env,db){
-  const id=req.headers.get('oai-authenticated-user-id');
-  if(!id)return null;
-  const email=(req.headers.get('oai-authenticated-user-email')||'').toLowerCase();
-  const owner=(env.ADMIN_EMAILS||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean).includes(email);
+  const token=req.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if(!token)return null;
+  const project=env.FIREBASE_PROJECT_ID||'smai-support';let claims;
+  try{({payload:claims}=await jwtVerify(token,firebaseKeys,{issuer:`https://securetoken.google.com/${project}`,audience:project,algorithms:['RS256']}));}catch{return null;}
+  const id=claims.sub,email=String(claims.email||'').toLowerCase(),verified=claims.email_verified===true;
+  if(!id||!email)return null;
+  const owner=verified&&(env.ADMIN_EMAILS||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean).includes(email);
   let u=await db.get('users',id);
   if(!u){
-    let name=req.headers.get('oai-authenticated-user-full-name')||email.split('@')[0]||'משתמש';
-    if(req.headers.get('oai-authenticated-user-full-name-encoding')==='percent-encoded-utf-8'){try{name=decodeURIComponent(name);}catch{}}
-    u={id,email,name,rank:'citizen',rankLvl:0,createdAt:now(),bio:'',avatar:''};
+    const name=String(claims.name||email.split('@')[0]||'משתמש');
+    u={id,email,name,rank:'citizen',rankLvl:0,createdAt:now(),bio:'',avatar:String(claims.picture||''),emailVerified:verified,authProvider:claims.firebase?.sign_in_provider||'password'};
     // Concurrent first requests share the same identity; only one creates the profile.
     await env.DB.prepare('INSERT OR IGNORE INTO records (collection,id,data,created_at) VALUES (?,?,?,?)').bind('users',id,JSON.stringify(u),u.createdAt).run();
     u=await db.get('users',id);
   }
-  if(owner&&!u.isOwner||!owner&&u.isOwner){
-    const updated={...u,email,rank:owner?'founder':'citizen',rankLvl:owner?70:0,isOwner:owner};
+  if(owner!==!!u.isOwner||u.email!==email||u.emailVerified!==verified){
+    const updated={...u,email,emailVerified:verified,authProvider:claims.firebase?.sign_in_provider||u.authProvider,rank:owner?'founder':u.isOwner?'citizen':u.rank,rankLvl:owner?70:u.isOwner?0:u.rankLvl,isOwner:owner};
     await db.put('users',updated,u);u=await db.get('users',id);
   }
   return {...u,email};

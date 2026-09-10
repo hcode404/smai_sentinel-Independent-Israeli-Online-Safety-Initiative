@@ -1,5 +1,6 @@
 import {remoteStore,request} from './api.js';
 import {initAssistant} from './assistant.js';
+import {authReady,loginEmail,registerEmail,loginGoogle,logoutFirebase,resetFirebasePassword,resendVerification,firebaseUser} from './firebase-auth.js';
 import { renderHome } from './home.js';
 
 /* =====================================================================
@@ -556,7 +557,6 @@ function bind(fn){ const k = 'h'+uid(); REG[k]=fn; return `window.__h('${k}',eve
 window.__h = (k,e,el)=>{ Promise.resolve().then(()=>REG[k]?.(e,el)).catch(err=>toast(err.message,'err')); };
 
 /* ===================== שכבת נתונים ===================== */
-let FB = null;                         // {db, auth, fns...}
 const LS_KEY = 'smai_db_v2';
 const subs = new Set();
 
@@ -564,16 +564,17 @@ const Local = {col(){return [];}};
 const Store=remoteStore;
 async function ensureOwner(u){return u;}
 const Auth={user:null,_cbs:[],onChange(f){this._cbs.push(f);f(this.user);},_emit(){this._cbs.forEach(f=>f(this.user));},
-  async refresh(){this.user=(await request('/api/session')).user;this._emit();},
-  async signIn(){location.href='/signin-with-chatgpt?return_to=/';},
-  async signUp(){return this.signIn();},
-  async signOut(){location.href='/signout-with-chatgpt?return_to=/';},
+  async refresh(){await authReady();this.user=(await request('/api/session')).user;this._emit();},
+  async signIn(){location.hash='#/login';},
+  async signUp(){location.hash='#/login';},
+  async signOut(){await logoutFirebase();this.user=null;this._emit();},
   isStaff(){return isStaffUser(this.user);},can(c){return can(this.user,c);},
   banInfo(){const u=this.user;if(!u?.isBanned||u.banUntil&&Date.parse(u.banUntil)<Date.now())return null;return {until:u.banUntil,reason:u.banReason,note:u.banNote,perm:!u.banUntil};},
   muted(){return Date.parse(this.user?.muteUntil)>Date.now();},
-  async changePassword(){throw new Error('ניהול הסיסמה מתבצע בחשבון ההזדהות שלכם');},
-  async changeEmail(){throw new Error('ניהול האימייל מתבצע בחשבון ההזדהות שלכם');}
+  async changePassword(){if(!firebaseUser()?.email)throw new Error('לא נמצא אימייל בחשבון');await resetFirebasePassword(firebaseUser().email);},
+  async changeEmail(){throw new Error('שינוי אימייל דורש אימות מחדש ויתווסף בהמשך')}
 };
+window.smaiLogout=async()=>{await Auth.signOut();location.hash='#/login';await render();};
 
 /* =====================================================================
    מנוע SMAI AI — ניתוח פניות, ניתוב, דירוג דחיפות ומודרציה.
@@ -1777,8 +1778,6 @@ const Friends = {
       from: me.id, fromName: me.name || me.email, to: other, toName: otherName || '',
       status: 'pending', createdAt: nowISO()
     };
-    if(FB && !FB?.auth?.currentUser){ try{ await new Promise((res,rej)=>{const unsub=FB.auth.onAuthStateChanged(u=>{unsub();res();});setTimeout(res,2000);FB.signInAnonymously(FB.auth).catch(rej);}); }catch(_){} }
-    if(FB && FB.auth.currentUser) await FB.auth.currentUser.getIdToken(true).catch(()=>{});
     const id = await Store.add('friends', rec);
     Sfx.play('pop');
     mailUser(other, 'friend', MAIL_TPL.friendReq(me.name || me.email)).catch(()=>{});
@@ -2460,8 +2459,6 @@ route('/ticket', async (app, id)=>{
     const inp = $('#msgIn'); const txt = inp.value.trim(); if(!txt) return;
     const internal = staff && $('#msgInt')?.checked;
     inp.disabled = true;
-    // ensure Firebase Auth token exists for Firestore rules
-    if(FB && !FB.auth.currentUser){ try{ await new Promise((res,rej)=>{const unsub=FB.auth.onAuthStateChanged(u=>{unsub();res();});setTimeout(res,2000);FB.signInAnonymously(FB.auth).catch(rej);}); }catch(_){} }
     try{
       await Store.add('messages', { ticketId:id, senderId:Auth.user?.id||null,
         senderName: Auth.user?.name || (t.anonymous?'מדווח אנונימי':(t.reporterName||'מדווח')),
@@ -2963,8 +2960,6 @@ function renderTextChannel(s, ch, users, o){
       return;
     }
     inp.value = ''; inp.disabled = true;
-    if(FB && !FB.auth.currentUser){ try{ await new Promise((res,rej)=>{const unsub=FB.auth.onAuthStateChanged(u=>{unsub();res();});setTimeout(res,2000);FB.signInAnonymously(FB.auth).catch(rej);}); }catch(_){} }
-    if(FB && FB.auth.currentUser) await FB.auth.currentUser.getIdToken(true).catch(()=>{});
     const cc = $('#cCount'); if(cc) cc.textContent = `0 / ${CFG.get('chatMaxLen')}`;
     try{
       await Store.add('cmsgs', { server:s.id, channel:ch.id, channelName:ch.name,
@@ -4005,13 +4000,25 @@ route('/join', (app)=>{
 
 /* ===================== מסך התחברות עם גלריית אנימציה ===================== */
 
-route('/login',app=>{app.innerHTML='<div class="card center" style="max-width:520px;margin:48px auto"><span class="eyebrow">SMAI SENTINEL</span><h1>כניסה מאובטחת</h1><p>הפניות וההרשאות משויכות לחשבון האישי שלכם.</p><a class="btn btn-p" href="/signin-with-chatgpt?return_to=/" target="_top">כניסה עם ChatGPT</a><p class="small mute">הגרסה החדשה נפרדת מחשבונות האתר הישן.</p></div>';});
+route('/login',app=>{
+ if(Auth.user){location.hash='#/';return;}
+ app.innerHTML=`<div class="card" style="max-width:540px;margin:48px auto"><div class="center"><span class="eyebrow">SMAI SENTINEL</span><h1>כניסה מאובטחת</h1><p>אפשר להיכנס עם Google או באמצעות מייל וסיסמה.</p></div><button id="googleLogin" class="btn btn-g" style="width:100%;justify-content:center;margin:14px 0 18px">${ic('user',18)} המשך עם Google</button><div class="center small mute" style="margin-bottom:14px">או באמצעות מייל</div><form id="emailAuth" class="stack"><div class="field" id="authNameWrap" hidden><label for="authName">שם תצוגה</label><input id="authName" maxlength="80" autocomplete="name"></div><div class="field"><label for="authEmail">כתובת מייל</label><input id="authEmail" type="email" required autocomplete="email"></div><div class="field"><label for="authPassword">סיסמה</label><input id="authPassword" type="password" required minlength="8" autocomplete="current-password"></div><button class="btn btn-p" type="submit">כניסה</button></form><div class="row" style="justify-content:center;margin-top:15px"><button id="authMode" class="btn btn-link">אין לי חשבון — הרשמה</button><button id="forgotPassword" class="btn btn-link">שכחתי סיסמה</button></div><p id="authStatus" class="small" role="status"></p></div>`;
+ let signup=false;const form=$('#emailAuth'),status=$('#authStatus'),submit=form.querySelector('[type=submit]');
+ const message=e=>({'auth/invalid-credential':'המייל או הסיסמה אינם נכונים','auth/email-already-in-use':'כבר קיים חשבון עם המייל הזה','auth/weak-password':'הסיסמה חלשה מדי','auth/popup-closed-by-user':'חלון Google נסגר לפני השלמת הכניסה','auth/unauthorized-domain':'כתובת האתר עדיין לא אושרה במערכת ההתחברות'}[e?.code]||e?.message||'הפעולה נכשלה');
+ const finish=async()=>{await Auth.refresh();await CFG.load().catch(()=>{});location.hash='#/';await render();};
+ $('#authMode').onclick=()=>{signup=!signup;$('#authNameWrap').hidden=!signup;$('#authName').required=signup;submit.textContent=signup?'יצירת חשבון':'כניסה';$('#authMode').textContent=signup?'יש לי חשבון — כניסה':'אין לי חשבון — הרשמה';$('#authPassword').autocomplete=signup?'new-password':'current-password';status.textContent='';};
+ $('#googleLogin').onclick=async()=>{status.textContent='פותח את Google…';try{await loginGoogle();await finish();}catch(e){status.textContent=message(e);}};
+ form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;status.textContent=signup?'יוצר חשבון…':'מתחבר…';try{if(signup){await registerEmail($('#authEmail').value.trim(),$('#authPassword').value,$('#authName').value.trim());status.textContent='החשבון נוצר ונשלח מייל אימות.';}else await loginEmail($('#authEmail').value.trim(),$('#authPassword').value);await finish();}catch(e){status.textContent=message(e);}finally{submit.disabled=false;}};
+ $('#forgotPassword').onclick=async()=>{const email=$('#authEmail').value.trim();if(!email){status.textContent='הזינו קודם את כתובת המייל.';return;}try{await resetFirebasePassword(email);status.textContent='אם קיים חשבון, נשלח אליו קישור לאיפוס הסיסמה.';}catch(e){status.textContent=message(e);}};
+});
 
 route('/account',async app=>{
  if(!Auth.user){app.innerHTML=requireLogin();return;}
  const u=Auth.user;
- app.innerHTML=`<div class="page-h"><div class="eyebrow">החשבון שלי</div><h1>הפרופיל וההעדפות שלך</h1></div><form id="profileForm" class="card" style="max-width:700px"><div class="row">${avatar(u,'l')}<div><h2>${esc(u.name)}</h2>${rankBadge(u.rank)}</div></div><div class="field"><label for="profileName">שם תצוגה</label><input id="profileName" required maxlength="80" value="${esc(u.name)}"></div><div class="field"><label for="profileBio">כמה מילים עליי</label><textarea id="profileBio" maxlength="500">${esc(u.bio||'')}</textarea></div><p class="small mute">אימייל: ${esc(u.email)}. פרטי הכניסה מנוהלים בחשבון ההזדהות, לא באתר.</p><div class="row"><button class="btn btn-p">שמירת פרופיל</button><a class="btn btn-g" href="/signout-with-chatgpt?return_to=/" target="_top">יציאה מהחשבון</a></div><p id="profileStatus" role="status"></p></form>`;
+ app.innerHTML=`<div class="page-h"><div class="eyebrow">החשבון שלי</div><h1>הפרופיל וההעדפות שלך</h1></div><form id="profileForm" class="card" style="max-width:700px"><div class="row">${avatar(u,'l')}<div><h2>${esc(u.name)}</h2>${rankBadge(u.rank)}</div></div><div class="field"><label for="profileName">שם תצוגה</label><input id="profileName" required maxlength="80" value="${esc(u.name)}"></div><div class="field"><label for="profileBio">כמה מילים עליי</label><textarea id="profileBio" maxlength="500">${esc(u.bio||'')}</textarea></div><p class="small mute">אימייל: ${esc(u.email)} · ${u.emailVerified?'מאומת':'טרם אומת'}</p><div class="row"><button class="btn btn-p">שמירת פרופיל</button>${u.emailVerified?'':`<button id="resendVerify" class="btn btn-g" type="button">שליחת אימות מחדש</button>`}<button id="accountLogout" class="btn btn-g" type="button">יציאה מהחשבון</button></div><p id="profileStatus" role="status"></p></form>`;
  $('#profileForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('button');b.disabled=true;try{await Store.update('users',u.id,{name:$('#profileName').value.trim(),bio:$('#profileBio').value.trim()});await Auth.refresh();$('#profileStatus').textContent='הפרופיל נשמר בשרת';renderNav();}catch(e){$('#profileStatus').textContent=e.message;}finally{b.disabled=false;}};
+ $('#accountLogout').onclick=async()=>{await Auth.signOut();location.hash='#/';await render();};
+ if($('#resendVerify'))$('#resendVerify').onclick=async()=>{await resendVerification();$('#profileStatus').textContent='מייל אימות נוסף נשלח.';};
 });
 
 route('/admin', async (app)=>{
@@ -4631,7 +4638,7 @@ async function render(){
   try{ await fn(app, arg, arg2, arg3); }
   catch(e){
     console.error(e);
-    if((e?.code==='permission-denied'||e?.message?.includes('permission'))&&!Auth.user&&!FB.auth.currentUser){location.hash='#/';return;}
+    if((e?.code==='permission-denied'||e?.message?.includes('permission'))&&!Auth.user&&!firebaseUser()){location.hash='#/login';return;}
     app.innerHTML = `<div class="card center" style="max-width:520px;margin:50px auto">
       <div class="ico-tile i-dang" style="margin:0 auto 14px;width:56px;height:56px">${ic('alert',24)}</div>
       <h2 style="font-size:1.25rem">משהו השתבש בטעינת העמוד</h2>
