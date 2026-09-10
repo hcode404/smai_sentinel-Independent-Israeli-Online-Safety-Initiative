@@ -1,4 +1,9 @@
 import {build as viteBuild} from 'vite';
 import {build} from 'esbuild';
+import {mkdir,rename} from 'node:fs/promises';
 await viteBuild();
+// Sites Worker deployments serve public assets from dist/client.
+await mkdir('dist/client',{recursive:true});
+await rename('dist/index.html','dist/client/index.html');
+await rename('dist/assets','dist/client/assets');
 await build({entryPoints:['server/index.js'],outfile:'dist/server/index.js',bundle:true,format:'esm',platform:'browser',target:'es2022'});
