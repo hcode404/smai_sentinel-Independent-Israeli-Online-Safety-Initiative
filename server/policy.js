@@ -89,7 +89,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     if(isNew){const p={...input};for(const key of ['id','rank','rankLvl','isOwner'])delete p[key];return {...p,userId:id,status:'pending'};}
     requireThat(n>=40);return pick(input,['status','note','reviewNote','reviewedAt']);
   }
-  if(col==='config'){requireThat(n>=60);return pick(input,['serverCreate','welcome','announcement','registrationOpen','maintenance','autoAI','replyHours','chatMaxLen']);}
+  if(col==='config'){requireThat(n>=60);return pick(input,['serverCreate','welcome','announcement','registrationOpen','maintenance','autoAI','replyHours','chatMaxLen','integrationPromptSeenAt']);}
   if(col==='updates'){requireThat(n>=60);return pick(input,['version','name','description','changelog','category','releasedAt']);}
   if(col==='articles'){requireThat(n>=60);return pick(input,['title','sum','body','dept','tags','read']);}
   if(col==='servers'){

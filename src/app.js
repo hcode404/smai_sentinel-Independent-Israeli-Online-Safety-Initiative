@@ -354,8 +354,13 @@ async function submitBanAppeal(){
 
 async function callAI(prompt){return (await request('/api/ai','POST',{prompt})).text;}
 async function smaiAIReply(ticketId){
-  if(!await confirmBox('סיוע AI לפנייה','תיאור הפנייה וההודעות הגלויות האחרונות יישלחו לספק Gemini. אין לשלוח מידע מזהה מיותר.','אישור ושליחה'))return;
-  try{await request('/api/ticket-ai','POST',{ticketId,consent:true});toast('תשובת העוזר נוספה לפנייה');await render();}catch(e){toast(e.message,'warn');}
+  try{
+    const status=await request('/api/status');
+    const gemini=status.aiMode==='gemini';
+    if(gemini&&!await confirmBox('סיוע AI לפנייה','תיאור הפנייה וההודעות הגלויות האחרונות יישלחו לספק Gemini. אין לשלוח מידע מזהה מיותר.','אישור ושליחה'))return;
+    await request('/api/ticket-ai','POST',{ticketId,consent:gemini});
+    toast(gemini?'תשובת Gemini נוספה לפנייה':'הכוונה אוטומטית נוספה לפנייה');await render();
+  }catch(e){toast(e.message,'warn');}
 }
 async function smaiAutoReply(){ /* AI is explicitly requested, never silently sent. */ }
 
@@ -4397,7 +4402,8 @@ function SRV_NAME(id){ const s = (window.__SRV_CACHE||[]).find(x=>x.id===id) || 
 route('/setup',async app=>{
  if(!Auth.can('siteConfig')){app.innerHTML=requireLogin('האזור פתוח למנהל המערכת בלבד');return;}
  const state=await request('/api/status');
- app.innerHTML=`<div class="page-h"><div class="eyebrow">SYSTEM / INTEGRATIONS</div><h1>מרכז המערכת</h1><p>המצב האמיתי של השירותים שמאחורי Sentinel.</p></div><div class="grid g3"><div class="card"><span class="b b-ok">מחובר</span><h2>אחסון נתונים</h2><p>פניות, הודעות והרשאות נשמרים בשרת.</p></div><div class="card"><span class="b ${state.ai?'b-ok':'b-warn'}">${state.ai?'מפתח הוגדר':'ממתין לחיבור'}</span><h2>Gemini AI</h2><p>${state.ai?'אפשר לבדוק שיחה באמצעות העוזר.':'יש להגדיר GEMINI_API_KEY כסוד בשירות האחסון. אין להדביק מפתח בצ׳אט או בקוד.'}</p><a class="btn btn-g" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">ניהול מפתחות ב-Google</a></div><div class="card"><span class="b b-warn">לא מחובר</span><h2>עדכונים במייל</h2><p>לא נשלחים מיילים כרגע. כל התשובות והעדכונים זמינים בתוך האתר.</p></div></div><div class="card" style="margin-top:24px"><h2>העברת המידע הישן</h2><p>זו מערכת נתונים חדשה ונפרדת. מידע וחשבונות Firebase הישנים לא הועברו ולא שונו. נדרש תהליך העברה מאושר לפני החלפת האתר הציבורי.</p><a class="btn btn-g" href="#/admin">חזרה לפאנל הניהול</a></div>`;
+ const gemini=state.aiMode==='gemini';
+ app.innerHTML=`<div class="page-h"><div class="eyebrow">SYSTEM / INTEGRATIONS</div><h1>מרכז המערכת</h1><p>המצב האמיתי של השירותים שמאחורי Sentinel.</p></div><div class="grid g3"><div class="card"><span class="b b-ok">מחובר</span><h2>אחסון נתונים</h2><p>פניות, הודעות והרשאות נשמרים בשרת.</p></div><div class="card"><span class="b ${gemini?'b-ok':'b-warn'}">${gemini?'Gemini מחובר':'מצב בסיסי פעיל'}</span><h2>עוזר בטיחות</h2><p>${gemini?'Gemini פועל דרך השרת והמפתח אינו נחשף בדפדפן.':'העוזר והפניות מקבלים כרגע הכוונה אוטומטית לפי נושא. היא אינה מוצגת כ-AI. לאחר הגדרת מפתח, המערכת תעבור אוטומטית ל-Gemini.'}</p>${gemini?'':`<a class="btn btn-g" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">יצירת מפתח ב-Google AI Studio</a>`}</div><div class="card"><span class="b ${state.mail?'b-ok':'b-warn'}">${state.mail?'מחובר':'ממתין לספק שליחה'}</span><h2>עדכונים במייל</h2><p>כתובת המערכת: <b>${esc(state.mailFrom||'minipro.7548@gmail.com')}</b>. ${state.mail?'שירות השליחה מחובר.':'עדיין לא נשלחים מיילים. סיסמת אפליקציה של Gmail אינה נשמרת באתר; נדרש שירות דואר מאובטח דרך HTTP.'}</p></div></div><div class="card" style="margin-top:24px"><h2>העברת המידע הישן</h2><p>זו מערכת נתונים חדשה ונפרדת. מידע וחשבונות Firebase הישנים לא הועברו ולא שונו. נדרש תהליך העברה מאושר לפני החלפת האתר הציבורי.</p><a class="btn btn-g" href="#/admin">חזרה לפאנל הניהול</a></div>`;
 });
 
 route('/terms', (app)=>{

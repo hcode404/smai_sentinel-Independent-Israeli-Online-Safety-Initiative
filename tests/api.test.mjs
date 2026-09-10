@@ -43,9 +43,16 @@ test('internal notes are hidden from reporter; manager can change status',async(
  assert.equal((await f.call('records/tickets/'+t.data.id,'PATCH',{status:'open'},'owner')).status,200);
  assert.equal((await f.call('records/tickets/'+t.data.id,'PATCH',{status:'closed'})).status,403);f.DB.close();
 });
-test('AI not configured is honest and never saves fake output',async()=>{
- const f=fixture();assert.equal((await f.call('ai','POST',{prompt:'help'})).status,503);
+test('without Gemini the assistant returns clearly marked basic guidance',async()=>{
+ const f=fixture();const result=await f.call('ai','POST',{prompt:'פרצו לי לחשבון'});
+ assert.equal(result.status,200);assert.equal(result.data.mode,'basic');assert.match(result.data.text,/סיסמה|אימות/);
  assert.deepEqual(await f.db.list('messages'),[]);f.DB.close();
+});
+test('basic guidance can be added to a ticket without Gemini consent',async()=>{
+ const f=fixture();const t=await f.call('records/tickets','POST',{...ticket,description:'פרצו לי לחשבון ואני צריך עזרה בהגנה עליו'});
+ const result=await f.call('ticket-ai','POST',{ticketId:t.data.id,consent:false});
+ assert.equal(result.status,200);assert.equal(result.data.aiMode,'basic');assert.equal(result.data.senderName,'הכוונה אוטומטית');
+ assert.equal((await f.db.list('messages')).length,1);f.DB.close();
 });
 test('private server messages do not leak to other accounts',async()=>{
  const f=fixture();await f.call('records/config/site','PATCH',{serverCreate:'all'},'owner');
