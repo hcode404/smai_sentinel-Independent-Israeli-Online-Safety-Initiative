@@ -1,0 +1,70 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {localDatabase} from '../scripts/local-db.mjs';
+import {api,database} from '../server/index.js';
+import {authorizeWrite} from '../server/policy.js';
+function fixture(){
+ const DB=localDatabase(),env={DB,ADMIN_EMAILS:'owner@example.test'};
+ const call=async(path,method='GET',body,user='alice',origin='https://sentinel.test')=>{
+ const headers={'Content-Type':'application/json',Origin:origin};
+ if(user){headers['oai-authenticated-user-id']=user;headers['oai-authenticated-user-email']=user+'@example.test';}
+ const r=await api(new Request('https://sentinel.test/api/'+path,{method,headers,...(body?{body:JSON.stringify(body)}:{})}),env);
+ return {status:r.status,data:await r.json()};};
+ return {DB,env,call,db:database(env)};
+}
+const ticket={title:'דיווח בדיקה',description:'זהו דיווח בדיקה מקומי לצורך בדיקת התוכנה בלבד',dept:'other'};
+test('ticket persists; identity and tracking code are issued by the server',async()=>{
+ const f=fixture();const a=await f.call('records/tickets','POST',{...ticket,reporterId:'bob',status:'closed',code:'fake'});
+ assert.equal(a.status,201);assert.equal(a.data.reporterId,'alice');assert.equal(a.data.status,'new');assert.match(a.data.code,/^SM-[A-F0-9]{32}$/);
+ const saved=await f.call('records/tickets/'+a.data.id);assert.equal(saved.data.description,ticket.description);f.DB.close();
+});
+test('ordinary accounts cannot read another ticket, or enumerate it',async()=>{
+ const f=fixture();const a=await f.call('records/tickets','POST',ticket);
+ assert.equal((await f.call('records/tickets/'+a.data.id,'GET',null,'bob')).status,403);
+ assert.deepEqual((await f.call('records/tickets','GET',null,'bob')).data,[]);
+ assert.equal((await f.call('track','POST',{code:a.data.code},'bob')).status,403);f.DB.close();
+});
+test('anonymous writes and cross-origin writes are rejected',async()=>{
+ const f=fixture();assert.equal((await f.call('records/tickets','POST',ticket,null)).status,401);
+ assert.equal((await f.call('records/tickets','POST',ticket,'alice','https://evil.test')).status,403);f.DB.close();
+});
+test('users cannot grant themselves founder, ban others, or forge AI messages',async()=>{
+ const f=fixture();await f.call('session');
+ assert.equal((await f.call('records/users/alice','PATCH',{rank:'founder',rankLvl:70,isOwner:true})).status,403);
+ assert.equal((await f.call('session')).data.user.rankLvl,0);
+ const t=await f.call('records/tickets','POST',ticket);
+ assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:'forged',ai:true})).status,403);
+ assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:'forged',system:true})).status,403);f.DB.close();
+});
+test('internal notes are hidden from reporter; manager can change status',async()=>{
+ const f=fixture();const t=await f.call('records/tickets','POST',ticket);
+ assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:'private note',internal:true},'owner')).status,201);
+ assert.deepEqual((await f.call('records/messages')).data,[]);
+ assert.equal((await f.call('records/tickets/'+t.data.id,'PATCH',{status:'open'},'owner')).status,200);
+ assert.equal((await f.call('records/tickets/'+t.data.id,'PATCH',{status:'closed'})).status,403);f.DB.close();
+});
+test('AI not configured is honest and never saves fake output',async()=>{
+ const f=fixture();assert.equal((await f.call('ai','POST',{prompt:'help'})).status,503);
+ assert.deepEqual(await f.db.list('messages'),[]);f.DB.close();
+});
+test('private server messages do not leak to other accounts',async()=>{
+ const f=fixture();await f.call('records/config/site','PATCH',{serverCreate:'all'},'owner');
+ const server=await f.call('records/servers','POST',{name:'private',private:true});
+ const channel=await f.call('records/channels','POST',{server:server.data.id,name:'room',kind:'chat'});
+ const message=await f.call('records/cmsgs','POST',{server:server.data.id,channel:channel.data.id,text:'secret'});
+ assert.equal(message.status,201);assert.deepEqual((await f.call('records/cmsgs','GET',null,'bob')).data,[]);
+ assert.equal((await f.call('records/servers/'+server.data.id,'PATCH',{members:['alice','bob']},'bob')).status,403);f.DB.close();
+});
+test('forged sender IDs are replaced and empty text rejected',async()=>{
+ const f=fixture();const t=await f.call('records/tickets','POST',ticket);
+ const m=await f.call('records/messages','POST',{ticketId:t.data.id,text:'hello',senderId:'owner',senderRank:'founder'});
+ assert.equal(m.data.senderId,'alice');assert.equal(m.data.senderRank,'citizen');
+ assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:''})).status,400);f.DB.close();
+});
+test('owner allowlist is empty by default',async()=>{
+ const f=fixture();f.env.ADMIN_EMAILS='';assert.equal((await f.call('session','GET',null,'owner')).data.user.rankLvl,0);f.DB.close();
+});
+test('production Worker does not contain dev identity override',async()=>{
+ const {readFileSync}=await import('node:fs');const source=readFileSync(new URL('../server/index.js',import.meta.url),'utf8');
+ assert.equal(source.includes('local_seedy'),false);assert.equal(source.includes('seedy@sites.test'),false);
+});
