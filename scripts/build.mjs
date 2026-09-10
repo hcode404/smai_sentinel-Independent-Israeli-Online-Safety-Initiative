@@ -6,4 +6,4 @@ await viteBuild();
 await mkdir('dist/client',{recursive:true});
 await rename('dist/index.html','dist/client/index.html');
 await rename('dist/assets','dist/client/assets');
-await build({entryPoints:['server/index.js'],outfile:'dist/server/index.js',bundle:true,format:'esm',platform:'browser',target:'es2022'});
+await build({entryPoints:['server/worker.js'],outfile:'dist/server/index.js',bundle:true,format:'esm',platform:'browser',target:'es2022',loader:{'.html':'text'}});
