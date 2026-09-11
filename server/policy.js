@@ -6,13 +6,13 @@ export const publicUser=u=>pick(u,['id','name','avatar','bio','rank','rankLvl','
 export const banned=u=>!!(u?.isBanned&&(!u.banUntil||Date.parse(u.banUntil)>Date.now()));
 export const muted=u=>Date.parse(u?.muteUntil)>Date.now();
 export const ranks={citizen:0,trainee:10,agent:20,senior:30,lead:40,head:50,admin:60,founder:70};
-export const collections=new Set('users tickets messages reports applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends dms dmsgs config updates articles'.split(' '));
+export const collections=new Set('users tickets messages reports applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends dms dmsgs config updates articles campaigns'.split(' '));
 export const officialIds=new Set(['s-welcome','s-help','s-parents','s-teens','s-gaming','s-security']);
 export async function canRead(col,r,u,get){
   if(!r)return false;
   const n=rank(u),id=u?.id;
   if(col==='users')return u?.id===r.id||n>=50||r.privacy?.profileVis!=='private';
-  if(col==='config'||col==='updates'||col==='articles')return true;
+  if(col==='config'||col==='updates'||col==='articles'||col==='campaigns')return true;
   if(col==='tickets')return n>=10||!!id&&r.reporterId===id;
   if(col==='messages')return (!r.internal||n>=20)&&await canRead('tickets',await get('tickets',r.ticketId),u,get);
   if(['applications','verifyApps','trustedApps','partnerApps','appeals'].includes(col))return n>=40||!!id&&r.userId===id;
@@ -93,6 +93,14 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
   if(col==='config'){requireThat(n>=60);return pick(input,['serverCreate','welcome','announcement','registrationOpen','maintenance','autoAI','replyHours','chatMaxLen','integrationPromptSeenAt']);}
   if(col==='updates'){requireThat(n>=60);return pick(input,['version','name','description','changelog','category','releasedAt']);}
   if(col==='articles'){requireThat(n>=60);return pick(input,['title','sum','body','dept','tags','read']);}
+  if(col==='campaigns'){
+    requireThat(n>=70,403,'ניהול קמפיינים זמין למייסד בלבד');
+    const p=pick(input,['title','body','mediaType','mediaUrl','linkUrl','audience','placement','startAt','endAt','seconds','active','frequency']);
+    requireThat(['image','video'].includes(p.mediaType),400,'סוג המדיה אינו תקין');
+    requireThat(/^https:\/\//.test(p.mediaUrl||''),400,'נדרשת כתובת HTTPS לתמונה או לסרטון');
+    requireThat(['all','members','staff'].includes(p.audience),400,'קהל היעד אינו תקין');
+    return p;
+  }
   if(col==='servers'){
     if(isNew){
       requireThat(!input.official);const cfg=await get('config','site'),mode=cfg?.serverCreate||'staff';

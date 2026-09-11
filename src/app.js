@@ -2083,24 +2083,10 @@ route('/report', (app)=>{
       saved.unshift({ code, id:t.id, title, at:nowISO() });
       localStorage.setItem('smai_codes', JSON.stringify(saved.slice(0,40)));
 
-      openModal(`
-        <div class="m-h"><span class="ico-tile i-ok">${ic('check',22)}</span><h3>הדיווח התקבל</h3></div>
-        <div class="m-b">
-          <p>הפנייה נותבה אוטומטית למחלקת <b>${esc(DEPT_BY[dept]?.name||'כללי')}</b>
-            ${critical?'וסומנה על ידי המערכת כ<b style="color:var(--danger)">קריטית</b> — במצב סכנה מיידית יש להתקשר ל-100.'
-              : `— היא נשמרה בהצלחה בתור הפניות לצוות. אין זמן תגובה מובטח.`}</p>
-          <div class="card pad-sm center" style="background:var(--surface2)">
-            <div class="tiny mute">קוד המעקב שלכם</div>
-            <div class="mono" style="font-size:1.55rem;font-weight:900;letter-spacing:.06em;margin:5px 0">${code}</div>
-            <button class="btn btn-g btn-sm" onclick="copyText('${code}')">${ic('copy',14)} העתקה</button>
-          </div>
-          <p class="small mute" style="margin:14px 0 0">שמרו את הקוד. הוא מאפשר לעקוב אחרי הפנייה
-            ולשוחח עם הנציג מהחשבון שלכם, דרך עמוד "מעקב פנייה".</p>
-        </div>
-        <div class="m-f">
-          <a class="btn btn-p btn-block" href="#/ticket/${t.id}" onclick="closeModal()">פתיחת הפנייה והצ׳אט ${ic('chevron',15)}</a>
-        </div>`);
       sessionStorage.removeItem('smai_report_draft');
+      toast(`הפנייה ${code} נפתחה והועברה ל${DEPT_BY[dept]?.name||'צוות המתאים'}`);
+      location.hash = `#/ticket/${t.id}`;
+      await render();
     }catch(err){
       console.error(err);
       $('#rfErr').innerHTML = `<div class="err">שגיאה בשליחה: ${esc(err.message||'נסו שוב')}</div>`;
@@ -4023,7 +4009,16 @@ route('/join', (app)=>{
 
 route('/login',app=>{
  if(Auth.user){location.hash='#/';return;}
- app.innerHTML=`<div class="card" style="max-width:540px;margin:48px auto"><div class="center"><span class="eyebrow">SMAI SENTINEL</span><h1>כניסה מאובטחת</h1><p>אפשר להיכנס עם Google או באמצעות מייל וסיסמה.</p></div><button id="googleLogin" class="btn btn-g" style="width:100%;justify-content:center;margin:14px 0 18px">${ic('user',18)} המשך עם Google</button><div class="center small mute" style="margin-bottom:14px">או באמצעות מייל</div><form id="emailAuth" class="stack"><div class="field" id="authNameWrap" hidden><label for="authName">שם תצוגה</label><input id="authName" maxlength="80" autocomplete="name"></div><div class="field"><label for="authEmail">כתובת מייל</label><input id="authEmail" type="email" required autocomplete="email"></div><div class="field"><label for="authPassword">סיסמה</label><input id="authPassword" type="password" required minlength="8" autocomplete="current-password"></div><button class="btn btn-p" type="submit">כניסה</button></form><div class="row" style="justify-content:center;margin-top:15px"><button id="authMode" class="btn btn-link">אין לי חשבון — הרשמה</button><button id="forgotPassword" class="btn btn-link">שכחתי סיסמה</button></div><p id="authStatus" class="small" role="status"></p></div>`;
+ const scenes=[
+  ['/assets/auth/always-behind-you.png','מעטפת הגנה דיגיטלית','shield','אנחנו תמיד מאחוריך','מהרגע הראשון ועד שהעניין נסגר — החשבון והפניות נשארים במקום אחד.'],
+  ['/assets/auth/response-247.png','שעון תגובה מהיר','clock','זמינים עבורך 24/7','המערכת קולטת ומנתבת פניות בכל שעה לצוות המתאים.'],
+  ['/assets/auth/safe-space.png','מרחב דיגיטלי מוגן','lock','מרחב בטוח לנשום בו','המידע שלך מוגן, והשיחה נשארת זמינה רק לך ולצוות המטפל.']
+ ];
+ app.innerHTML=`<section class="auth-stage anim-up"><aside class="auth-visual" aria-label="${scenes[0][1]}">${scenes.map((s,i)=>`<div class="auth-scene ${i?'':'on'}" style="background-image:url('${s[0]}')" role="img" aria-label="${s[1]}"></div>`).join('')}<div class="auth-visual-copy"><span class="auth-live"><i></i> מערכת ההגנה פעילה</span><div class="auth-feature"><span id="authFeatureIcon" class="auth-feature-icon">${ic(scenes[0][2],27)}</span><h2 id="authFeatureTitle">${scenes[0][3]}</h2><p id="authFeatureText">${scenes[0][4]}</p></div><div class="auth-dots">${scenes.map((_,i)=>`<button class="${i?'':'on'}" data-scene="${i}" aria-label="שקופית ${i+1}"></button>`).join('')}</div></div></aside><div class="auth-panel"><div class="auth-brand"><span class="eyebrow">SMAI SENTINEL</span><h1>טוב שחזרת</h1><p>כניסה מאובטחת לחשבון ולפניות שלך.</p></div><button id="googleLogin" class="btn btn-g auth-google">${ic('user',18)} המשך עם Google</button><div class="auth-divider"><span>או באמצעות מייל</span></div><form id="emailAuth" class="stack"><div class="field" id="authNameWrap" hidden><label for="authName">שם תצוגה</label><input id="authName" maxlength="80" autocomplete="name" placeholder="איך לפנות אליך?"></div><div class="field"><label for="authEmail">כתובת מייל</label><input id="authEmail" type="email" required autocomplete="email" placeholder="name@example.com"></div><div class="field"><label for="authPassword">סיסמה</label><input id="authPassword" type="password" required minlength="8" autocomplete="current-password" placeholder="לפחות 8 תווים"></div><button class="btn btn-p auth-submit" type="submit">כניסה מאובטחת ${ic('chevron',17)}</button></form><div class="auth-actions"><button id="authMode" class="btn btn-link">אין לי חשבון — הרשמה</button><button id="forgotPassword" class="btn btn-link">שכחתי סיסמה</button></div><p id="authStatus" class="auth-status small" role="status"></p><p class="auth-trust">${ic('shield',14)} פרטי ההתחברות מוצפנים ומנוהלים בשירות אימות מאובטח</p></div></section>`;
+ let scene=0,sceneTimer;
+ const showScene=i=>{scene=i;$$('.auth-scene').forEach((x,n)=>x.classList.toggle('on',n===i));$$('[data-scene]').forEach((x,n)=>x.classList.toggle('on',n===i));$('.auth-visual')?.setAttribute('aria-label',scenes[i][1]);const f=$('.auth-feature');if(f){f.classList.remove('swap');void f.offsetWidth;$('#authFeatureIcon').innerHTML=ic(scenes[i][2],27);$('#authFeatureTitle').textContent=scenes[i][3];$('#authFeatureText').textContent=scenes[i][4];f.classList.add('swap');}};
+ $$('[data-scene]').forEach(b=>b.onclick=()=>showScene(Number(b.dataset.scene)));
+ if(!matchMedia('(prefers-reduced-motion: reduce)').matches)sceneTimer=setInterval(()=>{if(!$('.auth-stage'))return clearInterval(sceneTimer);showScene((scene+1)%scenes.length);},3000);
  let signup=false;const form=$('#emailAuth'),status=$('#authStatus'),submit=form.querySelector('[type=submit]');
  const message=e=>({'auth/invalid-credential':'המייל או הסיסמה אינם נכונים','auth/user-not-found':'לא נמצא חשבון עם כתובת המייל הזו','auth/email-already-in-use':'כבר קיים חשבון עם המייל הזה','auth/weak-password':'הסיסמה חלשה מדי','auth/too-many-requests':'בוצעו יותר מדי ניסיונות. המתינו מעט ונסו שוב','auth/network-request-failed':'אין כרגע חיבור לשירות ההתחברות','auth/popup-closed-by-user':'חלון Google נסגר לפני השלמת הכניסה','auth/unauthorized-domain':'כתובת האתר עדיין לא אושרה במערכת ההתחברות'}[e?.code]||e?.message||'הפעולה נכשלה');
  const finish=async()=>{await Auth.refresh();await CFG.load().catch(()=>{});location.hash='#/';await render();};
@@ -4061,6 +4056,7 @@ route('/admin', async (app)=>{
     { k:'verify', l:'תגי אימות', ic:'check', cap:'reviewApps' },
     { k:'users', l:'משתמשים ודרגות', ic:'shield', cap:'manageUsers' },
     { k:'system', l:'מערכת ומיילים', ic:'settings', cap:'siteConfig' },
+    ...(Auth.user?.rank==='founder'?[{ k:'campaigns', l:'קמפיינים', ic:'sparkle', cap:'siteConfig' }]:[]),
     { k:'backup', l:'גיבוי ונתונים', ic:'file', cap:'siteConfig' },
   ].filter(t=>Auth.can(t.cap));
 
@@ -4085,13 +4081,14 @@ route('/admin', async (app)=>{
     ].map(s=>`<div class="stat"><div class="row between" style="margin-bottom:7px"><span class="ico-tile i-${s[3]}">${ic(s[0],18)}</span></div><div class="n">${s[2]}</div><div class="l">${s[1]}</div></div>`).join('');
   };
 
-  let tickets=[], reports=[], apps=[], users=[], appeals=[], modlog=[], vapps=[], maillog=[];
+  let tickets=[], reports=[], apps=[], users=[], appeals=[], modlog=[], vapps=[], maillog=[], campaigns=[];
   async function loadAll(){
     if(!Auth.user || !Auth.can('viewPanel')) return;
-    [tickets, reports, apps, users, appeals, modlog, vapps, maillog] = await Promise.all([
+    [tickets, reports, apps, users, appeals, modlog, vapps, maillog, campaigns] = await Promise.all([
       Store.list('tickets'), Store.list('reports'), Store.list('applications'),
       Store.list('users'), Store.list('appeals'), Store.list('modlog'),
-      Store.list('verifyApps').catch(()=>[]), Store.list('mail').catch(()=>[])
+      Store.list('verifyApps').catch(()=>[]), Store.list('mail').catch(()=>[]),
+      Auth.user?.rank==='founder'?Store.list('campaigns').catch(()=>[]):Promise.resolve([])
     ]);
     paintStats(tickets, reports, apps);
   }
@@ -4364,6 +4361,11 @@ route('/admin', async (app)=>{
 
   function tBackup(){return '<div class="card"><h2>ייצוא נתוני המערכת</h2><p>קובץ הגיבוי מכיל מידע רגיש. שמרו אותו במקום מאובטח ואל תשתפו אותו בציבור.</p><button id="bkDl" class="btn btn-p">הורדת גיבוי</button><p class="small mute">ייבוא מהמערכת הקודמת יבוצע רק לאחר התאמת חשבונות והרשאות. אין כרגע ייבוא אוטומטי.</p></div>';}
   function tSystem(){return '<div class="card"><div class="eyebrow">חיבורי מערכת</div><h2>מצב השירותים</h2><p>מצב החיבור נבדק מול השרת. מפתחות אינם נשמרים בדפדפן.</p><a href="#/setup" class="btn btn-p">פתיחת מרכז המערכת</a></div>';}
+  function tCampaigns(){
+    if(Auth.user?.rank!=='founder')return '<div class="err">ניהול קמפיינים זמין למייסד בלבד.</div>';
+    const audience={all:'כולם',members:'משתמשים מחוברים',staff:'צוות בלבד'};
+    return `<div class="grid g2"><form id="campaignForm" class="card stack"><div><span class="eyebrow">FOUNDER ONLY</span><h2>קמפיין חדש</h2><p class="small mute">תמונה או סרטון מאוחסנים בכתובת HTTPS מאובטחת. אפשר לקבוע קהל, תזמון ומשך הופעה.</p></div><div class="field"><label>כותרת</label><input id="campaignTitle" required maxlength="90"></div><div class="field"><label>תיאור קצר</label><textarea id="campaignBody" maxlength="220"></textarea></div><div class="grid g2"><div class="field"><label>סוג</label><select id="campaignType"><option value="image">תמונה</option><option value="video">סרטון</option></select></div><div class="field"><label>קהל יעד</label><select id="campaignAudience"><option value="all">כולם</option><option value="members">משתמשים מחוברים</option><option value="staff">צוות בלבד</option></select></div></div><div class="field"><label>כתובת המדיה (HTTPS)</label><input id="campaignMedia" type="url" required placeholder="https://..."></div><div class="field"><label>קישור בלחיצה (רשות)</label><input id="campaignLink" type="url" placeholder="https://..."></div><div class="grid g2"><div class="field"><label>מתאריך</label><input id="campaignStart" type="datetime-local"></div><div class="field"><label>עד תאריך</label><input id="campaignEnd" type="datetime-local"></div></div><div class="grid g2"><div class="field"><label>משך בכל הופעה</label><select id="campaignSeconds"><option value="5">5 שניות</option><option value="10" selected>10 שניות</option><option value="20">20 שניות</option><option value="0">עד סגירה</option></select></div><div class="field"><label>תדירות</label><select id="campaignFrequency"><option value="session">פעם בביקור</option><option value="daily">פעם ביום</option><option value="always">בכל כניסה</option></select></div></div><label class="check"><input id="campaignActive" type="checkbox" checked><span><span class="t">הקמפיין פעיל</span><span class="d">יוצג רק בתוך טווח התאריכים שנבחר.</span></span></label><button class="btn btn-p">פרסום הקמפיין</button></form><div class="stack"><div class="page-h"><h2>קמפיינים קיימים</h2><p>${campaigns.length} קמפיינים</p></div>${campaigns.length?campaigns.map(c=>`<article class="card"><div class="row between"><div><span class="b ${c.active?'b-ok':'b-warn'}">${c.active?'פעיל':'מושהה'}</span> <span class="b">${audience[c.audience]||c.audience}</span><h3>${esc(c.title)}</h3></div><button class="btn btn-g btn-sm" data-campaign-toggle="${c.id}" data-active="${c.active?'1':'0'}">${c.active?'השהיה':'הפעלה'}</button></div><p class="small mute">${esc(c.body||'')} · ${c.seconds||0} שניות · ${esc(c.frequency||'session')}</p></article>`).join(''):'<div class="card center mute">עדיין אין קמפיינים</div>'}</div></div>`;
+  }
 
   function tUsers(){
     const rows = users.slice().sort((a,b)=>lvl(b)-lvl(a));
@@ -4397,7 +4399,11 @@ route('/admin', async (app)=>{
     const body = $('#admBody');if(!body)return;
     body.innerHTML = tab==='queue' ? tQueue() : tab==='depts' ? tDepts() : tab==='mod' ? tMod()
       : tab==='appeals' ? tAppeals() : tab==='apps' ? tApps() : tab==='verify' ? tVerify()
-      : tab==='system' ? tSystem() : tab==='backup' ? tBackup() : tUsers();
+      : tab==='system' ? tSystem() : tab==='campaigns' ? tCampaigns() : tab==='backup' ? tBackup() : tUsers();
+    if(tab==='campaigns'){
+      $('#campaignForm').onsubmit=async e=>{e.preventDefault();const val=id=>$('#'+id).value;await Store.add('campaigns',{title:val('campaignTitle').trim(),body:val('campaignBody').trim(),mediaType:val('campaignType'),mediaUrl:val('campaignMedia').trim(),linkUrl:val('campaignLink').trim(),audience:val('campaignAudience'),placement:'site',startAt:val('campaignStart')?new Date(val('campaignStart')).toISOString():'',endAt:val('campaignEnd')?new Date(val('campaignEnd')).toISOString():'',seconds:Number(val('campaignSeconds')),frequency:val('campaignFrequency'),active:$('#campaignActive').checked});toast('הקמפיין פורסם');await loadAll();paint();};
+      $$('[data-campaign-toggle]').forEach(b=>b.onclick=async()=>{await Store.update('campaigns',b.dataset.campaignToggle,{active:b.dataset.active!=='1'});await loadAll();paint();});
+    }
     if(tab==='queue'){
       const qi = $('#admQ');
       qi.oninput = debounce(()=>{ q = qi.value.trim(); const p = qi.selectionStart; paint(); const n=$('#admQ'); if(n){ n.focus(); n.setSelectionRange(p,p); } }, 260);
@@ -4635,6 +4641,20 @@ route('/404', (app)=>{
 
 /* ===================== ראוטר ===================== */
 let RENDERING = false; let _renderPending = false;
+async function renderCampaign(app,path){
+  if(['/login','/admin','/setup'].includes(path))return;
+  try{
+    const at=Date.now(),rows=await Store.list('campaigns');
+    const eligible=rows.filter(c=>c.active&&(!c.startAt||Date.parse(c.startAt)<=at)&&(!c.endAt||Date.parse(c.endAt)>=at)&&(c.audience==='all'||c.audience==='members'&&Auth.user||c.audience==='staff'&&lvl(Auth.user)>=10));
+    const c=eligible.find(x=>{const key='smai_campaign_'+x.id;return x.frequency==='always'||!localStorage.getItem(key)||(x.frequency==='daily'&&at-Number(localStorage.getItem(key))>86400000);});
+    if(!c)return;
+    localStorage.setItem('smai_campaign_'+c.id,String(at));
+    const media=c.mediaType==='video'?`<video class="campaign-media" src="${esc(c.mediaUrl)}" autoplay muted loop playsinline></video>`:`<img class="campaign-media" src="${esc(c.mediaUrl)}" alt="">`;
+    app.insertAdjacentHTML('afterbegin',`<aside id="siteCampaign" class="site-campaign anim-up"><div class="campaign-copy"><span class="eyebrow">עדכון מ־SMAI SENTINEL</span><h2>${esc(c.title)}</h2><p>${esc(c.body||'')}</p>${c.linkUrl?`<a class="btn btn-p btn-sm" href="${esc(c.linkUrl)}" target="_blank" rel="noopener">למידע נוסף</a>`:''}</div>${media}<button class="campaign-close" aria-label="סגירת הפרסומת">×</button></aside>`);
+    $('.campaign-close').onclick=()=>$('#siteCampaign')?.remove();
+    if(Number(c.seconds)>0)setTimeout(()=>$('#siteCampaign')?.remove(),Number(c.seconds)*1000);
+  }catch{}
+}
 async function render(){
   if(RENDERING){ _renderPending = true; return; } RENDERING = true; _renderPending = false;
   runCleanup();
@@ -4658,7 +4678,7 @@ async function render(){
 
   const fn = ROUTES[path] || ROUTES['/404'];
   app.innerHTML = loader();
-  try{ await fn(app, arg, arg2, arg3); }
+  try{ await fn(app, arg, arg2, arg3); await renderCampaign(app,path); }
   catch(e){
     console.error(e);
     if((e?.code==='permission-denied'||e?.message?.includes('permission'))&&!Auth.user&&!firebaseUser()){location.hash='#/login';return;}

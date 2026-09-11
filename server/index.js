@@ -95,6 +95,10 @@ export async function api(req,env,ctx={waitUntil(){}}){
     const db=database(env),u=await identity(req,env,db);
     if(path==='/api/session')return json({user:u?safeRecord('users',u,u):null});
     if(path==='/api/status')return json({database:true,ai:true,aiMode:env.GEMINI_API_KEY?'gemini':'basic',mail:!!env.RESEND_API_KEY,mailFrom:rank(u)>=60?(env.MAIL_FROM||null):undefined,migration:'new-database',version:'2.0',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
+    if(path==='/api/records/campaigns'&&req.method==='GET'&&!u){
+      const rows=(await db.list('campaigns')).map(r=>safeRecord('campaigns',r,null));
+      return json(rows);
+    }
     if(path==='/api/ai'&&req.method==='POST'){
       const raw=await req.text();requireThat(raw.length<=60000,413,'הבקשה גדולה מדי');let body;
       try{body=JSON.parse(raw);}catch{throw new HttpError(400,'בקשה לא תקינה');}
