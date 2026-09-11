@@ -739,7 +739,7 @@ function moderate(text){
 const Mail={cfg(){return {provider:'none'};},ready(){return false;},wants(){return false;},async send(){return {ok:false,why:'שירות המייל לא מחובר; ניתן לעקוב באתר'};},save(){throw new Error('הגדרות שירות נשמרות בשרת בלבד');}};
 
 /* תבניות מייל — טקסט נקי, קריא בכל לקוח דואר */
-const MAIL_TPL = {
+const MAIL_TPL_RAW = {
   threadReply: (who, title, txt)=>({ subject:'תגובה חדשה בשרשור שלך',
     body:`<p><b>${esc(who)}</b> הגיב/ה בשרשור «${esc(title)}»:</p>
           <blockquote style="border-inline-start:3px solid #4f46e5;padding-inline-start:12px;color:#444">${esc(txt)}</blockquote>` }),
@@ -941,6 +941,17 @@ body{font-family:Arial,sans-serif;background:#0a0a1a;margin:0;padding:0}
 </div></body></html>`
   })
 };
+
+function emailShell(title,content){
+  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(title)}</title></head>
+  <body style="margin:0;background:#07111f;font-family:Arial,sans-serif;color:#e8f3ff"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#07111f;padding:28px 12px"><tr><td align="center">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#0d1b2d;border:1px solid #1e4666;border-radius:20px;overflow:hidden"><tr><td style="padding:28px;background:linear-gradient(135deg,#075985,#0e7490)"><div style="font-size:12px;letter-spacing:2px;color:#a5f3fc">SMAI SENTINEL</div><h1 style="margin:8px 0 0;font-size:25px;color:#fff">${esc(title)}</h1></td></tr>
+  <tr><td style="padding:30px;font-size:16px;line-height:1.75;color:#cfe3f5">${content}<p style="margin:28px 0 0"><a href="https://smai-sentinel.smai-sentinel.chatgpt.site/" style="display:inline-block;background:#22d3ee;color:#05202b;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px">מעבר ל‑SMAI Sentinel</a></p></td></tr>
+  <tr><td style="padding:18px 30px;border-top:1px solid #19344d;color:#7894aa;font-size:12px">הודעה אוטומטית ומאובטחת. צוות SMAI לעולם לא יבקש סיסמה או קוד אימות.</td></tr></table></td></tr></table></body></html>`;
+}
+const MAIL_TPL=Object.fromEntries(Object.entries(MAIL_TPL_RAW).map(([key,make])=>[key,(...args)=>{const out=make(...args);return {...out,body:/^\s*<!doctype html/i.test(out.body)?out.body:emailShell(out.subject,out.body)};} ]));
+async function mailUser(){return Mail.send();}
+async function notifyTicket(){return Mail.send();}
 
 
 /* ---------- ציר השלבים של הסוכן ---------- */
@@ -2065,7 +2076,7 @@ route('/report', (app)=>{
       code=t.code;
       /* Initial description is part of the ticket, already saved atomically. */
 
-      const saved = [];
+      const saved = JSON.parse(localStorage.getItem('smai_codes')||'[]').filter(x=>x.id!==t.id);
       saved.unshift({ code, id:t.id, title, at:nowISO() });
       localStorage.setItem('smai_codes', JSON.stringify(saved.slice(0,40)));
 
@@ -2083,8 +2094,9 @@ route('/report', (app)=>{
           <p class="small mute" style="margin:14px 0 0">שמרו את הקוד. הוא מאפשר לעקוב אחרי הפנייה
             ולשוחח עם הנציג מהחשבון שלכם, דרך עמוד "מעקב פנייה".</p>
         </div>
-        <div class="m-f"><button class="btn btn-g" onclick="closeModal()">סגירה</button>
-          <a class="btn btn-p" href="#/ticket/${t.id}" onclick="closeModal()">מעבר לפנייה ${ic('chevron',15)}</a></div>`);
+        <div class="m-f">
+          <a class="btn btn-p btn-block" href="#/ticket/${t.id}" onclick="closeModal()">פתיחת הפנייה והצ׳אט ${ic('chevron',15)}</a>
+        </div>`);
       sessionStorage.removeItem('smai_report_draft');
     }catch(err){
       console.error(err);
@@ -2360,14 +2372,16 @@ route('/ticket', async (app, id)=>{
           <div class="tiny mute">${staff?'הודעות פנימיות מסומנות ולא נראות למדווח':'הצוות יראה את ההודעות שלכם כאן'}</div></div></div>
         <button class="btn btn-g" onclick="${bind(()=>smaiAIReply(id))}">${ic('sparkle',16)} בקשת עזרה מ-AI</button><div class="chat" id="chat">${loader()}</div>
         ${(t.status==='closed'||t.status==='resolved')
-          ? `<div class="card" style="background:var(--bg2);color:var(--muted);text-align:center;padding:12px 16px;margin-top:12px;border-radius:8px">🔒 הפנייה נסגרה${t.closedBy?' על ידי <strong>'+esc(t.closedBy)+'</strong>':''}${t.closedAt?' · '+fmtDate(t.closedAt):''}</div>`
-          : `<div class="composer" style="position:relative">
+          ? `<div class="callout c-info" style="margin-top:12px"><span class="ic">${ic('message',17)}</span><div>הפנייה נסגרה${t.closedBy?' על ידי <strong>'+esc(t.closedBy)+'</strong>':''}. כתיבת הודעה חדשה תפתח אותה מחדש ותעדכן את הצוות.</div></div>`
+          : ''}
+        ${(!staff||!['closed','resolved'].includes(t.status))?`<div class="composer" style="position:relative">
           <div id="mentionList" class="mention-list"></div>
           <textarea id="msgIn" placeholder="כתיבת הודעה... (Enter לשליחה)"></textarea>
           <button class="btn btn-p" id="msgBtn" style="height:48px">${ic('send',17)}</button>
         </div>
         ${staff?`<label class="check" style="margin-top:10px"><input type="checkbox" id="msgInt">
-          <span><span class="t">הערה פנימית</span><span class="d">נראית לצוות בלבד — לא למדווח.</span></span></label>`:''}` }      </div>
+          <span><span class="t">הערה פנימית</span><span class="d">נראית לצוות בלבד — לא למדווח.</span></span></label>`:''}`:''}
+      </div>
     </div>
 
     <aside class="stack anim-up d2">
@@ -2460,6 +2474,10 @@ route('/ticket', async (app, id)=>{
     const internal = staff && $('#msgInt')?.checked;
     inp.disabled = true;
     try{
+      if(!staff&&['closed','resolved'].includes(t.status)){
+        await Store.update('tickets',id,{status:'open'});
+        t.status='open';
+      }
       await Store.add('messages', { ticketId:id, senderId:Auth.user?.id||null,
         senderName: Auth.user?.name || (t.anonymous?'מדווח אנונימי':(t.reporterName||'מדווח')),
         senderRank: Auth.user?.rank || 'citizen', verified: Auth.user?.verified||false, staffSide: staff, text:txt, internal:!!internal, createdAt:nowISO(), ...(window._replyTo?{replyTo:window._replyTo}:{}) });
@@ -4004,12 +4022,12 @@ route('/login',app=>{
  if(Auth.user){location.hash='#/';return;}
  app.innerHTML=`<div class="card" style="max-width:540px;margin:48px auto"><div class="center"><span class="eyebrow">SMAI SENTINEL</span><h1>כניסה מאובטחת</h1><p>אפשר להיכנס עם Google או באמצעות מייל וסיסמה.</p></div><button id="googleLogin" class="btn btn-g" style="width:100%;justify-content:center;margin:14px 0 18px">${ic('user',18)} המשך עם Google</button><div class="center small mute" style="margin-bottom:14px">או באמצעות מייל</div><form id="emailAuth" class="stack"><div class="field" id="authNameWrap" hidden><label for="authName">שם תצוגה</label><input id="authName" maxlength="80" autocomplete="name"></div><div class="field"><label for="authEmail">כתובת מייל</label><input id="authEmail" type="email" required autocomplete="email"></div><div class="field"><label for="authPassword">סיסמה</label><input id="authPassword" type="password" required minlength="8" autocomplete="current-password"></div><button class="btn btn-p" type="submit">כניסה</button></form><div class="row" style="justify-content:center;margin-top:15px"><button id="authMode" class="btn btn-link">אין לי חשבון — הרשמה</button><button id="forgotPassword" class="btn btn-link">שכחתי סיסמה</button></div><p id="authStatus" class="small" role="status"></p></div>`;
  let signup=false;const form=$('#emailAuth'),status=$('#authStatus'),submit=form.querySelector('[type=submit]');
- const message=e=>({'auth/invalid-credential':'המייל או הסיסמה אינם נכונים','auth/email-already-in-use':'כבר קיים חשבון עם המייל הזה','auth/weak-password':'הסיסמה חלשה מדי','auth/popup-closed-by-user':'חלון Google נסגר לפני השלמת הכניסה','auth/unauthorized-domain':'כתובת האתר עדיין לא אושרה במערכת ההתחברות'}[e?.code]||e?.message||'הפעולה נכשלה');
+ const message=e=>({'auth/invalid-credential':'המייל או הסיסמה אינם נכונים','auth/user-not-found':'לא נמצא חשבון עם כתובת המייל הזו','auth/email-already-in-use':'כבר קיים חשבון עם המייל הזה','auth/weak-password':'הסיסמה חלשה מדי','auth/too-many-requests':'בוצעו יותר מדי ניסיונות. המתינו מעט ונסו שוב','auth/network-request-failed':'אין כרגע חיבור לשירות ההתחברות','auth/popup-closed-by-user':'חלון Google נסגר לפני השלמת הכניסה','auth/unauthorized-domain':'כתובת האתר עדיין לא אושרה במערכת ההתחברות'}[e?.code]||e?.message||'הפעולה נכשלה');
  const finish=async()=>{await Auth.refresh();await CFG.load().catch(()=>{});location.hash='#/';await render();};
  $('#authMode').onclick=()=>{signup=!signup;$('#authNameWrap').hidden=!signup;$('#authName').required=signup;submit.textContent=signup?'יצירת חשבון':'כניסה';$('#authMode').textContent=signup?'יש לי חשבון — כניסה':'אין לי חשבון — הרשמה';$('#authPassword').autocomplete=signup?'new-password':'current-password';status.textContent='';};
  $('#googleLogin').onclick=async()=>{status.textContent='פותח את Google…';try{await loginGoogle();await finish();}catch(e){status.textContent=message(e);}};
  form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;status.textContent=signup?'יוצר חשבון…':'מתחבר…';try{if(signup){await registerEmail($('#authEmail').value.trim(),$('#authPassword').value,$('#authName').value.trim());status.textContent='החשבון נוצר ונשלח מייל אימות.';}else await loginEmail($('#authEmail').value.trim(),$('#authPassword').value);await finish();}catch(e){status.textContent=message(e);}finally{submit.disabled=false;}};
- $('#forgotPassword').onclick=async()=>{const email=$('#authEmail').value.trim();if(!email){status.textContent='הזינו קודם את כתובת המייל.';return;}try{await resetFirebasePassword(email);status.textContent='אם קיים חשבון, נשלח אליו קישור לאיפוס הסיסמה.';}catch(e){status.textContent=message(e);}};
+ $('#forgotPassword').onclick=async()=>{const email=$('#authEmail').value.trim();if(!email){status.textContent='הזינו קודם את כתובת המייל.';$('#authEmail').focus();return;}const b=$('#forgotPassword');b.disabled=true;status.textContent='שולח קישור מאובטח…';try{await resetFirebasePassword(email);status.textContent='קישור לאיפוס הסיסמה נשלח. בדקו גם בתיקיית הספאם.';}catch(e){status.textContent=message(e);}finally{b.disabled=false;}};
 });
 
 route('/account',async app=>{

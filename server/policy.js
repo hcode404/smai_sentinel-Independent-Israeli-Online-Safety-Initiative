@@ -73,6 +73,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     requireThat(await canRead(col,old,u,get));
     let p={};
     if(input.status==='escalated'&&old.reporterId===id)p.status='escalated';
+    if(input.status==='open'&&old.reporterId===id&&['closed','resolved'].includes(old.status))p.status='open';
     if(n>=20)Object.assign(p,pick(input,['status','priority','dept','escalateReason']));
     if(n>=30||n>=10&&input.assignedTo===id&&!old.assignedTo)Object.assign(p,pick(input,['assignedTo','assignedName']));
     if(p.status)requireThat(['new','open','waiting','active','in_progress','escalated','resolved','closed'].includes(p.status),400,'סטטוס לא תקין');

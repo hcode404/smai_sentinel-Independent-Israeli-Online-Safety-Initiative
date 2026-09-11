@@ -78,6 +78,12 @@ test('forged sender IDs are replaced and empty text rejected',async()=>{
  assert.equal(m.data.senderId,'alice');assert.equal(m.data.senderRank,'citizen');
  assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:''})).status,400);f.DB.close();
 });
+test('reporter can reopen a closed ticket and continue its conversation',async()=>{
+ const f=fixture();const t=await f.call('records/tickets','POST',ticket);
+ await f.call('records/tickets/'+t.data.id,'PATCH',{status:'closed'},'owner');
+ assert.equal((await f.call('records/tickets/'+t.data.id,'PATCH',{status:'open'})).status,200);
+ assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:'אני צריך להמשיך את השיחה'})).status,201);f.DB.close();
+});
 test('owner allowlist is empty by default',async()=>{
  const f=fixture();f.env.ADMIN_EMAILS='';assert.equal((await f.call('session','GET',null,'owner')).data.user.rankLvl,0);f.DB.close();
 });
