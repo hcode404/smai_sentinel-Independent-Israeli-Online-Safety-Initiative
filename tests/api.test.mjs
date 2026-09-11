@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {localDatabase} from '../scripts/local-db.mjs';
-import {api,database} from '../server/index.js';
+import {api,database,renderEmail} from '../server/index.js';
 import {authorizeWrite} from '../server/policy.js';
 import {SignJWT,exportJWK,generateKeyPair} from 'jose';
 const project='smai-support';
@@ -98,4 +98,10 @@ test('owner allowlist is empty by default',async()=>{
 test('production Worker does not contain dev identity override',async()=>{
  const {readFileSync}=await import('node:fs');const source=readFileSync(new URL('../server/index.js',import.meta.url),'utf8');
  assert.equal(source.includes('local_seedy'),false);assert.equal(source.includes('seedy@sites.test'),false);
+});
+test('transactional emails are branded HTML with contextual actions',()=>{
+ const reply=renderEmail('ticketReply',{ticketId:'ticket-1',code:'SM-123',title:'בדיקה',sender:'נציג',text:'יש עדכון'});
+ assert.match(reply.html,/<!doctype html>/i);assert.match(reply.html,/SMAI Sytem/);assert.match(reply.html,/#\/ticket\/ticket-1/);assert.match(reply.html,/פתיחת הצ׳אט בפנייה/);
+ const resetLike=renderEmail('securityLogin',{name:'בדיקה',when:'עכשיו'});assert.match(resetLike.html,/#\/account/);
+ const purchase=renderEmail('purchase',{product:'חבילה',orderId:'A-1',amount:'₪10'});assert.match(purchase.html,/מספר הזמנה/);
 });

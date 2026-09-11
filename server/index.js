@@ -3,6 +3,53 @@ import {createRemoteJWKSet,jwtVerify} from 'jose';
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const nonce=()=>crypto.randomUUID().replaceAll('-','');
+const MAIL_BRAND='SMAI Sytem';
+const MAIL_SITE='https://smai-sentinel.smai-sentinel.chatgpt.site';
+const mailEsc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const mailUrl=(env,path='')=>(env.PUBLIC_SITE_URL||MAIL_SITE).replace(/\/$/,'')+'/'+String(path).replace(/^\//,'');
+const mailBox=(label,value)=>`<tr><td style="padding:9px 0;color:#8eabc2;font-size:13px">${mailEsc(label)}</td><td style="padding:9px 0;color:#f4f9ff;font-weight:700;text-align:left">${mailEsc(value)}</td></tr>`;
+function mailShell({title,preheader='',icon='✦',accent='#22d3ee',content,actionLabel='פתיחת SMAI',actionUrl,notice=''}){
+  const url=actionUrl||MAIL_SITE;
+  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${mailEsc(title)}</title></head>
+  <body style="margin:0;background:#06101c;font-family:Arial,'Helvetica Neue',sans-serif;color:#eaf6ff"><div style="display:none;max-height:0;overflow:hidden;opacity:0">${mailEsc(preheader)}</div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#06101c;padding:30px 12px"><tr><td align="center">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:610px;background:#0c1b2c;border:1px solid #1b405b;border-radius:22px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.35)">
+  <tr><td style="padding:30px 32px;background:linear-gradient(135deg,#0c2941,#0b5363);border-bottom:3px solid ${accent}"><table role="presentation" width="100%"><tr><td><div style="font-size:12px;letter-spacing:2.4px;color:#9be9f7">${MAIL_BRAND}</div><h1 style="margin:9px 0 0;font-size:25px;line-height:1.35;color:#fff">${mailEsc(title)}</h1></td><td width="56" align="left"><div style="width:52px;height:52px;line-height:52px;text-align:center;border-radius:16px;background:rgba(255,255,255,.12);font-size:25px">${icon}</div></td></tr></table></td></tr>
+  <tr><td style="padding:32px;color:#cfe2f2;font-size:16px;line-height:1.75">${content}<div style="margin-top:28px"><a href="${mailEsc(url)}" style="display:inline-block;background:${accent};color:#041820;text-decoration:none;font-weight:800;padding:13px 24px;border-radius:11px">${mailEsc(actionLabel)}</a></div>${notice?`<div style="margin-top:24px;padding:14px 16px;background:#10283d;border:1px solid #244a65;border-radius:12px;color:#9fb9ce;font-size:13px">${mailEsc(notice)}</div>`:''}</td></tr>
+  <tr><td style="padding:18px 32px;border-top:1px solid #19364d;color:#7897ad;font-size:12px;line-height:1.6">הודעה אוטומטית ומאובטחת של ${MAIL_BRAND}. לעולם לא נבקש סיסמה או קוד אימות במייל.</td></tr></table></td></tr></table></body></html>`;
+}
+export function renderEmail(type,data={},env={}){
+  const ticketUrl=mailUrl(env,`#/ticket/${encodeURIComponent(data.ticketId||'')}`);
+  if(type==='securityLogin')return {subject:`כניסה חדשה לחשבון ${MAIL_BRAND}`,html:mailShell({title:'זוהתה כניסה חדשה',preheader:'כניסה חדשה לחשבון שלך',icon:'🛡️',accent:'#38bdf8',content:`<p style="margin-top:0">שלום ${mailEsc(data.name||'')}, זיהינו כניסה לחשבון מרשת חדשה.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מועד',data.when||'כעת')}${mailBox('מכשיר',data.device||'דפדפן חדש')}</table><p>אם זו לא הייתה הכניסה שלך, מומלץ לאפס מיד את הסיסמה.</p>`,actionLabel:'בדיקת אבטחת החשבון',actionUrl:mailUrl(env,'#/account'),notice:'ההתראה אינה כוללת את כתובת ה-IP המלאה כדי לשמור על פרטיותך.'})};
+  if(type==='ticketReply')return {subject:`תשובה חדשה בפנייה ${data.code||''}`,html:mailShell({title:'התקבלה תשובה חדשה',preheader:`עדכון בפנייה ${data.code||''}`,icon:'💬',accent:'#22d3ee',content:`<p style="margin-top:0"><b>${mailEsc(data.sender||'צוות SMAI')}</b> השיב/ה בפנייה שלך.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}</table><div style="margin-top:18px;padding:16px;border-right:3px solid #22d3ee;background:#10283d;border-radius:10px">${mailEsc(data.text||'').replace(/\n/g,'<br>')}</div>`,actionLabel:'פתיחת הצ׳אט בפנייה',actionUrl:ticketUrl,notice:'במצב סכנה מיידית מתקשרים למשטרה 100.'})};
+  if(type==='ticketClaim')return {subject:`הפנייה ${data.code||''} התקבלה לטיפול`,html:mailShell({title:'נציג קיבל את הפנייה',preheader:'הפנייה שלך נמצאת כעת בטיפול',icon:'🎫',accent:'#34d399',content:`<p style="margin-top:0">הפנייה שלך הועברה לטיפול אישי.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}${mailBox('נציג מטפל',data.agent||'צוות SMAI')}</table><p>אפשר להמשיך להתכתב עם הנציג ישירות בחלון הפנייה.</p>`,actionLabel:'מעבר לשיחה עם הנציג',actionUrl:ticketUrl})};
+  if(type==='ticketStatus')return {subject:`עדכון בפנייה ${data.code||''}: ${data.status||''}`,html:mailShell({title:'סטטוס הפנייה השתנה',preheader:`הפנייה עודכנה ל-${data.status||''}`,icon:'↻',accent:'#a78bfa',content:`<table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}${mailBox('סטטוס חדש',data.status||'עודכן')}</table>`,actionLabel:'צפייה בעדכון המלא',actionUrl:ticketUrl})};
+  if(type==='moderation')return {subject:`עדכון אכיפה בחשבון ${MAIL_BRAND}`,html:mailShell({title:'עדכון בנושא אכיפה',preheader:data.title||'בוצע עדכון בחשבון',icon:'⚖️',accent:'#fb7185',content:`<h2 style="font-size:18px;color:#fff;margin-top:0">${mailEsc(data.title||'עדכון בחשבון')}</h2><p>${mailEsc(data.detail||'פרטי הפעולה זמינים בחשבון שלך.')}</p>`,actionLabel:'צפייה בפרטי החשבון',actionUrl:mailUrl(env,'#/account'),notice:'אם לדעתך נפלה טעות, אפשר להגיש ערעור מתוך האתר.'})};
+  if(type==='purchase')return {subject:`אישור רכישה — ${data.product||MAIL_BRAND}`,html:mailShell({title:'הרכישה הושלמה בהצלחה',preheader:'אישור ופרטי הרכישה שלך',icon:'✓',accent:'#34d399',content:`<p style="margin-top:0">תודה על הרכישה.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מוצר',data.product||'')}${mailBox('מספר הזמנה',data.orderId||'')}${mailBox('סכום',data.amount||'')}</table>`,actionLabel:'צפייה בחשבון',actionUrl:mailUrl(env,'#/account')})};
+  throw new HttpError(400,'סוג הודעת המייל אינו נתמך');
+}
+async function deliverMail(env,to,message){
+  if(!to||!message)return {ok:false};
+  if(env.MAIL_GATEWAY_URL&&env.MAIL_GATEWAY_SECRET){
+    const response=await fetch(env.MAIL_GATEWAY_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({secret:env.MAIL_GATEWAY_SECRET,to,fromName:MAIL_BRAND,subject:message.subject,html:message.html}),signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw new Error('mail gateway failed');
+    const result=await response.json().catch(()=>null);
+    if(!result?.ok)throw new Error(result?.error||'mail gateway rejected the message');
+    return {ok:true};
+  }
+  if(env.RESEND_API_KEY&&env.MAIL_FROM){
+    const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:`${MAIL_BRAND} <${env.MAIL_FROM}>`,to:[to],subject:message.subject,html:message.html}),signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw new Error('mail provider failed');return {ok:true};
+  }
+  return {ok:false};
+}
+async function sendUserMail(env,user,type,data){
+  if(!user?.email)return {ok:false};
+  const critical=['securityLogin','moderation'].includes(type);
+  if(!critical&&user.mailPrefs?.[type]===false)return {ok:false};
+  return deliverMail(env,user.email,renderEmail(type,{name:user.name,...data},env));
+}
+const scheduleMail=(ctx,promise)=>{try{ctx?.waitUntil?.(Promise.resolve(promise).catch(()=>{}));}catch{}};
 export function database(env){
   requireThat(env.DB,503,'אחסון הנתונים אינו זמין כרגע. לא נשמרו שינויים.');
   const get=async(col,id)=>{
@@ -23,7 +70,7 @@ export function database(env){
   return {get,put,list,statement};
 }
 const firebaseKeys=createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
-async function identity(req,env,db){
+async function identity(req,env,db,ctx){
   const token=req.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
   if(!token)return null;
   const project=env.FIREBASE_PROJECT_ID||'smai-support';let claims;
@@ -50,6 +97,7 @@ async function identity(req,env,db){
     if(u.lastNetworkHash!==networkHash){
       const first=!u.lastNetworkHash,updated={...u,lastNetworkHash:networkHash,lastLoginAt:now(),securityEvents:first?(u.securityEvents||[]):[{type:'new_network',createdAt:now()},...(u.securityEvents||[])].slice(0,10)};
       await db.put('users',updated,u);u=await db.get('users',id);
+      if(!first)scheduleMail(ctx,sendUserMail(env,u,'securityLogin',{when:new Date().toLocaleString('he-IL'),device:req.headers.get('User-Agent')?.slice(0,80)||'דפדפן חדש'}));
     }
   }
   return {...u,email};
@@ -92,9 +140,9 @@ export async function api(req,env,ctx={waitUntil(){}}){
       requireThat(req.headers.get('Origin')===url.origin,403,'בקשה ממקור לא מורשה');
       requireThat(req.headers.get('Content-Type')?.startsWith('application/json'),415,'נדרש JSON');
     }
-    const db=database(env),u=await identity(req,env,db);
+    const db=database(env),u=await identity(req,env,db,ctx);
     if(path==='/api/session')return json({user:u?safeRecord('users',u,u):null});
-    if(path==='/api/status')return json({database:true,ai:true,aiMode:env.GEMINI_API_KEY?'gemini':'basic',mail:!!env.RESEND_API_KEY,mailFrom:rank(u)>=60?(env.MAIL_FROM||null):undefined,migration:'new-database',version:'2.0',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
+    if(path==='/api/status')return json({database:true,ai:true,aiMode:env.GEMINI_API_KEY?'gemini':'basic',mail:!!(env.MAIL_GATEWAY_URL&&env.MAIL_GATEWAY_SECRET||env.RESEND_API_KEY&&env.MAIL_FROM),mailFrom:rank(u)>=60?(env.MAIL_FROM||MAIL_BRAND):undefined,migration:'new-database',version:'2.1',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
     if(path==='/api/records/campaigns'&&req.method==='GET'&&!u){
       const rows=(await db.list('campaigns')).map(r=>safeRecord('campaigns',r,null));
       return json(rows);
@@ -184,6 +232,19 @@ export async function api(req,env,ctx={waitUntil(){}}){
     if(col==='tickets'&&old&&(rec.status!==old.status||rec.assignedTo!==old.assignedTo)){
       const text=rec.assignedTo!==old.assignedTo?'שיוך הפנייה עודכן על ידי הצוות.':'סטטוס הפנייה עודכן: '+rec.status;
       try{await db.put('messages',{id:nonce(),createdAt:now(),ticketId:rec.id,system:true,senderId:null,text});}catch{}
+      const reporter=await db.get('users',rec.reporterId);
+      if(reporter&&rec.assignedTo!==old.assignedTo&&rec.assignedTo)scheduleMail(ctx,sendUserMail(env,reporter,'ticketClaim',{ticketId:rec.id,code:rec.code,title:rec.title,agent:rec.assignedName||u.name}));
+      else if(reporter&&rec.status!==old.status)scheduleMail(ctx,sendUserMail(env,reporter,'ticketStatus',{ticketId:rec.id,code:rec.code,title:rec.title,status:rec.status}));
+    }
+    if(col==='messages'&&!old&&!rec.internal){
+      const ticket=await db.get('tickets',rec.ticketId);
+      const targetId=rec.staffSide?ticket?.reporterId:ticket?.assignedTo;
+      const target=targetId&&targetId!==u.id?await db.get('users',targetId):null;
+      if(target)scheduleMail(ctx,sendUserMail(env,target,'ticketReply',{ticketId:ticket.id,code:ticket.code,title:ticket.title,sender:rec.senderName,text:rec.text.slice(0,1200)}));
+    }
+    if(col==='users'&&old&&old.id!==u.id&&(rec.isBanned!==old.isBanned||rec.muteUntil!==old.muteUntil||rec.banReason!==old.banReason)){
+      const title=rec.isBanned?'החשבון הוגבל':rec.muteUntil?'החשבון הושתק זמנית':'הגבלת החשבון עודכנה';
+      scheduleMail(ctx,sendUserMail(env,rec,'moderation',{title,detail:rec.banReason||rec.banNote||'פרטי הפעולה זמינים בחשבון שלך.'}));
     }
     if(col==='tmsgs'&&!old){
       const thread=await db.get('threads',rec.thread);
