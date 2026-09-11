@@ -96,7 +96,7 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const raw=await req.text();requireThat(raw.length<=60000,413,'הבקשה גדולה מדי');let body;
       try{body=JSON.parse(raw);}catch{throw new HttpError(400,'בקשה לא תקינה');}
       requireThat(body&&typeof body==='object'&&!Array.isArray(body),400,'בקשה לא תקינה');
-      if(env.GEMINI_API_KEY){requireThat(u,401,'יש להתחבר כדי להמשיך');requireThat(body.consent===true,400,'נדרש אישור חד־פעמי לפני העברת ההודעה לשירות AI חיצוני');}
+      if(env.GEMINI_API_KEY)requireThat(body.consent===true,400,'נדרש אישור חד־פעמי לפני העברת ההודעה לשירות AI חיצוני');
       if(u)requireThat(!banned(u));const actor=u?.id||req.headers.get('CF-Connecting-IP')||'anonymous';await limit(env,'ai:'+actor,12,3600);await limit(env,'ai:site',200,86400);
       const prompt=String(body.prompt||'').trim();requireThat(prompt.length>0&&prompt.length<=12000,400,'נא להזין הודעה באורך מתאים');return json(await generate(env,prompt,Array.isArray(body.history)?body.history:[]));
     }
