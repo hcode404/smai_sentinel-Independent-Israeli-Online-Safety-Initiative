@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 .env.*
+.gmail-app-password
 !.env.example
 .wrangler/
 *.tgz

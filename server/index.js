@@ -43,6 +43,15 @@ async function identity(req,env,db){
     const updated={...u,email,emailVerified:verified,authProvider:claims.firebase?.sign_in_provider||u.authProvider,rank:owner?'founder':u.isOwner?'citizen':u.rank,rankLvl:owner?70:u.isOwner?0:u.rankLvl,isOwner:owner};
     await db.put('users',updated,u);u=await db.get('users',id);
   }
+  const network=req.headers.get('CF-Connecting-IP');
+  if(network){
+    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(network+'|'+id));
+    const networkHash=[...new Uint8Array(digest)].slice(0,12).map(x=>x.toString(16).padStart(2,'0')).join('');
+    if(u.lastNetworkHash!==networkHash){
+      const first=!u.lastNetworkHash,updated={...u,lastNetworkHash:networkHash,lastLoginAt:now(),securityEvents:first?(u.securityEvents||[]):[{type:'new_network',createdAt:now()},...(u.securityEvents||[])].slice(0,10)};
+      await db.put('users',updated,u);u=await db.get('users',id);
+    }
+  }
   return {...u,email};
 }
 async function limit(env,key,max,seconds=60){

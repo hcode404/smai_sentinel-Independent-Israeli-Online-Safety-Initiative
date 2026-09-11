@@ -6,7 +6,7 @@ import { renderHome } from './home.js';
 /* =====================================================================
    SMAI — Single-file app.  הדבק כאן את פרטי הפרויקט שלך מ-Firebase.
    ===================================================================== */
-const SITE = {name:'SMAI Sentinel',tagline:'הגנה וליווי ברשת',email:'',responseHours:12};
+const SITE = {name:'SMAI Sentinel',tagline:'הגנה וליווי ברשת',email:'minipro.7548@gmail.com',responseHours:12};
 const FB_ON=true;
 
 /* ===================== קבועים ===================== */
@@ -182,6 +182,9 @@ const PROFILE_REPORTS = [
 
 /* ===================== העדפות עדכוני מייל ===================== */
 const MAIL_PREFS = [
+  { id:'securityLogin', l:'כניסה חדשה לחשבון', d:'התראה על כניסה ממכשיר או מרשת שלא זוהו בעבר.', def:true },
+  { id:'securityAccount', l:'פעולות אבטחה בחשבון', d:'שינוי סיסמה, מייל או הגדרות אבטחה.', def:true },
+  { id:'accountDeletion', l:'מחיקה ושחזור החשבון', d:'אישור בקשת מחיקה ועדכונים חשובים על התהליך.', def:true },
   { id:'friend', l:'בקשות חברות', d:'כשמישהו שולח או מאשר בקשת חברות.', def:true },
 
   { id:'ticketReply',  l:'תשובה חדשה בפנייה שלי',        d:'נציג אנושי או הסוכן החכם הגיבו בשרשור.', def:true },
@@ -4032,11 +4035,13 @@ route('/login',app=>{
 
 route('/account',async app=>{
  if(!Auth.user){app.innerHTML=requireLogin();return;}
- const u=Auth.user;
- app.innerHTML=`<div class="page-h"><div class="eyebrow">החשבון שלי</div><h1>הפרופיל וההעדפות שלך</h1></div><form id="profileForm" class="card" style="max-width:700px"><div class="row">${avatar(u,'l')}<div><h2>${esc(u.name)}</h2>${rankBadge(u.rank)}</div></div><div class="field"><label for="profileName">שם תצוגה</label><input id="profileName" required maxlength="80" value="${esc(u.name)}"></div><div class="field"><label for="profileBio">כמה מילים עליי</label><textarea id="profileBio" maxlength="500">${esc(u.bio||'')}</textarea></div><p class="small mute">אימייל: ${esc(u.email)} · ${u.emailVerified?'מאומת':'טרם אומת'}</p><div class="row"><button class="btn btn-p">שמירת פרופיל</button>${u.emailVerified?'':`<button id="resendVerify" class="btn btn-g" type="button">שליחת אימות מחדש</button>`}<button id="accountLogout" class="btn btn-g" type="button">יציאה מהחשבון</button></div><p id="profileStatus" role="status"></p></form>`;
- $('#profileForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('button');b.disabled=true;try{await Store.update('users',u.id,{name:$('#profileName').value.trim(),bio:$('#profileBio').value.trim()});await Auth.refresh();$('#profileStatus').textContent='הפרופיל נשמר בשרת';renderNav();}catch(e){$('#profileStatus').textContent=e.message;}finally{b.disabled=false;}};
+ const u=Auth.user,prefs={...mailPrefDefaults(),...(u.mailPrefs||{})};
+ app.innerHTML=`<div class="page-h"><div class="eyebrow">החשבון שלי</div><h1>הפרופיל וההעדפות שלך</h1></div><form id="profileForm" class="stack" style="max-width:760px"><section class="card"><div class="row">${avatar(u,'l')}<div><h2>${esc(u.name)}</h2>${rankBadge(u.rank)}</div></div><div class="field"><label for="profileName">שם תצוגה</label><input id="profileName" required maxlength="80" value="${esc(u.name)}"></div><div class="field"><label for="profileBio">כמה מילים עליי</label><textarea id="profileBio" maxlength="500">${esc(u.bio||'')}</textarea></div><p class="small mute">אימייל: ${esc(u.email)} · ${u.emailVerified?'מאומת':'טרם אומת'}</p></section><section class="card"><div class="card-h"><span class="ico-tile i-brand">${ic('mail',19)}</span><div><h3>התראות במייל</h3><p class="small mute" style="margin:3px 0 0">בחרו אילו עדכונים תרצו לקבל. הודעות אבטחה קריטיות תמיד נשמרות בחשבון.</p></div></div><div class="stack">${MAIL_PREFS.map(p=>`<label class="row" style="align-items:flex-start"><input type="checkbox" data-mail-pref="${p.id}" ${prefs[p.id]?'checked':''}><span><b>${esc(p.l)}</b><small class="mute" style="display:block">${esc(p.d)}</small></span></label>`).join('')}</div></section><section class="card"><h3>אבטחת החשבון</h3><p class="small mute">אימות הרשמה ואיפוס סיסמה נשלחים דרך שירות ההתחברות המאובטח.</p>${u.securityEvents?.length?`<div class="callout c-warn"><span class="ic">${ic('shield',18)}</span><div>זוהתה כניסה מרשת חדשה ב־${fmtDate(u.securityEvents[0].createdAt)}. אם זו לא הייתה הכניסה שלך, אפס את הסיסמה.</div></div>`:''}<div class="row"><button id="changePassword" class="btn btn-g" type="button">איפוס סיסמה</button>${u.emailVerified?'':`<button id="resendVerify" class="btn btn-g" type="button">שליחת אימות מחדש</button>`}<button id="requestDeletion" class="btn btn-d" type="button">בקשת מחיקת חשבון</button></div></section><div class="row"><button class="btn btn-p">שמירת כל ההגדרות</button><button id="accountLogout" class="btn btn-g" type="button">יציאה מהחשבון</button></div><p id="profileStatus" role="status"></p></form>`;
+ $('#profileForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('[type=submit]');b.disabled=true;const mailPrefs={};$$('[data-mail-pref]').forEach(x=>mailPrefs[x.dataset.mailPref]=x.checked);try{await Store.update('users',u.id,{name:$('#profileName').value.trim(),bio:$('#profileBio').value.trim(),mailPrefs});await Auth.refresh();$('#profileStatus').textContent='הפרופיל והעדפות ההתראות נשמרו';renderNav();}catch(e){$('#profileStatus').textContent=e.message;}finally{b.disabled=false;}};
  $('#accountLogout').onclick=async()=>{await Auth.signOut();location.hash='#/';await render();};
  if($('#resendVerify'))$('#resendVerify').onclick=async()=>{await resendVerification();$('#profileStatus').textContent='מייל אימות נוסף נשלח.';};
+ $('#changePassword').onclick=async()=>{await Auth.changePassword();$('#profileStatus').textContent='קישור מאובטח לאיפוס הסיסמה נשלח למייל.';};
+ $('#requestDeletion').onclick=async()=>{if(!confirm('לשלוח בקשה למחיקת החשבון? החשבון לא יימחק מיד.'))return;await Store.add('reports',{kind:'account_delete',type:'account',reason:'בקשת מחיקת חשבון',text:'המשתמש ביקש להתחיל תהליך מחיקה'});$('#profileStatus').textContent='בקשת המחיקה התקבלה ונשמרה. הצוות יעדכן אותך לפני ביצוע מחיקה.';};
 });
 
 route('/admin', async (app)=>{
