@@ -78,7 +78,10 @@ async function generate(env,prompt,history=[]){
   contents.push({role:'user',parts:[{text:prompt.slice(0,16000)}]});
   let response;
   try{response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':env.GEMINI_API_KEY},body:JSON.stringify({systemInstruction:{parts:[{text:AI_SYSTEM}]},contents,generationConfig:{maxOutputTokens:1500,temperature:0.35}}),signal:AbortSignal.timeout(25000)});}catch{throw new HttpError(504,'העוזר לא השיב בזמן. נסו שוב; הפנייה לא נמחקה.');}
-  requireThat(response.ok,502,'שירות ה-AI אינו זמין כרגע. נסו שוב מאוחר יותר.');
+  if(!response.ok){
+    if([400,401,403,404,429].includes(response.status))return {text:basicGuidance(prompt),mode:'basic',degraded:true};
+    throw new HttpError(502,'שירות ה-AI אינו זמין כרגע. נסו שוב מאוחר יותר.');
+  }
   const data=await response.json();const text=data.candidates?.[0]?.content?.parts?.filter(p=>!p.thought).map(p=>p.text||'').join('').trim();
   requireThat(text,502,'לא התקבלה תשובה מהעוזר. ניתן לפנות לצוות אנושי.');return {text,mode:'gemini'};
 }
