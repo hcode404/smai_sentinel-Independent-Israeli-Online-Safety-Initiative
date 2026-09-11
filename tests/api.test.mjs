@@ -58,6 +58,10 @@ test('without Gemini the assistant returns clearly marked basic guidance',async(
  assert.equal(result.status,200);assert.equal(result.data.mode,'basic');assert.match(result.data.text,/סיסמה|אימות/);
  assert.deepEqual(await f.db.list('messages'),[]);f.DB.close();
 });
+test('local safety assistant works before login',async()=>{
+ const f=fixture();const result=await f.call('ai','POST',{prompt:'מישהו מטריד אותי'},null);
+ assert.equal(result.status,200);assert.equal(result.data.mode,'basic');assert.match(result.data.text,/תיעוד|חסמו/);f.DB.close();
+});
 test('basic guidance can be added to a ticket without Gemini consent',async()=>{
  const f=fixture();const t=await f.call('records/tickets','POST',{...ticket,description:'פרצו לי לחשבון ואני צריך עזרה בהגנה עליו'});
  const result=await f.call('ticket-ai','POST',{ticketId:t.data.id,consent:false});

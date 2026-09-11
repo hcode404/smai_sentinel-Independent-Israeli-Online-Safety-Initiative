@@ -83,6 +83,14 @@ export async function api(req,env,ctx={waitUntil(){}}){
     const db=database(env),u=await identity(req,env,db);
     if(path==='/api/session')return json({user:u?safeRecord('users',u,u):null});
     if(path==='/api/status')return json({database:true,ai:true,aiMode:env.GEMINI_API_KEY?'gemini':'basic',mail:!!env.RESEND_API_KEY,mailFrom:rank(u)>=60?(env.MAIL_FROM||null):undefined,migration:'new-database',version:'2.0',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
+    if(path==='/api/ai'&&req.method==='POST'){
+      const raw=await req.text();requireThat(raw.length<=60000,413,'הבקשה גדולה מדי');let body;
+      try{body=JSON.parse(raw);}catch{throw new HttpError(400,'בקשה לא תקינה');}
+      requireThat(body&&typeof body==='object'&&!Array.isArray(body),400,'בקשה לא תקינה');
+      if(env.GEMINI_API_KEY){requireThat(u,401,'יש להתחבר כדי להמשיך');requireThat(body.consent===true,400,'נדרש אישור חד־פעמי לפני העברת ההודעה לשירות AI חיצוני');}
+      if(u)requireThat(!banned(u));const actor=u?.id||req.headers.get('CF-Connecting-IP')||'anonymous';await limit(env,'ai:'+actor,12,3600);await limit(env,'ai:site',200,86400);
+      const prompt=String(body.prompt||'').trim();requireThat(prompt.length>0&&prompt.length<=12000,400,'נא להזין הודעה באורך מתאים');return json(await generate(env,prompt,Array.isArray(body.history)?body.history:[]));
+    }
     requireThat(u,401,'יש להתחבר כדי להמשיך');
     let body={};
     if(!['GET','HEAD'].includes(req.method)){
@@ -90,11 +98,6 @@ export async function api(req,env,ctx={waitUntil(){}}){
       try{body=JSON.parse(raw);}catch{throw new HttpError(400,'בקשה לא תקינה');}
       requireThat(body&&typeof body==='object'&&!Array.isArray(body),400,'בקשה לא תקינה');
       await limit(env,'write:'+u.id,100);
-    }
-    if(path==='/api/ai'&&req.method==='POST'){
-      requireThat(!banned(u));await limit(env,'ai:'+u.id,12,3600);await limit(env,'ai:site',200,86400);
-      let prompt=String(body.prompt||'').trim();requireThat(prompt.length>0&&prompt.length<=12000,400,'נא להזין הודעה באורך מתאים');
-      return json(await generate(env,prompt,Array.isArray(body.history)?body.history:[]));
     }
     if(path==='/api/ticket-ai'&&req.method==='POST'){
       const t=await db.get('tickets',body.ticketId);requireThat(await canRead('tickets',t,u,db.get));requireThat(!banned(u));
