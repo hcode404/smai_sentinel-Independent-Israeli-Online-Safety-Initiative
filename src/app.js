@@ -1,6 +1,6 @@
 import {remoteStore,request} from './api.js';
 import {initAssistant} from './assistant.js';
-import {authReady,loginEmail,registerEmail,loginGoogle,logoutFirebase,resetFirebasePassword,resendVerification,firebaseUser} from './firebase-auth.js';
+import {authReady,loginEmail,registerEmail,loginGoogle,logoutFirebase,resendVerification,firebaseUser} from './firebase-auth.js';
 import { renderHome } from './home.js';
 
 /* =====================================================================
@@ -575,7 +575,7 @@ const Auth={user:null,_cbs:[],onChange(f){this._cbs.push(f);f(this.user);},_emit
   isStaff(){return isStaffUser(this.user);},can(c){return can(this.user,c);},
   banInfo(){const u=this.user;if(!u?.isBanned||u.banUntil&&Date.parse(u.banUntil)<Date.now())return null;return {until:u.banUntil,reason:u.banReason,note:u.banNote,perm:!u.banUntil};},
   muted(){return Date.parse(this.user?.muteUntil)>Date.now();},
-  async changePassword(){if(!firebaseUser()?.email)throw new Error('לא נמצא אימייל בחשבון');await resetFirebasePassword(firebaseUser().email);},
+  async changePassword(){if(!firebaseUser()?.email)throw new Error('לא נמצא אימייל בחשבון');await request('/api/auth/password-reset','POST',{email:firebaseUser().email});},
   async changeEmail(){throw new Error('שינוי אימייל דורש אימות מחדש ויתווסף בהמשך')}
 };
 window.smaiLogout=async()=>{await Auth.signOut();location.hash='#/login';await render();};
@@ -4026,7 +4026,7 @@ route('/login',app=>{
  $('#authMode').onclick=()=>{signup=!signup;$('#authNameWrap').hidden=!signup;$('#authName').required=signup;submit.textContent=signup?'יצירת חשבון':'כניסה';$('#authMode').textContent=signup?'יש לי חשבון — כניסה':'אין לי חשבון — הרשמה';$('#authPassword').autocomplete=signup?'new-password':'current-password';status.textContent='';};
  $('#googleLogin').onclick=async()=>{status.textContent='פותח את Google…';try{await loginGoogle();await finish();}catch(e){status.textContent=message(e);}};
  form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;status.textContent=signup?'יוצר חשבון…':'מתחבר…';try{if(signup){await registerEmail($('#authEmail').value.trim(),$('#authPassword').value,$('#authName').value.trim());status.textContent='החשבון נוצר ונשלח מייל אימות.';}else await loginEmail($('#authEmail').value.trim(),$('#authPassword').value);await finish();}catch(e){status.textContent=message(e);}finally{submit.disabled=false;}};
- $('#forgotPassword').onclick=async()=>{const email=$('#authEmail').value.trim();if(!email){status.textContent='הזינו קודם את כתובת המייל.';$('#authEmail').focus();return;}const b=$('#forgotPassword');b.disabled=true;status.textContent='שולח קישור מאובטח…';try{await resetFirebasePassword(email);status.textContent='קישור לאיפוס הסיסמה נשלח. בדקו גם בתיקיית הספאם.';}catch(e){status.textContent=message(e);}finally{b.disabled=false;}};
+ $('#forgotPassword').onclick=async()=>{const email=$('#authEmail').value.trim();if(!email){status.textContent='הזינו קודם את כתובת המייל.';$('#authEmail').focus();return;}const b=$('#forgotPassword');b.disabled=true;status.textContent='שולח הודעת איפוס מאובטחת…';try{const result=await request('/api/auth/password-reset','POST',{email});status.textContent=result.message;}catch(e){status.textContent=message(e);}finally{b.disabled=false;}};
 });
 
 route('/account',async app=>{

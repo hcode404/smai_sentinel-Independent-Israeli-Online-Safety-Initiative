@@ -19,6 +19,11 @@ function mailShell({title,preheader='',icon='✦',accent='#22d3ee',content,actio
   <tr><td style="padding:18px 32px;border-top:1px solid #19364d;color:#7897ad;font-size:12px;line-height:1.6">הודעה אוטומטית ומאובטחת של ${MAIL_BRAND}. לעולם לא נבקש סיסמה או קוד אימות במייל.</td></tr></table></td></tr></table></body></html>`;
 }
 export function renderEmail(type,data={},env={}){
+  if(type==='passwordReset'){
+    let resetUrl;try{resetUrl=new URL(data.resetUrl);}catch{throw new HttpError(400,'חסר קישור איפוס תקין');}
+    requireThat(resetUrl.origin==='https://smai-support.firebaseapp.com'&&resetUrl.pathname==='/__/auth/action'&&resetUrl.searchParams.get('mode')==='resetPassword'&&resetUrl.searchParams.get('oobCode'),400,'קישור האיפוס אינו תקין');
+    return {subject:`איפוס הסיסמה שלך — ${MAIL_BRAND}`,html:mailShell({title:'בוחרים סיסמה חדשה',preheader:'התקבלה בקשה לאיפוס הסיסמה בחשבון SMAI שלך',icon:'🔑',accent:'#22d3ee',content:'<p style="margin-top:0">התקבלה בקשה לאיפוס הסיסמה לחשבון שלך.</p><p>לחיצה על הכפתור תפתח את המסך שבו אפשר לבחור סיסמה חדשה. הסיסמה הנוכחית תישאר בתוקף עד להשלמת האיפוס.</p>',actionLabel:'איפוס הסיסמה',actionUrl:resetUrl.href,notice:'לא ביקשת לאפס את הסיסמה? אפשר להתעלם מההודעה. אין להעביר את ההודעה או את כפתור האיפוס לאדם אחר.'})};
+  }
   const ticketUrl=mailUrl(env,`#/ticket/${encodeURIComponent(data.ticketId||'')}`);
   if(type==='securityLogin')return {subject:`כניסה חדשה לחשבון ${MAIL_BRAND}`,html:mailShell({title:'זוהתה כניסה חדשה',preheader:'כניסה חדשה לחשבון שלך',icon:'🛡️',accent:'#38bdf8',content:`<p style="margin-top:0">שלום ${mailEsc(data.name||'')}, זיהינו כניסה לחשבון מרשת חדשה.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מועד',data.when||'כעת')}${mailBox('מכשיר',data.device||'דפדפן חדש')}</table><p>אם זו לא הייתה הכניסה שלך, מומלץ לאפס מיד את הסיסמה.</p>`,actionLabel:'בדיקת אבטחת החשבון',actionUrl:mailUrl(env,'#/account'),notice:'ההתראה אינה כוללת את כתובת ה-IP המלאה כדי לשמור על פרטיותך.'})};
   if(type==='ticketReply')return {subject:`תשובה חדשה בפנייה ${data.code||''}`,html:mailShell({title:'התקבלה תשובה חדשה',preheader:`עדכון בפנייה ${data.code||''}`,icon:'💬',accent:'#22d3ee',content:`<p style="margin-top:0"><b>${mailEsc(data.sender||'צוות SMAI')}</b> השיב/ה בפנייה שלך.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}</table><div style="margin-top:18px;padding:16px;border-right:3px solid #22d3ee;background:#10283d;border-radius:10px">${mailEsc(data.text||'').replace(/\n/g,'<br>')}</div>`,actionLabel:'פתיחת הצ׳אט בפנייה',actionUrl:ticketUrl,notice:'במצב סכנה מיידית מתקשרים למשטרה 100.'})};
@@ -50,6 +55,28 @@ async function sendUserMail(env,user,type,data){
   return deliverMail(env,user.email,renderEmail(type,{name:user.name,...data},env));
 }
 const scheduleMail=(ctx,promise)=>{try{ctx?.waitUntil?.(Promise.resolve(promise).catch(()=>{}));}catch{}};
+let firebaseTokenCache;
+const b64url=value=>btoa(String.fromCharCode(...new Uint8Array(value))).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+async function firebaseAdminToken(env){
+  if(firebaseTokenCache?.expires>Date.now()+60000)return firebaseTokenCache.token;
+  let service;try{service=JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON||'');}catch{throw new HttpError(503,'שירות איפוס הסיסמה טרם הוגדר');}
+  requireThat(service?.client_email&&service?.private_key,503,'שירות איפוס הסיסמה טרם הוגדר');
+  const issued=Math.floor(Date.now()/1000),header=b64url(new TextEncoder().encode(JSON.stringify({alg:'RS256',typ:'JWT'}))),payload=b64url(new TextEncoder().encode(JSON.stringify({iss:service.client_email,scope:'https://www.googleapis.com/auth/identitytoolkit',aud:'https://oauth2.googleapis.com/token',iat:issued,exp:issued+3600})));
+  const pem=service.private_key.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g,''),bytes=Uint8Array.from(atob(pem),c=>c.charCodeAt(0));
+  const key=await crypto.subtle.importKey('pkcs8',bytes,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign']);
+  const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,new TextEncoder().encode(`${header}.${payload}`));
+  const response=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:`${header}.${payload}.${b64url(signature)}`}),signal:AbortSignal.timeout(15000)});
+  const data=await response.json();requireThat(response.ok&&data.access_token,503,'שירות איפוס הסיסמה אינו זמין כרגע');
+  firebaseTokenCache={token:data.access_token,expires:Date.now()+Number(data.expires_in||3600)*1000};return data.access_token;
+}
+async function sendPasswordReset(env,email){
+  const token=await firebaseAdminToken(env),project=env.FIREBASE_PROJECT_ID||'smai-support';
+  const response=await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${encodeURIComponent(project)}/accounts:sendOobCode`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestType:'PASSWORD_RESET',email,returnOobLink:true,continueUrl:mailUrl(env,'#/login')}),signal:AbortSignal.timeout(15000)});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok&&['EMAIL_NOT_FOUND','USER_DISABLED'].includes(data?.error?.message))return;
+  requireThat(response.ok&&data.oobLink,503,'לא ניתן לשלוח כרגע את הודעת האיפוס');
+  await deliverMail(env,email,renderEmail('passwordReset',{resetUrl:data.oobLink},env));
+}
 export function database(env){
   requireThat(env.DB,503,'אחסון הנתונים אינו זמין כרגע. לא נשמרו שינויים.');
   const get=async(col,id)=>{
@@ -143,6 +170,14 @@ export async function api(req,env,ctx={waitUntil(){}}){
     const db=database(env),u=await identity(req,env,db,ctx);
     if(path==='/api/session')return json({user:u?safeRecord('users',u,u):null});
     if(path==='/api/status')return json({database:true,ai:true,aiMode:env.GEMINI_API_KEY?'gemini':'basic',mail:!!(env.MAIL_GATEWAY_URL&&env.MAIL_GATEWAY_SECRET||env.RESEND_API_KEY&&env.MAIL_FROM),mailFrom:rank(u)>=60?(env.MAIL_FROM||MAIL_BRAND):undefined,migration:'new-database',version:'2.1',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
+    if(path==='/api/auth/password-reset'&&req.method==='POST'){
+      const raw=await req.text();requireThat(raw.length<=2000,413,'הבקשה גדולה מדי');let body;
+      try{body=JSON.parse(raw);}catch{throw new HttpError(400,'בקשה לא תקינה');}
+      const email=String(body?.email||'').trim().toLowerCase();requireThat(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)&&email.length<=254,400,'כתובת המייל אינה תקינה');
+      const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(email));const emailKey=[...new Uint8Array(digest)].slice(0,12).map(x=>x.toString(16).padStart(2,'0')).join('');
+      await limit(env,'reset-ip:'+(req.headers.get('CF-Connecting-IP')||'unknown'),5,3600);await limit(env,'reset-email:'+emailKey,3,3600);
+      await sendPasswordReset(env,email);return json({ok:true,message:'אם קיים חשבון עם הכתובת הזו, נשלחה הודעת איפוס.'});
+    }
     if(path==='/api/records/campaigns'&&req.method==='GET'&&!u){
       const rows=(await db.list('campaigns')).map(r=>safeRecord('campaigns',r,null));
       return json(rows);
