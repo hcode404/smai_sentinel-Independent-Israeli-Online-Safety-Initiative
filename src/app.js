@@ -1,6 +1,6 @@
 import {remoteStore,request} from './api.js';
 import {initAssistant} from './assistant.js';
-import {authReady,loginEmail,registerEmail,loginGoogle,logoutFirebase,resendVerification,firebaseUser} from './firebase-auth.js';
+import {authReady,loginEmail,registerEmail,loginGoogle,logoutFirebase,firebaseUser} from './firebase-auth.js';
 import { renderHome } from './home.js';
 
 /* =====================================================================
@@ -1182,19 +1182,19 @@ const NAV = [
   { p:'#/updates',   l:'עדכונים',           ico:'download' }
 ];
 function renderNav(){
-  const cur = (location.hash || '#/').split('/')[1] || '';
+  const cur = location.pathname.split('/')[1] || '';
   const items = NAV.map(n=>{
     const on = ('#/'+cur) === n.p || (n.p==='#/' && !cur);
     return `<a href="${n.p}" class="${on?'on':''}" ${on?'aria-current="page"':''}>${ic(n.ico,18)}<span>${n.l}</span></a>`;
   });
-  if(Auth.isStaff()) items.push(`<a href="#/admin" class="${cur==='admin'?'on':''}">${ic('shield',14)} פאנל צוות</a>`);
+  if(Auth.isStaff()) items.push(`<a href="/admin" class="${cur==='admin'?'on':''}">${ic('shield',14)} פאנל צוות</a>`);
   $('#nav').innerHTML = items.join('');
   const u = Auth.user;
   $('#authSlot').innerHTML = u
     ? `<button class="iconbtn" id="meBtn" title="${esc(u.name||u.email)}" style="width:auto;padding:0 6px;gap:7px;display:flex">
          ${avatar(u,'s')}<span class="hide-sm" style="font-size:.84rem;font-weight:700;padding-inline-end:4px">${esc((u.name||u.email).split(' ')[0])}</span>
        </button>`
-    : `<a class="btn btn-p btn-sm" href="#/login">${ic('login',15)} כניסה</a>`;
+    : `<a class="btn btn-p btn-sm" href="/login">${ic('login',15)} כניסה</a>`;
   const mb = $('#meBtn'); if(mb) mb.onclick = userMenu;
 }
 function userMenu(){
@@ -1206,10 +1206,10 @@ function userMenu(){
       <div style="margin-top:5px">${rankBadge(u.rank)} ${u.dept?`<span class="b b-gray">${esc(DEPT_BY[u.dept]?.short||u.dept)}</span>`:''}</div></div></div>
     <div class="m-b" style="padding:12px">
       <div class="stack" style="gap:4px">
-        <a class="ch" href="#/account" onclick="closeModal()">${ic('user',17)}<span class="nm">החשבון שלי</span></a>
-        <a class="ch" href="#/my" onclick="closeModal()">${ic('file',17)}<span class="nm">הפניות שלי</span></a>
-        ${Auth.isStaff()?`<a class="ch" href="#/admin" onclick="closeModal()">${ic('shield',17)}<span class="nm">פאנל צוות</span></a>`:''}
-        ${Auth.can('siteConfig')?`<a class="ch" href="#/setup" onclick="closeModal()">${ic('settings',17)}<span class="nm">הגדרות מערכת</span></a>`:''}
+        <a class="ch" href="/account" onclick="closeModal()">${ic('user',17)}<span class="nm">החשבון שלי</span></a>
+        <a class="ch" href="/my" onclick="closeModal()">${ic('file',17)}<span class="nm">הפניות שלי</span></a>
+        ${Auth.isStaff()?`<a class="ch" href="/admin" onclick="closeModal()">${ic('shield',17)}<span class="nm">פאנל צוות</span></a>`:''}
+        ${Auth.can('siteConfig')?`<a class="ch" href="/setup" onclick="closeModal()">${ic('settings',17)}<span class="nm">הגדרות מערכת</span></a>`:''}
         <button class="ch" id="loBtn" style="width:100%;text-align:start;border:0;background:none;font:inherit;color:var(--danger)">${ic('logout',17)}<span class="nm">התנתקות</span></button>
       </div>
     </div>`);
@@ -1230,14 +1230,14 @@ function renderFooter(){
         <p class="small mute" style="max-width:42ch">${esc(SITE.tagline)}. אנחנו לא גוף ממשלתי ולא מחליפים משטרה או טיפול מקצועי — אנחנו הצעד הראשון, ומלווים משם הלאה.</p>
       </div>
       <div><h4>דיווח</h4><ul>
-        <li><a href="#/report">פתיחת דיווח חדש</a></li><li><a href="#/track">מעקב לפי קוד</a></li>
-        <li><a href="#/my">הפניות שלי</a></li></ul></div>
+        <li><a href="/report">פתיחת דיווח חדש</a></li><li><a href="/track">מעקב לפי קוד</a></li>
+        <li><a href="/my">הפניות שלי</a></li></ul></div>
       <div><h4>ידע</h4><ul>
-        <li><a href="#/articles">מדריכים ומאמרים</a></li><li><a href="#/community">קהילה</a></li>
-        <li><a href="#/join">הצטרפות לצוות</a></li></ul></div>
+        <li><a href="/articles">מדריכים ומאמרים</a></li><li><a href="/community">קהילה</a></li>
+        <li><a href="/join">הצטרפות לצוות</a></li></ul></div>
       <div><h4>מידע</h4><ul>
-        <li><a href="#/terms">תנאי שימוש</a></li><li><a href="#/privacy">מדיניות פרטיות</a></li>
-        <li><a href="#/report">יצירת קשר</a></li>
+        <li><a href="/terms">תנאי שימוש</a></li><li><a href="/privacy">מדיניות פרטיות</a></li>
+        <li><a href="/report">יצירת קשר</a></li>
         </ul></div>
     </div>
     <div class="fbot"><span>© ${new Date().getFullYear()} SMAI. כל הזכויות שמורות.</span>
@@ -1268,7 +1268,7 @@ function requireLogin(msg='צריך להתחבר כדי להמשיך'){
     <div class="ico-tile i-brand" style="margin:0 auto 14px;width:56px;height:56px">${ic('lock',24)}</div>
     <h2 style="font-size:1.35rem">${esc(msg)}</h2>
     <p class="mute">ההתחברות מאפשרת לעקוב אחרי הפניות שלך, להשתתף בקהילה ולקבל עדכונים.</p>
-    <a class="btn btn-p btn-block" href="#/login">${ic('login',17)} כניסה או הרשמה</a></div>`;
+    <a class="btn btn-p btn-block" href="/login">${ic('login',17)} כניסה או הרשמה</a></div>`;
 }
 
 /* ===================== ראוטר ===================== */
@@ -1965,7 +1965,7 @@ route('/report', (app)=>{
     <form id="vf" class="card" novalidate>
       <div class="card-h"><span class="ico-tile i-ok">${ic('check',20)}</span>
         <div><h3 style="margin:0">בקשת תג מאומת</h3><p class="small mute" style="margin:2px 0 0">התג ✓ ניתן למשתמשים פעילים ואמינים בקהילה, ומקשה על התחזות אליכם.</p></div></div>
-      ${Auth.user ? '' : '<div class="callout c-warn" style="margin-bottom:16px"><span class="ic">'+ic('info',18)+'</span><div>כדי לבקש תג מאומת צריך חשבון. <a href="#/login">התחברות או הרשמה</a>.</div></div>'}
+      ${Auth.user ? '' : '<div class="callout c-warn" style="margin-bottom:16px"><span class="ic">'+ic('info',18)+'</span><div>כדי לבקש תג מאומת צריך חשבון. <a href="/login">התחברות או הרשמה</a>.</div></div>'}
       <div class="field"><label class="fl" for="v_why">למה מגיע לכם תג? <span class="req">*</span></label>
         <textarea id="v_why" required style="min-height:130px" placeholder="ספרו על הפעילות שלכם בקהילה — עזרה למשתמשים, השתתפות בפורומים, תוכן שיצרתם."></textarea></div>
       <div class="field"><label class="fl" for="v_links">קישורים תומכים (לא חובה)</label>
@@ -2022,7 +2022,7 @@ route('/report', (app)=>{
         <button type="button" class="btn btn-g" onclick="${bind(()=>{ W.step=2; paint(); })}">${ic('chevron',14)} חזרה</button>
         <button type="submit" class="btn btn-p btn-lg" style="flex:1" id="rfBtn">${ic('send',18)} שליחת הדיווח</button>
       </div>
-      <p class="tiny mute center" style="margin:12px 0 0">בשליחה אתם מאשרים את <a href="#/terms">תנאי השימוש</a> ואת <a href="#/privacy">מדיניות הפרטיות</a>.</p>
+      <p class="tiny mute center" style="margin:12px 0 0">בשליחה אתם מאשרים את <a href="/terms">תנאי השימוש</a> ואת <a href="/privacy">מדיניות הפרטיות</a>.</p>
     </form>`;
   };
 
@@ -2116,7 +2116,7 @@ route('/report', (app)=>{
       <div class="card-h"><span class="ico-tile i-brand">${ic('award',20)}</span>
         <div><h3 style="margin:0">בקשת מעמד מדווח מהימן</h3>
           <p class="small mute" style="margin:2px 0 0">מלאו את הפרטים — הצוות יבדוק תוך 7 ימי עסקים.</p></div></div>
-      ${Auth.user ? '' : '<div class="callout c-warn" style="margin-bottom:16px"><span class="ic">'+ic('info',18)+'</span><div>כדי להגיש בקשה צריך חשבון. <a href="#/login">התחברות או הרשמה</a>.</div></div>'}
+      ${Auth.user ? '' : '<div class="callout c-warn" style="margin-bottom:16px"><span class="ic">'+ic('info',18)+'</span><div>כדי להגיש בקשה צריך חשבון. <a href="/login">התחברות או הרשמה</a>.</div></div>'}
       <div class="grid g2" style="gap:12px">
         <div class="field"><label class="fl" for="tr_name">שם מלא <span class="req">*</span></label>
           <input type="text" id="tr_name" required placeholder="השם שלכם" value="${Auth.user?.name||''}"></div>
@@ -2253,11 +2253,11 @@ route('/my', async (app)=>{
   const _closedTs = t => t.closedAt ? new Date(t.closedAt).getTime() : new Date(t.updatedAt||t.createdAt||0).getTime();
   const activeTickets = mine.filter(t => !_isClosed(t) || (_now - _closedTs(t)) < TWO_DAYS_MS);
   const closedTickets = mine.filter(t => _isClosed(t) && (_now - _closedTs(t)) < TWO_YEARS_MS);
-  const body = `<div id="myTabs" style="display:flex;gap:8px;margin-bottom:16px"><button class="btn on" data-tab="active">פתוחות (${activeTickets.length})</button><button class="btn" data-tab="closed">נסגרו (${closedTickets.length})</button></div><div id="myActive">${activeTickets.length ? '<div class="stack">'+activeTickets.map((t,i)=>ticketRow(t,i)).join('')+'</div>' : emptyState('file','אין פניות פתוחות','כשתפתחו דיווח הוא יופיע כאן.',`<a class="btn btn-p" href="#/report">${ic('plus',16)} פתיחת דיווח</a>`)}</div><div id="myClosed" style="display:none">${closedTickets.length ? '<div class="stack">'+closedTickets.map((t,i)=>ticketRow(t,i)).join('')+'</div>' : emptyState('file','אין פניות סגורות','פניות סגורות יופיעו כאן עד שנתיים.','')}</div>`;
+  const body = `<div id="myTabs" style="display:flex;gap:8px;margin-bottom:16px"><button class="btn on" data-tab="active">פתוחות (${activeTickets.length})</button><button class="btn" data-tab="closed">נסגרו (${closedTickets.length})</button></div><div id="myActive">${activeTickets.length ? '<div class="stack">'+activeTickets.map((t,i)=>ticketRow(t,i)).join('')+'</div>' : emptyState('file','אין פניות פתוחות','כשתפתחו דיווח הוא יופיע כאן.',`<a class="btn btn-p" href="/report">${ic('plus',16)} פתיחת דיווח</a>`)}</div><div id="myClosed" style="display:none">${closedTickets.length ? '<div class="stack">'+closedTickets.map((t,i)=>ticketRow(t,i)).join('')+'</div>' : emptyState('file','אין פניות סגורות','פניות סגורות יופיעו כאן עד שנתיים.','')}</div>`;
   app.innerHTML = `<div class="page-h anim-up"><div class="eyebrow">מעקב</div><h1>הפניות שלי</h1>
     <p>כל הפניות שפתחתם מהדפדפן הזה, ומהחשבון שלכם אם התחברתם.</p></div>
     ${!Auth.user?`<div class="callout c-info" style="margin-bottom:20px"><span class="ic">${ic('info',18)}</span>
-      <div>לא מחוברים. <a href="#/login">התחברו</a> כדי לראות את הפניות שלכם מכל מכשיר.</div></div>`:''}
+      <div>לא מחוברים. <a href="/login">התחברו</a> כדי לראות את הפניות שלכם מכל מכשיר.</div></div>`:''}
     ${body}`;
   // tab switching
   $$('#myTabs button').forEach(btn => {
@@ -2271,7 +2271,7 @@ route('/my', async (app)=>{
   });
 });
 function ticketRow(t, i=0){
-  return `<a class="tk p-${t.priority||'normal'} anim-up" style="animation-delay:${Math.min(i*45,400)}ms" href="#/ticket/${t.id}">
+  return `<a class="tk p-${t.priority||'normal'} anim-up" style="animation-delay:${Math.min(i*45,400)}ms" href="/ticket/${t.id}">
     <div class="row between" style="align-items:flex-start;gap:12px">
       <div style="min-width:0;flex:1">
         <div class="tk-t">${esc(t.title)}</div>
@@ -2299,7 +2299,7 @@ route('/track', (app)=>{
     <div id="tres" style="margin-top:14px"></div>
   </div>
   ${saved.length?`<div class="sec"><h3>קודים שנשמרו בדפדפן הזה</h3>
-    <div class="stack">${saved.map(c=>`<a class="tk" href="#/ticket/${c.id}">
+    <div class="stack">${saved.map(c=>`<a class="tk" href="/ticket/${c.id}">
       <div class="row between"><div><div class="tk-t">${esc(c.title)}</div>
       <div class="tk-m"><span class="mono">${esc(c.code)}</span> · ${ago(c.at)}</div></div>
       <span style="color:var(--ink3)">${ic('chevron',18)}</span></div></a>`).join('')}</div></div>`:''}`;
@@ -2323,7 +2323,7 @@ route('/ticket', async (app, id)=>{
   app.innerHTML = loader();
   const t = await Store.get('tickets', id);
   if(!t){ app.innerHTML = emptyState('alert','הפנייה לא נמצאה','ייתכן שהקישור שגוי או שהפנייה נמחקה.',
-    `<a class="btn btn-g" href="#/track">חזרה למעקב</a>`); return; }
+    `<a class="btn btn-g" href="/track">חזרה למעקב</a>`); return; }
   const staff = Auth.isStaff();
   const d = DEPT_BY[t.dept] || DEPT_BY.other;
   const users = staff ? await Store.list('users') : [];
@@ -2446,7 +2446,7 @@ route('/ticket', async (app, id)=>{
             ${m.escalated?'<span class="b b-dang">הועבר לנציג אנושי</span>':''}</div>
           ${aiStagesHTML(m.stages)}
           ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}<div class="txt">${esc(m.text)}</div>
-          ${m.article?`<a class="btn btn-g btn-sm" style="margin-top:9px" href="#/article/${m.article}">${ic('book',14)} למדריך המלא</a>`:''}
+          ${m.article?`<a class="btn btn-g btn-sm" style="margin-top:9px" href="/article/${m.article}">${ic('book',14)} למדריך המלא</a>`:''}
           <div class="tm">${fmtTime(m.createdAt)} · ${fmtDate(m.createdAt)}</div><button class="reply-btn" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
       return `<div class="msg ${mine?'mine':''} ${m.internal?'int':''}">
         ${avatar({id:m.senderId,name:m.senderName},'s')}
@@ -2608,7 +2608,7 @@ route('/articles', async (app)=>{
     const list = dep ? all.filter(a=>a.dept===dep) : all;
     $('#aGrid').innerHTML = list.length ? list.map((a,i)=>{
       const d = DEPT_BY[a.dept]||DEPT_BY.other;
-      return `<a class="card hov anim-up" style="animation-delay:${i*55}ms" href="#/article/${a.id}">
+      return `<a class="card hov anim-up" style="animation-delay:${i*55}ms" href="/article/${a.id}">
         <div class="row" style="gap:7px;margin-bottom:11px"><span class="b b-${d.cls}">${esc(d.short)}</span>
           <span class="tiny mute">${a.read} דק׳ קריאה</span></div>
         <h3 style="font-size:1.08rem">${esc(a.title)}</h3>
@@ -2624,7 +2624,7 @@ route('/articles', async (app)=>{
 route('/article', async (app, id)=>{
   const extra = await Store.list('articles');
   const a = [...SEED_ARTICLES, ...extra].find(x=>x.id===id);
-  if(!a){ app.innerHTML = emptyState('book','המדריך לא נמצא','',`<a class="btn btn-g" href="#/articles">לכל המדריכים</a>`); return; }
+  if(!a){ app.innerHTML = emptyState('book','המדריך לא נמצא','',`<a class="btn btn-g" href="/articles">לכל המדריכים</a>`); return; }
   const d = DEPT_BY[a.dept]||DEPT_BY.other;
   const html = String(a.body||'').split('\n\n').map(p=>{
     const t = p.trim();
@@ -2632,7 +2632,7 @@ route('/article', async (app, id)=>{
     return `<p>${esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>')}</p>`;
   }).join('');
   app.innerHTML = `
-  <div class="crumb anim-in"><a href="#/articles">מדריכים</a> ← ${esc(a.title)}</div>
+  <div class="crumb anim-in"><a href="/articles">מדריכים</a> ← ${esc(a.title)}</div>
   <div class="split">
     <article class="card anim-up">
       <div class="row" style="gap:8px;margin-bottom:14px"><span class="b b-${d.cls}">${esc(d.short)}</span>
@@ -2643,13 +2643,13 @@ route('/article', async (app, id)=>{
       <div style="line-height:1.85">${html}</div>
       <hr class="divider">
       <div class="callout c-info"><span class="ic">${ic('info',18)}</span>
-        <div>המדריך לא מחליף ליווי אישי. אם המצב נוגע אליכם — <a href="#/report">פתחו דיווח</a> ונציג יחזור אליכם.</div></div>
+        <div>המדריך לא מחליף ליווי אישי. אם המצב נוגע אליכם — <a href="/report">פתחו דיווח</a> ונציג יחזור אליכם.</div></div>
     </article>
     <aside class="stack anim-up d2">
       <div class="card sticky"><h4>מדריכים נוספים</h4>
         <div class="stack" style="gap:8px">${SEED_ARTICLES.filter(x=>x.id!==a.id).slice(0,5).map(x=>
-          `<a href="#/article/${x.id}" class="small" style="display:block;padding:9px 11px;border-radius:var(--r);background:var(--surface2);color:var(--ink2);font-weight:600">${esc(x.title)}</a>`).join('')}</div>
-        <a class="btn btn-p btn-block" href="#/report" style="margin-top:14px">${ic('shield-alert',16)} פתיחת דיווח</a></div>
+          `<a href="/article/${x.id}" class="small" style="display:block;padding:9px 11px;border-radius:var(--r);background:var(--surface2);color:var(--ink2);font-weight:600">${esc(x.title)}</a>`).join('')}</div>
+        <a class="btn btn-p btn-block" href="/report" style="margin-top:14px">${ic('shield-alert',16)} פתיחת דיווח</a></div>
     </aside>
   </div>`;
 });
@@ -2676,7 +2676,7 @@ route('/community', async (app)=>{
       ${SRV_CATS.map(c=>`<button class="chip" data-c="${c.id}">${c.ico} ${esc(c.l)}</button>`).join('')}
     </div>
     <div class="row" style="gap:7px;flex:none">
-      ${Auth.user?`<a class="btn btn-ghost btn-sm" href="#/friends">${ic('users',15)} חברים</a>`:''}
+      ${Auth.user?`<a class="btn btn-ghost btn-sm" href="/friends">${ic('users',15)} חברים</a>`:''}
       ${Auth.user?`<button class="btn btn-ghost btn-sm" id="joinInv">${ic('link',15)} הצטרפות בקוד</button>`:''}
       ${canCreateServer(Auth.user)?`<button class="btn btn-g btn-sm" id="newSrv">${ic('plus',15)} שרת חדש</button>`:''}
     </div>
@@ -2700,7 +2700,7 @@ route('/community', async (app)=>{
     const list = cat ? servers.filter(s=>s.cat===cat) : servers;
     const vis = list.filter(s => s.cat!=='staff' || Auth.isStaff());
     $('#srvGrid').innerHTML = vis.length ? vis.map((s,i)=>`
-      <a class="srv-card anim-up" style="animation-delay:${i*50}ms" href="#/server/${s.id}">
+      <a class="srv-card anim-up" style="animation-delay:${i*50}ms" href="/server/${s.id}">
         <span class="srv-ico">${s.ico||'💬'}</span>
         <div style="min-width:0;flex:1">
           <div class="row" style="gap:6px;margin-bottom:3px">
@@ -2745,7 +2745,7 @@ function newServerModal(){
     return openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('info',20)}</span><h3>פתיחת שרת</h3></div>
       <div class="m-b"><p class="small">כרגע רק ${CFG.get('serverCreate')==='verified'?'משתמשים מאומתים':'אנשי צוות'} יכולים לפתוח שרתים חדשים בקהילה.
       אפשר להגיש בקשה לתג מאומת מעמוד הקהילה, או לפתוח קבוצה פרטית בהודעות הפרטיות.</p></div>
-      <div class="m-f"><a class="btn btn-g" href="#/dm" onclick="closeModal()">קבוצה פרטית</a>
+      <div class="m-f"><a class="btn btn-g" href="/dm" onclick="closeModal()">קבוצה פרטית</a>
       <button class="btn btn-p" onclick="closeModal()">הבנתי</button></div>`);
   }
   openModal(`
@@ -2788,7 +2788,7 @@ route('/server', async (app, id, chArg, threadArg)=>{
   if(Auth.banInfo()) return renderBanned(app);
   const servers = await Servers.all();
   const s = servers.find(x=>x.id===id);
-  if(!s){ app.innerHTML = emptyState('message','השרת לא נמצא','',`<a class="btn btn-g" href="#/community">לכל השרתים</a>`); return; }
+  if(!s){ app.innerHTML = emptyState('message','השרת לא נמצא','',`<a class="btn btn-g" href="/community">לכל השרתים</a>`); return; }
 
   // Private membership is authorized by the server.
   const [users, channels] = await Promise.all([Store.list('users'), Servers.channels(id)]);
@@ -2805,7 +2805,7 @@ route('/server', async (app, id, chArg, threadArg)=>{
   sideList.forEach(x=>{ (grouped[x.cat] = grouped[x.cat]||[]).push(x); });
 
   app.innerHTML = `
-  <div class="crumb anim-in"><a href="#/community">קהילה</a> ← ${esc(s.name)} ← ${esc(ch?.name||'')}</div>
+  <div class="crumb anim-in"><a href="/community">קהילה</a> ← ${esc(s.name)} ← ${esc(ch?.name||'')}</div>
   <button class="hub-toggle" id="hubTog" aria-label="פתיחת רשימת הערוצים">${ic('list',18)} ערוצים</button>
   <div class="hub hub3 anim-up" id="hubRoot">
     <div class="hub-side" id="hubSide">
@@ -2814,7 +2814,7 @@ route('/server', async (app, id, chArg, threadArg)=>{
       <div class="hs-b">
         ${SRV_CATS.filter(c=>grouped[c.id]?.length).map(c=>`
           <div class="cat-lbl">${c.ico} ${esc(c.l)}</div>
-          ${grouped[c.id].map(x=>`<a class="ch ${x.id===id?'on':''}" href="#/server/${x.id}">
+          ${grouped[c.id].map(x=>`<a class="ch ${x.id===id?'on':''}" href="/server/${x.id}">
             <span class="em">${x.ico||'💬'}</span><span class="nm">${esc(x.name)}</span>
             ${x.private?ic('lock',12):''}</a>`).join('')}`).join('')}
       </div>
@@ -2824,7 +2824,7 @@ route('/server', async (app, id, chArg, threadArg)=>{
         <div style="padding:6px 8px 12px">
           ${channels.filter(c=>!c.staffOnly||staff).map(c=>{
             const k = CH_KIND_BY[c.kind]||CH_KIND_BY.text;
-            return `<a class="ch ${c.id===ch?.id?'on':''}" href="#/server/${id}/${encodeURIComponent(c.id)}">
+            return `<a class="ch ${c.id===ch?.id?'on':''}" href="/server/${id}/${encodeURIComponent(c.id)}">
               <span class="em">${ic(k.ico,14)}</span><span class="nm">${esc(c.name)}</span>
               ${c.staffOnly?ic('lock',11):''}
               ${manage && !c.virtual?`<button class="ch-x" data-chdel="${c.id}" title="מחיקת הערוץ">${ic('trash',11)}</button>`:''}</a>`;
@@ -2901,7 +2901,7 @@ function renderTextChannel(s, ch, users, o){
              <div>${ch.kind==='ann' ? 'ערוץ הכרזות — רק מנהלי השרת כותבים בו.'
                    : !o.member ? 'הצטרפו לשרת כדי לכתוב בערוצים שלו.' : 'אין לכם הרשאת כתיבה בערוץ הזה.'}</div></div>`))
         : `<div class="row between"><span class="small mute">כדי לכתוב בקהילה צריך חשבון.</span>
-           <a class="btn btn-p btn-sm" href="#/login">${ic('login',15)} כניסה</a></div>`}
+           <a class="btn btn-p btn-sm" href="/login">${ic('login',15)} כניסה</a></div>`}
     </div>`;
 
   const box = $('#cchat');
@@ -2963,7 +2963,7 @@ function renderTextChannel(s, ch, users, o){
         <div class="m-b"><div class="callout c-dang" style="margin-bottom:14px"><span class="ic">${ic('alert',18)}</span>
           <div>מנוע SMAI זיהה בהודעה תוכן שמפר את כללי הקהילה (${esc(mod.catLabel)}, חומרה ${esc(mod.label)}).
           ההודעה לא פורסמה.</div></div>
-          <p class="small mute">אם מדובר בטעות — נסחו מחדש. אם אתם במצוקה, <a href="#/report">פתחו דיווח</a> ונציג ילווה אתכם באופן פרטי.</p></div>
+          <p class="small mute">אם מדובר בטעות — נסחו מחדש. אם אתם במצוקה, <a href="/report">פתחו דיווח</a> ונציג ילווה אתכם באופן פרטי.</p></div>
         <div class="m-f"><button class="btn btn-p" onclick="closeModal()">הבנתי</button></div>`);
       return;
     }
@@ -3069,7 +3069,7 @@ async function renderForum(s, ch, users, threadId, o){
         </div>
         <div class="th-list">
           ${threads.length ? threads.map(t=>`
-            <a class="th-row" href="#/server/${s.id}/${encodeURIComponent(ch.id)}/${t.id}">
+            <a class="th-row" href="/server/${s.id}/${encodeURIComponent(ch.id)}/${t.id}">
               ${avatar({id:t.authorId,name:t.authorName,avatar:(users.find(u=>u.id===t.authorId)||{}).avatar},'s')}
               <div style="min-width:0;flex:1">
                 <div class="row" style="gap:6px">
@@ -3098,7 +3098,7 @@ async function renderForum(s, ch, users, threadId, o){
           <textarea id="tin" maxlength="${CFG.get('threadMaxLen')}" placeholder="תגובה לשרשור... (Enter לשליחה)" style="min-height:46px"></textarea>
           <button class="btn btn-p" id="tbtn" style="height:46px">${ic('send',17)}</button></div>`
       : `<div class="row between"><span class="small mute">כדי להגיב צריך חשבון פעיל בשרת.</span>
-         <a class="btn btn-p btn-sm" href="#/login">${ic('login',15)} כניסה</a></div>`)}
+         <a class="btn btn-p btn-sm" href="/login">${ic('login',15)} כניסה</a></div>`)}
     </div>`;
 
   const box = $('#thBox');
@@ -3110,7 +3110,7 @@ async function renderForum(s, ch, users, threadId, o){
       .sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
     const au = users.find(u=>u.id===cur.authorId) || {};
     box.innerHTML = `
-      <a class="btn btn-ghost btn-xs" href="#/server/${s.id}/${encodeURIComponent(ch.id)}" style="margin-bottom:12px">${ic('arrow',13)} חזרה לשרשורים</a>
+      <a class="btn btn-ghost btn-xs" href="/server/${s.id}/${encodeURIComponent(ch.id)}" style="margin-bottom:12px">${ic('arrow',13)} חזרה לשרשורים</a>
       <div class="th-head">
         <div class="row between" style="align-items:flex-start">
           <h2 style="font-size:1.2rem;margin:0 0 6px">${esc(cur.title)}</h2>
@@ -3465,7 +3465,7 @@ function renderBanned(app){
         ובמצב סכנה מיידית אפשר תמיד להתקשר למשטרה, 100.</p>
       <div class="row" style="margin-top:18px">
         <button class="btn btn-p" id="apBtn">${ic('message',16)} הגשת ערעור</button>
-        <a class="btn btn-g" href="#/">חזרה לדף הבית</a>
+        <a class="btn btn-g" href="/">חזרה לדף הבית</a>
       </div>
       <div id="apOut" style="margin-top:14px"></div>
     </div>
@@ -3639,7 +3639,7 @@ route('/dm', async (app, id)=>{
   const otherU = users.find(u=>u.id===other);
 
   app.innerHTML = `
-  <div class="crumb anim-in"><a href="#/community">קהילה</a> ← הודעות פרטיות</div>
+  <div class="crumb anim-in"><a href="/community">קהילה</a> ← הודעות פרטיות</div>
   <div class="hub anim-up">
     <div class="hub-side">
       <div class="hs-h"><span>${ic('message',16)} שיחות</span>
@@ -3652,7 +3652,7 @@ route('/dm', async (app, id)=>{
           const o = (c.members||[]).find(x=>x!==me.id);
           const ou = users.find(u=>u.id===o) || { id:o, name:c.names?.[o]||'משתמש' };
           const av = g ? `<span class="grp-av">${ic('users',16)}</span>` : avatar(ou,'s');
-          return `<a class="dm-item ${cur&&c.id===cur.id?'on':''}" href="#/dm/${c.id}">
+          return `<a class="dm-item ${cur&&c.id===cur.id?'on':''}" href="/dm/${c.id}">
             ${av}<div style="min-width:0">
               <div class="nm">${esc(convTitle(c, me.id, users))}
                 ${g?`<span class="b b-gray" style="font-size:.6rem">${(c.members||[]).length}</span>`
@@ -3975,7 +3975,7 @@ route('/join', (app)=>{
       <textarea id="appExp" placeholder="מודרציה בשרתים, תמיכה טכנית, הדרכה, עבודה עם נוער..."></textarea></div>
     <div class="field"><label>למה דווקא SMAI?</label>
       <textarea id="appWhy" style="min-height:120px" placeholder="ספרו לנו קצת עליכם ומה מביא אתכם לכאן"></textarea></div>
-    <label class="check"><input type="checkbox" id="appOk"><span>אני מאשר/ת שקראתי את <a href="#/privacy">מדיניות הפרטיות</a> ומסכים/ה לשמירת הפרטים לצורך בחינת המועמדות.</span></label>
+    <label class="check"><input type="checkbox" id="appOk"><span>אני מאשר/ת שקראתי את <a href="/privacy">מדיניות הפרטיות</a> ומסכים/ה לשמירת הפרטים לצורך בחינת המועמדות.</span></label>
     <button class="btn btn-p btn-block" id="appSend" style="margin-top:16px">${ic('send',17)} שליחת מועמדות</button>
   </div>`;
   initReveal();
@@ -3997,7 +3997,7 @@ route('/join', (app)=>{
       openModal(`<div class="m-h"><span class="ico-tile i-ok">${ic('check',20)}</span><h3>המועמדות נשלחה</h3></div>
       <div class="m-b"><p>תודה! נחזור אליך למייל <b>${esc(g('appMail'))}</b> תוך 7 ימי עסקים.</p>
         <p class="small mute">בינתיים מוזמנים להצטרף לשרתי הקהילה ולהכיר את הצוות.</p></div>
-      <div class="m-f"><a class="btn btn-g" href="#/community" onclick="closeModal()">לקהילה</a>
+      <div class="m-f"><a class="btn btn-g" href="/community" onclick="closeModal()">לקהילה</a>
         <button class="btn btn-p" onclick="closeModal()">סגירה</button></div>`);
       ['appAge','appTag','appRole','appExp','appWhy'].forEach(i=>{ const el=$('#'+i); if(el) el.value=''; });
       $('#appOk').checked = false;
@@ -4022,10 +4022,10 @@ route('/login',app=>{
  if(!matchMedia('(prefers-reduced-motion: reduce)').matches)sceneTimer=setInterval(()=>{if(!$('.auth-stage'))return clearInterval(sceneTimer);showScene((scene+1)%scenes.length);},3000);
  let signup=false;const form=$('#emailAuth'),status=$('#authStatus'),submit=form.querySelector('[type=submit]');
  const message=e=>({'auth/invalid-credential':'המייל או הסיסמה אינם נכונים','auth/user-not-found':'לא נמצא חשבון עם כתובת המייל הזו','auth/email-already-in-use':'כבר קיים חשבון עם המייל הזה','auth/weak-password':'הסיסמה חלשה מדי','auth/too-many-requests':'בוצעו יותר מדי ניסיונות. המתינו מעט ונסו שוב','auth/network-request-failed':'אין כרגע חיבור לשירות ההתחברות','auth/popup-closed-by-user':'חלון Google נסגר לפני השלמת הכניסה','auth/unauthorized-domain':'כתובת האתר עדיין לא אושרה במערכת ההתחברות'}[e?.code]||e?.message||'הפעולה נכשלה');
- const finish=async()=>{await Auth.refresh();await CFG.load().catch(()=>{});location.hash='#/';await render();};
+ const finish=async()=>{await Auth.refresh();await CFG.load().catch(()=>{});history.replaceState(null,'','/');await render();};
  $('#authMode').onclick=()=>{signup=!signup;$('#authNameWrap').hidden=!signup;$('#authName').required=signup;submit.textContent=signup?'יצירת חשבון':'כניסה';$('#authMode').textContent=signup?'יש לי חשבון — כניסה':'אין לי חשבון — הרשמה';$('#authPassword').autocomplete=signup?'new-password':'current-password';status.textContent='';};
  $('#googleLogin').onclick=async()=>{status.textContent='פותח את Google…';try{await loginGoogle();await finish();}catch(e){status.textContent=message(e);}};
- form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;status.textContent=signup?'יוצר חשבון…':'מתחבר…';try{if(signup){await registerEmail($('#authEmail').value.trim(),$('#authPassword').value,$('#authName').value.trim());status.textContent='החשבון נוצר ונשלח מייל אימות.';}else await loginEmail($('#authEmail').value.trim(),$('#authPassword').value);await finish();}catch(e){status.textContent=message(e);}finally{submit.disabled=false;}};
+ form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;status.textContent=signup?'יוצר חשבון…':'מתחבר…';try{if(signup){await registerEmail($('#authEmail').value.trim(),$('#authPassword').value,$('#authName').value.trim());await Auth.refresh();await request('/api/auth/email-verification','POST',{});status.textContent='החשבון נוצר ונשלח מייל אימות מעוצב.';}else await loginEmail($('#authEmail').value.trim(),$('#authPassword').value);await finish();}catch(e){status.textContent=message(e);}finally{submit.disabled=false;}};
  $('#forgotPassword').onclick=async()=>{const email=$('#authEmail').value.trim();if(!email){status.textContent='הזינו קודם את כתובת המייל.';$('#authEmail').focus();return;}const b=$('#forgotPassword');b.disabled=true;status.textContent='שולח הודעת איפוס מאובטחת…';try{const result=await request('/api/auth/password-reset','POST',{email});status.textContent=result.message;}catch(e){status.textContent=message(e);}finally{b.disabled=false;}};
 });
 
@@ -4035,7 +4035,7 @@ route('/account',async app=>{
  app.innerHTML=`<div class="page-h"><div class="eyebrow">החשבון שלי</div><h1>הפרופיל וההעדפות שלך</h1></div><form id="profileForm" class="stack" style="max-width:760px"><section class="card"><div class="row">${avatar(u,'l')}<div><h2>${esc(u.name)}</h2>${rankBadge(u.rank)}</div></div><div class="field"><label for="profileName">שם תצוגה</label><input id="profileName" required maxlength="80" value="${esc(u.name)}"></div><div class="field"><label for="profileBio">כמה מילים עליי</label><textarea id="profileBio" maxlength="500">${esc(u.bio||'')}</textarea></div><p class="small mute">אימייל: ${esc(u.email)} · ${u.emailVerified?'מאומת':'טרם אומת'}</p></section><section class="card"><div class="card-h"><span class="ico-tile i-brand">${ic('mail',19)}</span><div><h3>התראות במייל</h3><p class="small mute" style="margin:3px 0 0">בחרו אילו עדכונים תרצו לקבל. הודעות אבטחה קריטיות תמיד נשמרות בחשבון.</p></div></div><div class="stack">${MAIL_PREFS.map(p=>`<label class="row" style="align-items:flex-start"><input type="checkbox" data-mail-pref="${p.id}" ${prefs[p.id]?'checked':''}><span><b>${esc(p.l)}</b><small class="mute" style="display:block">${esc(p.d)}</small></span></label>`).join('')}</div></section><section class="card"><h3>אבטחת החשבון</h3><p class="small mute">אימות הרשמה ואיפוס סיסמה נשלחים דרך שירות ההתחברות המאובטח.</p>${u.securityEvents?.length?`<div class="callout c-warn"><span class="ic">${ic('shield',18)}</span><div>זוהתה כניסה מרשת חדשה ב־${fmtDate(u.securityEvents[0].createdAt)}. אם זו לא הייתה הכניסה שלך, אפס את הסיסמה.</div></div>`:''}<div class="row"><button id="changePassword" class="btn btn-g" type="button">איפוס סיסמה</button>${u.emailVerified?'':`<button id="resendVerify" class="btn btn-g" type="button">שליחת אימות מחדש</button>`}<button id="requestDeletion" class="btn btn-d" type="button">בקשת מחיקת חשבון</button></div></section><div class="row"><button class="btn btn-p">שמירת כל ההגדרות</button><button id="accountLogout" class="btn btn-g" type="button">יציאה מהחשבון</button></div><p id="profileStatus" role="status"></p></form>`;
  $('#profileForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('[type=submit]');b.disabled=true;const mailPrefs={};$$('[data-mail-pref]').forEach(x=>mailPrefs[x.dataset.mailPref]=x.checked);try{await Store.update('users',u.id,{name:$('#profileName').value.trim(),bio:$('#profileBio').value.trim(),mailPrefs});await Auth.refresh();$('#profileStatus').textContent='הפרופיל והעדפות ההתראות נשמרו';renderNav();}catch(e){$('#profileStatus').textContent=e.message;}finally{b.disabled=false;}};
  $('#accountLogout').onclick=async()=>{await Auth.signOut();location.hash='#/';await render();};
- if($('#resendVerify'))$('#resendVerify').onclick=async()=>{await resendVerification();$('#profileStatus').textContent='מייל אימות נוסף נשלח.';};
+ if($('#resendVerify'))$('#resendVerify').onclick=async()=>{const result=await request('/api/auth/email-verification','POST',{});$('#profileStatus').textContent=result.message;};
  $('#changePassword').onclick=async()=>{await Auth.changePassword();$('#profileStatus').textContent='קישור מאובטח לאיפוס הסיסמה נשלח למייל.';};
  $('#requestDeletion').onclick=async()=>{if(!confirm('לשלוח בקשה למחיקת החשבון? החשבון לא יימחק מיד.'))return;await Store.add('reports',{kind:'account_delete',type:'account',reason:'בקשת מחיקת חשבון',text:'המשתמש ביקש להתחיל תהליך מחיקה'});$('#profileStatus').textContent='בקשת המחיקה התקבלה ונשמרה. הצוות יעדכן אותך לפני ביצוע מחיקה.';};
 });
@@ -4046,7 +4046,7 @@ route('/admin', async (app)=>{
     <div class="ico-tile i-dang" style="margin:0 auto 14px;width:56px;height:56px">${ic('lock',24)}</div>
     <h2 style="font-size:1.3rem">אין לך הרשאה לאזור הזה</h2>
     <p class="mute">פאנל הצוות פתוח מדרגת מתמחה ומעלה. אם לדעתך זו טעות, פנו לראש המחלקה.</p>
-    <a class="btn btn-g" href="#/">חזרה לדף הבית</a></div>`;
+    <a class="btn btn-g" href="/">חזרה לדף הבית</a></div>`;
 
   const TABS = [
     { k:'queue', l:'תור פניות', ic:'file', cap:'viewPanel' },
@@ -4263,7 +4263,7 @@ route('/admin', async (app)=>{
 
   function tApps(){
     if(!apps.length) return emptyState('users','אין מועמדויות','שתפו את עמוד ההצטרפות כדי לקבל מועמדים.',
-      '<a class="btn btn-g btn-sm" href="#/join">לעמוד ההצטרפות</a>');
+      '<a class="btn btn-g btn-sm" href="/join">לעמוד ההצטרפות</a>');
     return `<div class="stack" style="gap:12px">${apps.map(a=>{
       const d = DEPT_BY[a.dept]||DEPT_BY.other;
       return `<div class="card">
@@ -4361,7 +4361,7 @@ route('/admin', async (app)=>{
   }
 
   function tBackup(){return '<div class="card"><h2>ייצוא נתוני המערכת</h2><p>קובץ הגיבוי מכיל מידע רגיש. שמרו אותו במקום מאובטח ואל תשתפו אותו בציבור.</p><button id="bkDl" class="btn btn-p">הורדת גיבוי</button><p class="small mute">ייבוא מהמערכת הקודמת יבוצע רק לאחר התאמת חשבונות והרשאות. אין כרגע ייבוא אוטומטי.</p></div>';}
-  function tSystem(){return '<div class="card"><div class="eyebrow">חיבורי מערכת</div><h2>מצב השירותים</h2><p>מצב החיבור נבדק מול השרת. מפתחות אינם נשמרים בדפדפן.</p><a href="#/setup" class="btn btn-p">פתיחת מרכז המערכת</a></div>';}
+  function tSystem(){return '<div class="card"><div class="eyebrow">חיבורי מערכת</div><h2>מצב השירותים</h2><p>מצב החיבור נבדק מול השרת. מפתחות אינם נשמרים בדפדפן.</p><a href="/setup" class="btn btn-p">פתיחת מרכז המערכת</a></div>';}
   function tCampaigns(){
     if(Auth.user?.rank!=='founder')return '<div class="err">ניהול קמפיינים זמין למייסד בלבד.</div>';
     const audience={all:'כולם',members:'משתמשים מחוברים',staff:'צוות בלבד'};
@@ -4440,7 +4440,7 @@ route('/setup',async app=>{
  if(!Auth.can('siteConfig')){app.innerHTML=requireLogin('האזור פתוח למנהל המערכת בלבד');return;}
  const state=await request('/api/status');
  const gemini=state.aiMode==='gemini';
- app.innerHTML=`<div class="page-h"><div class="eyebrow">SYSTEM / INTEGRATIONS</div><h1>מרכז המערכת</h1><p>המצב האמיתי של השירותים שמאחורי Sentinel.</p></div><div class="grid g3"><div class="card"><span class="b b-ok">מחובר</span><h2>אחסון נתונים</h2><p>פניות, הודעות והרשאות נשמרים בשרת.</p></div><div class="card"><span class="b ${gemini?'b-ok':'b-warn'}">${gemini?'מערכת AI פעילה':'מצב בסיסי פעיל'}</span><h2>SMAI AI</h2><p>${gemini?'מערכת ה-AI פועלת דרך השרת והמפתח אינו נחשף בדפדפן.':'העוזר והפניות מקבלים כרגע הכוונה אוטומטית לפי נושא. לאחר הגדרת מפתח API תקין, המערכת תעבור אוטומטית למצב AI.'}</p>${gemini?'':`<a class="btn btn-g" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">יצירת מפתח AI</a>`}</div><div class="card"><span class="b ${state.mail?'b-ok':'b-warn'}">${state.mail?'מחובר':'ממתין לספק שליחה'}</span><h2>עדכונים במייל</h2><p>כתובת המערכת: <b>${esc(state.mailFrom||'minipro.7548@gmail.com')}</b>. ${state.mail?'שירות השליחה מחובר.':'עדיין לא נשלחים מיילים. סיסמת אפליקציה של Gmail אינה נשמרת באתר; נדרש שירות דואר מאובטח דרך HTTP.'}</p></div></div><div class="card" style="margin-top:24px"><h2>העברת המידע הישן</h2><p>זו מערכת נתונים חדשה ונפרדת. מידע וחשבונות Firebase הישנים לא הועברו ולא שונו. נדרש תהליך העברה מאושר לפני החלפת האתר הציבורי.</p><a class="btn btn-g" href="#/admin">חזרה לפאנל הניהול</a></div>`;
+ app.innerHTML=`<div class="page-h"><div class="eyebrow">SYSTEM / INTEGRATIONS</div><h1>מרכז המערכת</h1><p>המצב האמיתי של השירותים שמאחורי Sentinel.</p></div><div class="grid g3"><div class="card"><span class="b b-ok">מחובר</span><h2>אחסון נתונים</h2><p>פניות, הודעות והרשאות נשמרים בשרת.</p></div><div class="card"><span class="b ${gemini?'b-ok':'b-warn'}">${gemini?'מערכת AI פעילה':'מצב בסיסי פעיל'}</span><h2>SMAI AI</h2><p>${gemini?'מערכת ה-AI פועלת דרך השרת והמפתח אינו נחשף בדפדפן.':'העוזר והפניות מקבלים כרגע הכוונה אוטומטית לפי נושא. לאחר הגדרת מפתח API תקין, המערכת תעבור אוטומטית למצב AI.'}</p>${gemini?'':`<a class="btn btn-g" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">יצירת מפתח AI</a>`}</div><div class="card"><span class="b ${state.mail?'b-ok':'b-warn'}">${state.mail?'מחובר':'ממתין לספק שליחה'}</span><h2>עדכונים במייל</h2><p>כתובת המערכת: <b>${esc(state.mailFrom||'minipro.7548@gmail.com')}</b>. ${state.mail?'שירות השליחה מחובר.':'עדיין לא נשלחים מיילים. סיסמת אפליקציה של Gmail אינה נשמרת באתר; נדרש שירות דואר מאובטח דרך HTTP.'}</p></div></div><div class="card" style="margin-top:24px"><h2>העברת המידע הישן</h2><p>זו מערכת נתונים חדשה ונפרדת. מידע וחשבונות Firebase הישנים לא הועברו ולא שונו. נדרש תהליך העברה מאושר לפני החלפת האתר הציבורי.</p><a class="btn btn-g" href="/admin">חזרה לפאנל הניהול</a></div>`;
 });
 
 route('/terms', (app)=>{
@@ -4479,7 +4479,7 @@ route('/terms', (app)=>{
     ['8. פרטיות ומידע',
      `מה שאתם כותבים לנו נשאר חסוי ונגיש לכם ולצוות המורשה. אנחנו לא מוכרים מידע, לא משתפים אותו
       עם מפרסמים, לא פונים לבית הספר ולא פונים להורים בלי לדבר איתכם — למעט מצב של סכנת חיים.
-      פירוט מלא נמצא ב<a href="#/privacy">מדיניות הפרטיות</a>.`],
+      פירוט מלא נמצא ב<a href="/privacy">מדיניות הפרטיות</a>.`],
     ['9. קניין רוחני',
      `התכנים, המדריכים והעיצוב באתר שייכים ל-SMAI. מותר לשתף קישורים ולצטט לצורך עזרה לאחרים, ואסור להעתיק
       את התוכן ולהציגו כאילו הוא שלכם או לעשות בו שימוש מסחרי ללא אישור בכתב.`],
@@ -4512,13 +4512,13 @@ route('/terms', (app)=>{
       <hr class="divider">
       <div class="callout c-info"><span class="ic">${ic('heart',18)}</span>
         <div>אנחנו כאן כי מגיע לכל ילד להרגיש בטוח ברשת. אם משהו בתנאים לא ברור —
-          <a href="#/report">פתחו פנייה</a> ונסביר בשמחה.</div></div>
+          <a href="/report">פתחו פנייה</a> ונסביר בשמחה.</div></div>
     </div>
     <aside class="stack anim-up d3">
       <div class="card sticky">
         <div class="card-h"><span class="ico-tile i-brand">${ic('list',19)}</span><h4>ניווט מהיר</h4></div>
         <div class="stack" style="gap:4px">
-          ${S.map(([h],i)=>`<a class="btn btn-ghost btn-sm" style="justify-content:flex-start" href="#/terms" onclick="${bind(()=>{ document.getElementById('t'+i)?.scrollIntoView({behavior:'smooth',block:'start'}); })}">${esc(h)}</a>`).join('')}
+          ${S.map(([h],i)=>`<a class="btn btn-ghost btn-sm" style="justify-content:flex-start" href="/terms" onclick="${bind(()=>{ document.getElementById('t'+i)?.scrollIntoView({behavior:'smooth',block:'start'}); })}">${esc(h)}</a>`).join('')}
         </div>
       </div>
       <div class="card">
@@ -4528,13 +4528,13 @@ route('/terms', (app)=>{
       </div>
       <div class="card">
         <p class="small mute" style="margin:0">רוצים לקרוא גם על מה קורה עם המידע שלכם?</p>
-        <a class="btn btn-g btn-sm btn-block" href="#/privacy" style="margin-top:10px">${ic('lock',15)} מדיניות פרטיות</a>
+        <a class="btn btn-g btn-sm btn-block" href="/privacy" style="margin-top:10px">${ic('lock',15)} מדיניות פרטיות</a>
       </div>
     </aside>
   </div>`;
 });
 
-route('/privacy',app=>{app.innerHTML='<div class="page-h"><div class="eyebrow">שקיפות</div><h1>פרטיות בגרסת הבדיקה</h1><p>עדכון: 10 בספטמבר 2026</p></div><div class="stack" style="max-width:850px"><section class="card"><h2>מה נשמר</h2><p>שם התצוגה, אימייל ומזהה החשבון מתקבלים משירות ההזדהות. תוכן הפניות, ההודעות והפעולות שלכם נשמר בשרת. שימוש בכינוי אינו אנונימיות מלאה: הפנייה משויכת לחשבון שלכם.</p></section><section class="card"><h2>מי יכול לגשת</h2><p>פניות נגישות לפונה ולצוות המורשה; הערות פנימיות זמינות לצוות בלבד. תוכן קהילתי גלוי למשתתפים המורשים באותו מרחב. שיחות פרטיות מוגבלות לחברי השיחה.</p></section><section class="card"><h2>סיוע של AI</h2><p>רק לאחר אישור מפורש, התוכן שנשלח לעוזר מועבר לספק AI חיצוני. בבקשת AI בתוך פנייה נשלחים גם התיאור וההודעות הגלויות האחרונות. אין לשלוח סיסמאות, קודי אימות, תמונות אינטימיות או פרטים מזהים שאינם נחוצים.</p></section><section class="card"><h2>אחסון ובקשות פרטיות</h2><p>המידע נשמר באמצעות תשתית Sites ו-Cloudflare. בגרסה זו עדיין אין מחיקה אוטומטית לפי זמן. אפשר לבקש תיקון, ייצוא או מחיקה באמצעות פנייה לצוות. ההעדפות וטיוטות מסוימות נשמרות גם בדפדפן.</p><a class="btn btn-g" href="#/report">פנייה בנושא פרטיות</a></section><section class="card"><h2>לפני פתיחה לציבור</h2><p>זוהי גרסת בדיקה פרטית. יש לקבוע מדיניות שמירת מידע, נוהל מחיקה, תנאים ושימוש של קטינים לפני הפעלה ציבורית. אין להזין כאן מידע רגיש אמיתי לצורך הבדיקה.</p></section></div>';});
+route('/privacy',app=>{app.innerHTML='<div class="page-h"><div class="eyebrow">שקיפות</div><h1>פרטיות בגרסת הבדיקה</h1><p>עדכון: 10 בספטמבר 2026</p></div><div class="stack" style="max-width:850px"><section class="card"><h2>מה נשמר</h2><p>שם התצוגה, אימייל ומזהה החשבון מתקבלים משירות ההזדהות. תוכן הפניות, ההודעות והפעולות שלכם נשמר בשרת. שימוש בכינוי אינו אנונימיות מלאה: הפנייה משויכת לחשבון שלכם.</p></section><section class="card"><h2>מי יכול לגשת</h2><p>פניות נגישות לפונה ולצוות המורשה; הערות פנימיות זמינות לצוות בלבד. תוכן קהילתי גלוי למשתתפים המורשים באותו מרחב. שיחות פרטיות מוגבלות לחברי השיחה.</p></section><section class="card"><h2>סיוע של AI</h2><p>רק לאחר אישור מפורש, התוכן שנשלח לעוזר מועבר לספק AI חיצוני. בבקשת AI בתוך פנייה נשלחים גם התיאור וההודעות הגלויות האחרונות. אין לשלוח סיסמאות, קודי אימות, תמונות אינטימיות או פרטים מזהים שאינם נחוצים.</p></section><section class="card"><h2>אחסון ובקשות פרטיות</h2><p>המידע נשמר באמצעות תשתית Sites ו-Cloudflare. בגרסה זו עדיין אין מחיקה אוטומטית לפי זמן. אפשר לבקש תיקון, ייצוא או מחיקה באמצעות פנייה לצוות. ההעדפות וטיוטות מסוימות נשמרות גם בדפדפן.</p><a class="btn btn-g" href="/report">פנייה בנושא פרטיות</a></section><section class="card"><h2>לפני פתיחה לציבור</h2><p>זוהי גרסת בדיקה פרטית. יש לקבוע מדיניות שמירת מידע, נוהל מחיקה, תנאים ושימוש של קטינים לפני הפעלה ציבורית. אין להזין כאן מידע רגיש אמיתי לצורך הבדיקה.</p></section></div>';});
 /* ===================== 404 ===================== */
 route('/updates', async (app)=>{
 
@@ -4636,8 +4636,8 @@ route('/404', (app)=>{
     <p class="mute" style="max-width:44ch;margin:0 auto 22px">אולי הקישור ישן, או שנפלה טעות בכתובת.
       אפשר לחזור לדף הבית או לפתוח פנייה חדשה.</p>
     <div class="row" style="justify-content:center">
-      <a class="btn btn-p" href="#/">${ic('home',17)} לדף הבית</a>
-      <a class="btn btn-g" href="#/report">${ic('send',17)} פתיחת פנייה</a></div></div>`;
+      <a class="btn btn-p" href="/">${ic('home',17)} לדף הבית</a>
+      <a class="btn btn-g" href="/report">${ic('send',17)} פתיחת פנייה</a></div></div>`;
 });
 
 /* ===================== ראוטר ===================== */
@@ -4660,8 +4660,8 @@ async function render(){
   if(RENDERING){ _renderPending = true; return; } RENDERING = true; _renderPending = false;
   runCleanup();
   const app = $('#app');
-  const hash = (location.hash || '#/').replace(/^#/, '');
-  const parts = hash.split('/').filter(Boolean);
+  if(location.hash.startsWith('#/'))history.replaceState(null,'',location.hash.slice(1));
+  const parts = location.pathname.split('/').filter(Boolean);
   const path = '/' + (parts[0] || '');
   const decode=x=>{try{return decodeURIComponent(x);}catch{return x;}};
   const arg = parts[1] ? decode(parts[1]) : null;
@@ -4688,7 +4688,7 @@ async function render(){
       <h2 style="font-size:1.25rem">משהו השתבש בטעינת העמוד</h2>
       <p class="mute small">${esc(e.message||'שגיאה לא ידועה')}</p>
       <div class="row" style="justify-content:center"><button class="btn btn-g" onclick="location.reload()">רענון</button>
-        <a class="btn btn-p" href="#/">לדף הבית</a></div></div>`;
+        <a class="btn btn-p" href="/">לדף הבית</a></div></div>`;
   }
   document.title = (PAGE_TITLES[path] ? PAGE_TITLES[path] + ' · ' : '') + SITE.name + ' — ' + SITE.tagline;
   try{ initReveal(); }catch(_){}
@@ -4732,7 +4732,7 @@ function initNotif(){
     const staff = Auth.can('viewPanel')
       ? tickets.filter(t=>t.status==='new' || (t.priority==='critical' && !['resolved','closed'].includes(t.status))).slice(0,6)
       : [];
-    const row = t=>`<a class="ch" href="#/ticket/${t.id}" onclick="closeModal()">
+    const row = t=>`<a class="ch" href="/ticket/${t.id}" onclick="closeModal()">
       ${ic('file',16)}<span class="nm">${esc(t.title)}</span>${statusBadge(t.status)}</a>`;
     openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('bell',20)}</span><h3>עדכונים</h3></div>
     <div class="m-b" style="padding:14px">
@@ -4744,7 +4744,7 @@ function initNotif(){
       ${Auth.can('ban') && appeals.filter(a=>a.status==='pending').length
         ? `<div class="callout c-warn" style="margin-top:14px"><span class="ic">${ic('message',17)}</span>
            <div>${appeals.filter(a=>a.status==='pending').length} ערעורים ממתינים לבדיקה.
-           <a href="#/admin" onclick="closeModal()">לפאנל</a></div></div>` : ''}
+           <a href="/admin" onclick="closeModal()">לפאנל</a></div></div>` : ''}
     </div>`);
   };
 }
@@ -4753,7 +4753,7 @@ function initDemoStrip(){
   if(FB_ON){ el.style.display = 'none'; return; }
   el.innerHTML = `<div class="wrap row" style="gap:9px;justify-content:center;flex-wrap:wrap">
     ${ic('info',15)}<b>מצב הדגמה.</b> הנתונים נשמרים בדפדפן הזה בלבד —
-    <a href="#/setup">חברו את האתר ל-Firebase</a> כדי לעבוד באמת.</div>`;
+    <a href="/setup">חברו את האתר ל-Firebase</a> כדי לעבוד באמת.</div>`;
 }
 
 
@@ -4761,7 +4761,11 @@ function initDemoStrip(){
 (async function boot(){
  initTheme();initSfx();initBurger();initNotif();renderFooter();$('#demoStrip').style.display='none';
  try{await Auth.refresh();await CFG.load();}catch(e){toast(e.message,'warn');}
- window.addEventListener('hashchange',()=>{closeModal();window.scrollTo({top:0});render();});
+ const navigate=path=>{history.pushState(null,'',path);closeModal();window.scrollTo({top:0});render();};
+ window.navigate=navigate;
+ document.addEventListener('click',e=>{const a=e.target.closest('a[href]');if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target||a.hasAttribute('download'))return;const url=new URL(a.href,location.href);if(url.origin!==location.origin||url.pathname.startsWith('/api/'))return;e.preventDefault();navigate(url.pathname+url.search);});
+ window.addEventListener('popstate',()=>{closeModal();window.scrollTo({top:0});render();});
+ window.addEventListener('hashchange',()=>{if(location.hash.startsWith('#/'))history.replaceState(null,'',location.hash.slice(1));closeModal();window.scrollTo({top:0});render();});
  await render();document.body.classList.add('ready');initAssistant();
 })();
 

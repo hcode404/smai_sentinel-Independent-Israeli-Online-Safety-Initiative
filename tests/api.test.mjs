@@ -103,8 +103,11 @@ test('transactional emails are branded HTML with contextual actions',()=>{
  const reset=renderEmail('passwordReset',{resetUrl:'https://smai-support.firebaseapp.com/__/auth/action?mode=resetPassword&oobCode=test-only'});
  assert.match(reset.html,/איפוס הסיסמה<\/a>/);assert.match(reset.html,/oobCode=test-only/);
  assert.throws(()=>renderEmail('passwordReset',{resetUrl:'https://example.org/reset'}));
+ const verify=renderEmail('emailVerification',{name:'בדיקה',verifyUrl:'https://smai-support.firebaseapp.com/__/auth/action?mode=verifyEmail&oobCode=verify-only'});
+ assert.match(verify.html,/אימות כתובת המייל<\/a>/);assert.match(verify.html,/oobCode=verify-only/);
+ assert.throws(()=>renderEmail('emailVerification',{verifyUrl:'https://example.org/verify'}));
  const reply=renderEmail('ticketReply',{ticketId:'ticket-1',code:'SM-123',title:'בדיקה',sender:'נציג',text:'יש עדכון'});
- assert.match(reply.html,/<!doctype html>/i);assert.match(reply.html,/SMAI Sytem/);assert.match(reply.html,/#\/ticket\/ticket-1/);assert.match(reply.html,/פתיחת הצ׳אט בפנייה/);
- const resetLike=renderEmail('securityLogin',{name:'בדיקה',when:'עכשיו'});assert.match(resetLike.html,/#\/account/);
+ assert.match(reply.html,/<!doctype html>/i);assert.match(reply.html,/SMAI Sytem/);assert.match(reply.html,/\/ticket\/ticket-1/);assert.match(reply.html,/פתיחת הצ׳אט בפנייה/);
+ const resetLike=renderEmail('securityLogin',{name:'בדיקה',when:'עכשיו'});assert.match(resetLike.html,/\/account/);
  const purchase=renderEmail('purchase',{product:'חבילה',orderId:'A-1',amount:'₪10'});assert.match(purchase.html,/מספר הזמנה/);
 });

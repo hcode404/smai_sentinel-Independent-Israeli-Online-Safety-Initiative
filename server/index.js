@@ -24,13 +24,18 @@ export function renderEmail(type,data={},env={}){
     requireThat(resetUrl.origin==='https://smai-support.firebaseapp.com'&&resetUrl.pathname==='/__/auth/action'&&resetUrl.searchParams.get('mode')==='resetPassword'&&resetUrl.searchParams.get('oobCode'),400,'קישור האיפוס אינו תקין');
     return {subject:`איפוס הסיסמה שלך — ${MAIL_BRAND}`,html:mailShell({title:'בוחרים סיסמה חדשה',preheader:'התקבלה בקשה לאיפוס הסיסמה בחשבון SMAI שלך',icon:'🔑',accent:'#22d3ee',content:'<p style="margin-top:0">התקבלה בקשה לאיפוס הסיסמה לחשבון שלך.</p><p>לחיצה על הכפתור תפתח את המסך שבו אפשר לבחור סיסמה חדשה. הסיסמה הנוכחית תישאר בתוקף עד להשלמת האיפוס.</p>',actionLabel:'איפוס הסיסמה',actionUrl:resetUrl.href,notice:'לא ביקשת לאפס את הסיסמה? אפשר להתעלם מההודעה. אין להעביר את ההודעה או את כפתור האיפוס לאדם אחר.'})};
   }
-  const ticketUrl=mailUrl(env,`#/ticket/${encodeURIComponent(data.ticketId||'')}`);
-  if(type==='securityLogin')return {subject:`כניסה חדשה לחשבון ${MAIL_BRAND}`,html:mailShell({title:'זוהתה כניסה חדשה',preheader:'כניסה חדשה לחשבון שלך',icon:'🛡️',accent:'#38bdf8',content:`<p style="margin-top:0">שלום ${mailEsc(data.name||'')}, זיהינו כניסה לחשבון מרשת חדשה.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מועד',data.when||'כעת')}${mailBox('מכשיר',data.device||'דפדפן חדש')}</table><p>אם זו לא הייתה הכניסה שלך, מומלץ לאפס מיד את הסיסמה.</p>`,actionLabel:'בדיקת אבטחת החשבון',actionUrl:mailUrl(env,'#/account'),notice:'ההתראה אינה כוללת את כתובת ה-IP המלאה כדי לשמור על פרטיותך.'})};
+  if(type==='emailVerification'){
+    let verifyUrl;try{verifyUrl=new URL(data.verifyUrl);}catch{throw new HttpError(400,'חסר קישור אימות תקין');}
+    requireThat(verifyUrl.origin==='https://smai-support.firebaseapp.com'&&verifyUrl.pathname==='/__/auth/action'&&verifyUrl.searchParams.get('mode')==='verifyEmail'&&verifyUrl.searchParams.get('oobCode'),400,'קישור האימות אינו תקין');
+    return {subject:`אימות כתובת המייל — ${MAIL_BRAND}`,html:mailShell({title:'מאמתים שזה באמת אתם',preheader:'שלב אחרון בהגנת חשבון SMAI',icon:'✉️',accent:'#38bdf8',content:`<p style="margin-top:0">שלום ${mailEsc(data.name||'')},</p><p>לחצו על הכפתור כדי לאמת את כתובת המייל ולהשלים את הגנת החשבון.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('תוקף','לחשבון הזה ולשימוש חד־פעמי')}</table>`,actionLabel:'אימות כתובת המייל',actionUrl:verifyUrl.href,notice:'לא פתחתם חשבון? אין צורך לעשות דבר. לעולם אל תעבירו את הודעת האימות לאדם אחר.'})};
+  }
+  const ticketUrl=mailUrl(env,`/ticket/${encodeURIComponent(data.ticketId||'')}`);
+  if(type==='securityLogin')return {subject:`כניסה חדשה לחשבון ${MAIL_BRAND}`,html:mailShell({title:'זוהתה כניסה חדשה',preheader:'כניסה חדשה לחשבון שלך',icon:'🛡️',accent:'#38bdf8',content:`<p style="margin-top:0">שלום ${mailEsc(data.name||'')}, זיהינו כניסה לחשבון מרשת חדשה.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מועד',data.when||'כעת')}${mailBox('מכשיר',data.device||'דפדפן חדש')}</table><p>אם זו לא הייתה הכניסה שלך, מומלץ לאפס מיד את הסיסמה.</p>`,actionLabel:'בדיקת אבטחת החשבון',actionUrl:mailUrl(env,'/account'),notice:'ההתראה אינה כוללת את כתובת ה-IP המלאה כדי לשמור על פרטיותך.'})};
   if(type==='ticketReply')return {subject:`תשובה חדשה בפנייה ${data.code||''}`,html:mailShell({title:'התקבלה תשובה חדשה',preheader:`עדכון בפנייה ${data.code||''}`,icon:'💬',accent:'#22d3ee',content:`<p style="margin-top:0"><b>${mailEsc(data.sender||'צוות SMAI')}</b> השיב/ה בפנייה שלך.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}</table><div style="margin-top:18px;padding:16px;border-right:3px solid #22d3ee;background:#10283d;border-radius:10px">${mailEsc(data.text||'').replace(/\n/g,'<br>')}</div>`,actionLabel:'פתיחת הצ׳אט בפנייה',actionUrl:ticketUrl,notice:'במצב סכנה מיידית מתקשרים למשטרה 100.'})};
   if(type==='ticketClaim')return {subject:`הפנייה ${data.code||''} התקבלה לטיפול`,html:mailShell({title:'נציג קיבל את הפנייה',preheader:'הפנייה שלך נמצאת כעת בטיפול',icon:'🎫',accent:'#34d399',content:`<p style="margin-top:0">הפנייה שלך הועברה לטיפול אישי.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}${mailBox('נציג מטפל',data.agent||'צוות SMAI')}</table><p>אפשר להמשיך להתכתב עם הנציג ישירות בחלון הפנייה.</p>`,actionLabel:'מעבר לשיחה עם הנציג',actionUrl:ticketUrl})};
   if(type==='ticketStatus')return {subject:`עדכון בפנייה ${data.code||''}: ${data.status||''}`,html:mailShell({title:'סטטוס הפנייה השתנה',preheader:`הפנייה עודכנה ל-${data.status||''}`,icon:'↻',accent:'#a78bfa',content:`<table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}${mailBox('סטטוס חדש',data.status||'עודכן')}</table>`,actionLabel:'צפייה בעדכון המלא',actionUrl:ticketUrl})};
-  if(type==='moderation')return {subject:`עדכון אכיפה בחשבון ${MAIL_BRAND}`,html:mailShell({title:'עדכון בנושא אכיפה',preheader:data.title||'בוצע עדכון בחשבון',icon:'⚖️',accent:'#fb7185',content:`<h2 style="font-size:18px;color:#fff;margin-top:0">${mailEsc(data.title||'עדכון בחשבון')}</h2><p>${mailEsc(data.detail||'פרטי הפעולה זמינים בחשבון שלך.')}</p>`,actionLabel:'צפייה בפרטי החשבון',actionUrl:mailUrl(env,'#/account'),notice:'אם לדעתך נפלה טעות, אפשר להגיש ערעור מתוך האתר.'})};
-  if(type==='purchase')return {subject:`אישור רכישה — ${data.product||MAIL_BRAND}`,html:mailShell({title:'הרכישה הושלמה בהצלחה',preheader:'אישור ופרטי הרכישה שלך',icon:'✓',accent:'#34d399',content:`<p style="margin-top:0">תודה על הרכישה.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מוצר',data.product||'')}${mailBox('מספר הזמנה',data.orderId||'')}${mailBox('סכום',data.amount||'')}</table>`,actionLabel:'צפייה בחשבון',actionUrl:mailUrl(env,'#/account')})};
+  if(type==='moderation')return {subject:`עדכון אכיפה בחשבון ${MAIL_BRAND}`,html:mailShell({title:'עדכון בנושא אכיפה',preheader:data.title||'בוצע עדכון בחשבון',icon:'⚖️',accent:'#fb7185',content:`<h2 style="font-size:18px;color:#fff;margin-top:0">${mailEsc(data.title||'עדכון בחשבון')}</h2><p>${mailEsc(data.detail||'פרטי הפעולה זמינים בחשבון שלך.')}</p>`,actionLabel:'צפייה בפרטי החשבון',actionUrl:mailUrl(env,'/account'),notice:'אם לדעתך נפלה טעות, אפשר להגיש ערעור מתוך האתר.'})};
+  if(type==='purchase')return {subject:`אישור רכישה — ${data.product||MAIL_BRAND}`,html:mailShell({title:'הרכישה הושלמה בהצלחה',preheader:'אישור ופרטי הרכישה שלך',icon:'✓',accent:'#34d399',content:`<p style="margin-top:0">תודה על הרכישה.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מוצר',data.product||'')}${mailBox('מספר הזמנה',data.orderId||'')}${mailBox('סכום',data.amount||'')}</table>`,actionLabel:'צפייה בחשבון',actionUrl:mailUrl(env,'/account')})};
   throw new HttpError(400,'סוג הודעת המייל אינו נתמך');
 }
 async function deliverMail(env,to,message){
@@ -71,7 +76,7 @@ async function firebaseAdminToken(env){
 }
 async function sendPasswordReset(env,email){
   const token=await firebaseAdminToken(env),project=env.FIREBASE_PROJECT_ID||'smai-support';
-  const response=await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${encodeURIComponent(project)}/accounts:sendOobCode`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestType:'PASSWORD_RESET',email,returnOobLink:true,continueUrl:mailUrl(env,'#/login')}),signal:AbortSignal.timeout(15000)});
+  const response=await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${encodeURIComponent(project)}/accounts:sendOobCode`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestType:'PASSWORD_RESET',email,returnOobLink:true,continueUrl:mailUrl(env,'/login')}),signal:AbortSignal.timeout(15000)});
   const data=await response.json().catch(()=>({}));
   const providerCode=String(data?.error?.message||'UNKNOWN').split(/\s*:\s*/)[0].trim();
   if(!response.ok&&['EMAIL_NOT_FOUND','USER_DISABLED'].includes(providerCode))return;
@@ -79,6 +84,13 @@ async function sendPasswordReset(env,email){
   requireThat(response.ok,503,'לא ניתן לשלוח כרגע את הודעת האיפוס');
   if(!data.oobLink)return;
   await deliverMail(env,email,renderEmail('passwordReset',{resetUrl:data.oobLink},env));
+}
+async function sendEmailVerification(env,user){
+  const token=await firebaseAdminToken(env),project=env.FIREBASE_PROJECT_ID||'smai-support';
+  const response=await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${encodeURIComponent(project)}/accounts:sendOobCode`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestType:'VERIFY_EMAIL',email:user.email,returnOobLink:true,continueUrl:mailUrl(env,'/login')}),signal:AbortSignal.timeout(15000)});
+  const data=await response.json().catch(()=>({}));
+  requireThat(response.ok&&data.oobLink,503,'לא ניתן לשלוח כרגע את הודעת האימות');
+  await deliverMail(env,user.email,renderEmail('emailVerification',{name:user.name,verifyUrl:data.oobLink},env));
 }
 export function database(env){
   requireThat(env.DB,503,'אחסון הנתונים אינו זמין כרגע. לא נשמרו שינויים.');
@@ -180,6 +192,12 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(email));const emailKey=[...new Uint8Array(digest)].slice(0,12).map(x=>x.toString(16).padStart(2,'0')).join('');
       await limit(env,'reset-ip:'+(req.headers.get('CF-Connecting-IP')||'unknown'),5,3600);await limit(env,'reset-email:'+emailKey,3,3600);
       await sendPasswordReset(env,email);return json({ok:true,message:'אם קיים חשבון עם הכתובת הזו, נשלחה הודעת איפוס.'});
+    }
+    if(path==='/api/auth/email-verification'&&req.method==='POST'){
+      requireThat(u,401,'יש להתחבר כדי לשלוח אימות');
+      await limit(env,'verify-email:'+u.id,3,3600);
+      await sendEmailVerification(env,u);
+      return json({ok:true,message:'נשלח מייל אימות מעוצב. בדקו גם בתיקיית הספאם.'});
     }
     if(path==='/api/records/campaigns'&&req.method==='GET'&&!u){
       const rows=(await db.list('campaigns')).map(r=>safeRecord('campaigns',r,null));
