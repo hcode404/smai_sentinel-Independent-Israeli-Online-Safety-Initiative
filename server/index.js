@@ -76,7 +76,8 @@ async function sendPasswordReset(env,email){
   const providerCode=String(data?.error?.message||'UNKNOWN').split(/\s*:\s*/)[0].trim();
   if(!response.ok&&['EMAIL_NOT_FOUND','USER_DISABLED'].includes(providerCode))return;
   if(!response.ok)console.error('Password reset provider rejected request',{status:response.status,code:providerCode});
-  requireThat(response.ok&&data.oobLink,503,'לא ניתן לשלוח כרגע את הודעת האיפוס');
+  requireThat(response.ok,503,'לא ניתן לשלוח כרגע את הודעת האיפוס');
+  if(!data.oobLink)return;
   await deliverMail(env,email,renderEmail('passwordReset',{resetUrl:data.oobLink},env));
 }
 export function database(env){
