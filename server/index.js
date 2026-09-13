@@ -61,7 +61,7 @@ async function firebaseAdminToken(env){
   if(firebaseTokenCache?.expires>Date.now()+60000)return firebaseTokenCache.token;
   let service;try{service=JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON||'');}catch{throw new HttpError(503,'שירות איפוס הסיסמה טרם הוגדר');}
   requireThat(service?.client_email&&service?.private_key,503,'שירות איפוס הסיסמה טרם הוגדר');
-  const issued=Math.floor(Date.now()/1000),header=b64url(new TextEncoder().encode(JSON.stringify({alg:'RS256',typ:'JWT'}))),payload=b64url(new TextEncoder().encode(JSON.stringify({iss:service.client_email,scope:'https://www.googleapis.com/auth/identitytoolkit',aud:'https://oauth2.googleapis.com/token',iat:issued,exp:issued+3600})));
+  const issued=Math.floor(Date.now()/1000),header=b64url(new TextEncoder().encode(JSON.stringify({alg:'RS256',typ:'JWT'}))),payload=b64url(new TextEncoder().encode(JSON.stringify({iss:service.client_email,scope:'https://www.googleapis.com/auth/identitytoolkit https://www.googleapis.com/auth/cloud-platform',aud:'https://oauth2.googleapis.com/token',iat:issued,exp:issued+3600})));
   const pem=service.private_key.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g,''),bytes=Uint8Array.from(atob(pem),c=>c.charCodeAt(0));
   const key=await crypto.subtle.importKey('pkcs8',bytes,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign']);
   const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,new TextEncoder().encode(`${header}.${payload}`));
@@ -73,7 +73,9 @@ async function sendPasswordReset(env,email){
   const token=await firebaseAdminToken(env),project=env.FIREBASE_PROJECT_ID||'smai-support';
   const response=await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${encodeURIComponent(project)}/accounts:sendOobCode`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestType:'PASSWORD_RESET',email,returnOobLink:true,continueUrl:mailUrl(env,'#/login')}),signal:AbortSignal.timeout(15000)});
   const data=await response.json().catch(()=>({}));
-  if(!response.ok&&['EMAIL_NOT_FOUND','USER_DISABLED'].includes(data?.error?.message))return;
+  const providerCode=String(data?.error?.message||'UNKNOWN').split(/\s*:\s*/)[0].trim();
+  if(!response.ok&&['EMAIL_NOT_FOUND','USER_DISABLED'].includes(providerCode))return;
+  if(!response.ok)console.error('Password reset provider rejected request',{status:response.status,code:providerCode});
   requireThat(response.ok&&data.oobLink,503,'לא ניתן לשלוח כרגע את הודעת האיפוס');
   await deliverMail(env,email,renderEmail('passwordReset',{resetUrl:data.oobLink},env));
 }
