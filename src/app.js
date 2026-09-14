@@ -1175,6 +1175,7 @@ const NAV = [
   { p:'#/my',        l:'הפניות שלי',  ico:'file' },
   { p:'#/track',     l:'מעקב פנייה',  ico:'search' },
   { p:'#/articles',  l:'מדריכים ומאמרים', ico:'book' },
+  { p:'#/press',     l:'עובדות',      ico:'info' },
   { p:'#/community', l:'קהילה',       ico:'message' },
   { p:'#/dm',        l:'הודעות פרטיות', ico:'send' },
   { p:'#/friends',   l:'חברים',       ico:'users' },
@@ -1836,6 +1837,43 @@ function runCleanup(){ CLEANUP.forEach(f=>{ try{ f(); }catch(e){} }); CLEANUP = 
 
 /* ===================== דף הבית ===================== */
 route('/', async app => renderHome(app, {ic,esc,Auth,DEPTS}));
+
+route('/press', async app => {
+  app.innerHTML = `<div class="page-h anim-up"><div class="eyebrow">Press / Facts</div>
+    <h1>SMAI Sentinel</h1>
+    <p>SMAI Sentinel is an Independent Israeli Online Safety Initiative helping children, teens and parents respond to online harassment, scams, hacked accounts, threats and digital risks.</p></div>
+    <div class="grid g2">
+      <section class="card anim-up d1"><div class="card-h"><span class="ico-tile i-brand">${ic('shield-check',20)}</span><div><h2>Entity Facts</h2><span class="small mute">Canonical public description</span></div></div>
+        <dl class="facts-list">
+          <dt>Name</dt><dd>SMAI Sentinel</dd>
+          <dt>Entity type</dt><dd>Independent Israeli Online Safety Initiative</dd>
+          <dt>Primary audience</dt><dd>Children, teens and parents in Israel</dd>
+          <dt>Focus areas</dt><dd>Online harassment, scams, hacked or stolen accounts, threats, impersonation and harmful content</dd>
+          <dt>Website</dt><dd><a href="https://smai-support.jo3.org/">https://smai-support.jo3.org/</a></dd>
+          <dt>Support/reporting</dt><dd><a href="mailto:smai-support@proton.me">smai-support@proton.me</a></dd>
+          <dt>General contact</dt><dd><a href="mailto:minipro.7548@gmail.com">minipro.7548@gmail.com</a></dd>
+        </dl>
+      </section>
+      <section class="card anim-up d2"><div class="card-h"><span class="ico-tile i-warn">${ic('info',20)}</span><div><h2>Important Limits</h2><span class="small mute">No inflated claims</span></div></div>
+        <p>SMAI Sentinel is not a government body, law enforcement agency, emergency service or registered nonprofit.</p>
+        <p>In urgent danger, people should contact local emergency services. In Israel, police emergency number is <a href="tel:100">100</a>.</p>
+        <p>In serious cases, SMAI Sentinel helps organize information and direct people toward the appropriate official or platform safety channels.</p>
+      </section>
+    </div>
+    <section class="card anim-up d3" style="margin-top:18px"><div class="card-h"><span class="ico-tile i-info">${ic('globe',20)}</span><div><h2>Official Public Profiles</h2><span class="small mute">Used for public identity verification</span></div></div>
+      <div class="profile-links">
+        <a href="https://x.com/smai_sentinel" rel="me noopener">X / @smai_sentinel</a>
+        <a href="https://www.facebook.com/profile.php?id=61594140369939" rel="me noopener">Facebook / SMAI Sentinel Online Safety</a>
+        <a href="https://www.reddit.com/r/SMAISentinelOfficial/" rel="me noopener">Reddit / r/SMAISentinelOfficial</a>
+        <a href="https://www.instagram.com/smai_creator/" rel="me noopener">Instagram / @smai_creator</a>
+        <a href="https://www.tiktok.com/@smai_sentinel" rel="me noopener">TikTok / @smai_sentinel</a>
+      </div>
+    </section>
+    <section class="card anim-up d4" style="margin-top:18px"><div class="card-h"><span class="ico-tile i-ok">${ic('book',20)}</span><div><h2>About SMAI Sentinel</h2><span class="small mute">Reusable short description</span></div></div>
+      <p>SMAI Sentinel helps families respond calmly and practically when a child or teen faces a digital safety problem. The initiative focuses on preserving evidence, reducing immediate risk, understanding platform reporting options and preparing serious cases for the right official or platform safety channels.</p>
+      <p>The initiative should be described as “SMAI Sentinel, an Independent Israeli Online Safety Initiative.” It should not be described as a registered nonprofit, government body, police unit, emergency service or verified official partner unless that status is publicly verifiable.</p>
+    </section>`;
+});
 
 /* כרטיס תוצאת AI */
 function aiCard(a, compact=false){
