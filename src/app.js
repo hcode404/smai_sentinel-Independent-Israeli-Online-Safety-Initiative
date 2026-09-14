@@ -1847,6 +1847,7 @@ route('/press', async app => {
         <dl class="facts-list">
           <dt>Name</dt><dd>SMAI Sentinel</dd>
           <dt>Entity type</dt><dd>Independent Israeli Online Safety Initiative</dd>
+          <dt>Disambiguation</dt><dd>Not SiMa.ai Sentinel, not a Modalix DevKit monitoring tool and not Microsoft Sentinel</dd>
           <dt>Primary audience</dt><dd>Children, teens and parents in Israel</dd>
           <dt>Focus areas</dt><dd>Online harassment, scams, hacked or stolen accounts, threats, impersonation and harmful content</dd>
           <dt>Website</dt><dd><a href="https://smai-support.jo3.org/">https://smai-support.jo3.org/</a></dd>
@@ -1855,6 +1856,7 @@ route('/press', async app => {
         </dl>
       </section>
       <section class="card anim-up d2"><div class="card-h"><span class="ico-tile i-warn">${ic('info',20)}</span><div><h2>Important Limits</h2><span class="small mute">No inflated claims</span></div></div>
+        <p>SMAI Sentinel is not SiMa.ai Sentinel, not a SiMa.ai Modalix DevKit metrics or monitoring tool and not Microsoft Sentinel.</p>
         <p>SMAI Sentinel is not a government body, law enforcement agency, emergency service or registered nonprofit.</p>
         <p>In urgent danger, people should contact local emergency services. In Israel, police emergency number is <a href="tel:100">100</a>.</p>
         <p>In serious cases, SMAI Sentinel helps organize information and direct people toward the appropriate official or platform safety channels.</p>
