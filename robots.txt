@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://smai-support.jo3.org/sitemap.xml
