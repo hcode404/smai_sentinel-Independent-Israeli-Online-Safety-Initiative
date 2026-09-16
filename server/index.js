@@ -4,7 +4,7 @@ const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const nonce=()=>crypto.randomUUID().replaceAll('-','');
 const MAIL_BRAND='SMAI Sytem';
-const MAIL_SITE='https://smai-sentinel.smai-sentinel.chatgpt.site';
+const MAIL_SITE='https://smai-support.jo3.org';
 const mailEsc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const mailUrl=(env,path='')=>(env.PUBLIC_SITE_URL||MAIL_SITE).replace(/\/$/,'')+'/'+String(path).replace(/^\//,'');
 const mailBox=(label,value)=>`<tr><td style="padding:9px 0;color:#8eabc2;font-size:13px">${mailEsc(label)}</td><td style="padding:9px 0;color:#f4f9ff;font-weight:700;text-align:left">${mailEsc(value)}</td></tr>`;
@@ -179,7 +179,8 @@ export async function api(req,env,ctx={waitUntil(){}}){
   try{
     const url=new URL(req.url),path=url.pathname;
     if(!['GET','HEAD'].includes(req.method)){
-      requireThat(req.headers.get('Origin')===url.origin,403,'בקשה ממקור לא מורשה');
+      const allowedOrigin=new URL(env.PUBLIC_SITE_URL||MAIL_SITE).origin;
+      requireThat(req.headers.get('Origin')===allowedOrigin||req.headers.get('Origin')===url.origin,403,'בקשה ממקור לא מורשה');
       requireThat(req.headers.get('Content-Type')?.startsWith('application/json'),415,'נדרש JSON');
     }
     const db=database(env),u=await identity(req,env,db,ctx);
@@ -320,6 +321,13 @@ export async function api(req,env,ctx={waitUntil(){}}){
   }catch(e){return json({error:e instanceof HttpError?e.message:'תקלה בשרת. נסו שוב מאוחר יותר.'},e.status||500);}
 }
 export default {async fetch(req,env,ctx){
-  if(new URL(req.url).pathname.startsWith('/api/'))return api(req,env,ctx);
-  return env.ASSETS.fetch(req);
+  const path=new URL(req.url).pathname;
+  if(!path.startsWith('/api/'))return env.ASSETS?.fetch?env.ASSETS.fetch(req):new Response('Not found',{status:404});
+  const allowedOrigin=new URL(env.PUBLIC_SITE_URL||MAIL_SITE).origin;
+  const origin=req.headers.get('Origin');
+  const cors=origin===allowedOrigin?{'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'GET, HEAD, POST, PATCH, DELETE, OPTIONS','Access-Control-Max-Age':'86400','Vary':'Origin'}:{};
+  if(req.method==='OPTIONS')return new Response(null,{status:origin===allowedOrigin?204:403,headers:cors});
+  const response=await api(req,env,ctx),headers=new Headers(response.headers);
+  for(const [key,value] of Object.entries(cors))headers.set(key,value);
+  return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
 }};

@@ -1,4 +1,4 @@
-const ALLOWED_HOST = 'smai-sentinel.smai-sentinel.chatgpt.site';
+const ALLOWED_HOST = 'smai-support.jo3.org';
 
 function doPost(e) {
   try {

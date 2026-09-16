@@ -1,0 +1,23 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "smai-sentinel-api",
+	"main": "server/index.js",
+	"compatibility_date": "2026-09-16",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"vars": {
+		"FIREBASE_PROJECT_ID": "smai-support",
+		"ADMIN_EMAILS": "minipro.7548@gmail.com",
+		"GEMINI_MODEL": "gemini-flash-latest",
+		"PUBLIC_SITE_URL": "https://smai-support.jo3.org"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "smai-sentinel",
+			"database_id": "325a976c-eff5-4b6c-abe6-0560db70ca92",
+			"migrations_dir": "drizzle"
+		}
+	]
+}

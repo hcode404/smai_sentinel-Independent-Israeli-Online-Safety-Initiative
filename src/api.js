@@ -1,7 +1,9 @@
 import {getAuthToken} from './firebase-auth.js';
+const API_ORIGIN=String(import.meta.env.VITE_API_ORIGIN||'').replace(/\/$/,'');
+const apiUrl=path=>`${API_ORIGIN}${path}`;
 export async function request(path,method='GET',data){
   let res;
-  try{const token=await getAuthToken();const headers={...(method==='GET'?{}:{'Content-Type':'application/json'}),...(token?{Authorization:`Bearer ${token}`}:{})};res=await fetch(path,{method,credentials:'same-origin',headers,...(data===undefined?{}:{body:JSON.stringify(data)}),signal:AbortSignal.timeout(35000)});}catch{throw new Error('אין חיבור לשרת. הפעולה לא אושרה — בדקו את החיבור ונסו שוב.');}
+  try{const token=await getAuthToken();const headers={...(method==='GET'?{}:{'Content-Type':'application/json'}),...(token?{Authorization:`Bearer ${token}`}:{})};res=await fetch(apiUrl(path),{method,credentials:'omit',headers,...(data===undefined?{}:{body:JSON.stringify(data)}),signal:AbortSignal.timeout(35000)});}catch{throw new Error('אין חיבור לשרת. הפעולה לא אושרה — בדקו את החיבור ונסו שוב.');}
   const result=await res.json().catch(()=>({error:'השרת לא החזיר תשובה תקינה'}));
   if(!res.ok)throw new Error(result.error||'הפעולה נכשלה');return result;
 }
