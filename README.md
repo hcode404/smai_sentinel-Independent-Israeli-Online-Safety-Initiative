@@ -46,3 +46,16 @@ The original `main` revision remains available in Git history. Do not replace th
 
 - [Gemini GenerateContent](https://ai.google.dev/api/generate-content)
 - [Gemini API authentication](https://ai.google.dev/api)
+
+## Official links
+
+- Website: https://smai-support.jo3.org/
+- Support/reporting: smai-support@proton.me
+- Contact: minipro.7548@gmail.com
+- X: https://x.com/smai_sentinel
+- Facebook: https://www.facebook.com/profile.php?id=61594140369939
+- Reddit: https://www.reddit.com/r/SMAISentinelOfficial/
+- Instagram: https://www.instagram.com/smai_creator/
+- TikTok: https://www.tiktok.com/@smai_sentinel
+
+SMAI Sentinel refers to this independent Israeli online safety initiative. It is not Microsoft Sentinel, SiMa.ai Sentinel, or a Modalix DevKit monitoring tool.
