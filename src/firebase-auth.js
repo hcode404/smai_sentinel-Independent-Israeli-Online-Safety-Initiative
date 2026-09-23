@@ -1,8 +1,10 @@
 import {initializeApp} from 'firebase/app';
-import {getAuth,setPersistence,browserLocalPersistence,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmailAndPassword,GoogleAuthProvider,signInWithRedirect,sendPasswordResetEmail,signOut,updateProfile} from 'firebase/auth';
+import {getAuth,setPersistence,browserLocalPersistence,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmailAndPassword,GoogleAuthProvider,signInWithRedirect,signOut,updateProfile} from 'firebase/auth';
+
+const FIREBASE_API_KEY='AIzaSyBhKBHABUpTCpY88PdEjFKRnPaIFmBJqB0';
 
 const app=initializeApp({
-  apiKey:'AIzaSyBhKBHABUpTCpY88PdEjFKRnPaIFmBJqB0',
+  apiKey:FIREBASE_API_KEY,
   authDomain:'smai-support.firebaseapp.com',
   projectId:'smai-support',
   storageBucket:'smai-support.firebasestorage.app',
@@ -26,6 +28,16 @@ export async function loginGoogle(){
   const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});
   return signInWithRedirect(auth,provider);
 }
-export const resetPassword=email=>sendPasswordResetEmail(auth,email,{url:'https://smai-support.jo3.org/login',handleCodeInApp:false});
+export async function resetPassword(email){
+  const response=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(FIREBASE_API_KEY)}`,{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestType:'PASSWORD_RESET',email})
+  });
+  if(!response.ok){
+    const data=await response.json().catch(()=>({}));
+    const error=new Error('לא ניתן לשלוח כרגע את הודעת האיפוס');
+    error.code=`auth/${String(data?.error?.message||'request-failed').toLowerCase().replaceAll('_','-')}`;
+    throw error;
+  }
+}
 export const logoutFirebase=()=>signOut(auth);
 export const firebaseUser=()=>auth.currentUser;
