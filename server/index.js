@@ -297,7 +297,10 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const ticket=await db.get('tickets',rec.ticketId);
       const targetId=rec.staffSide?ticket?.reporterId:ticket?.assignedTo;
       const target=targetId&&targetId!==u.id?await db.get('users',targetId):null;
-      if(target)scheduleMail(ctx,sendUserMail(env,target,'ticketReply',{ticketId:ticket.id,code:ticket.code,title:ticket.title,sender:rec.senderName,text:rec.text.slice(0,1200)}));
+      if(target){
+        await db.put('notifications',{id:nonce(),userId:target.id,ticketId:ticket.id,type:'ticketReply',title:`תשובה חדשה בפנייה ${ticket.code||''}`,text:`${rec.senderName||'צוות SMAI'}: ${rec.text.slice(0,180)}`,read:false,createdAt:now()});
+        scheduleMail(ctx,sendUserMail(env,target,'ticketReply',{ticketId:ticket.id,code:ticket.code,title:ticket.title,sender:rec.senderName,text:rec.text.slice(0,1200)}));
+      }
     }
     if(col==='users'&&old&&old.id!==u.id&&(rec.isBanned!==old.isBanned||rec.muteUntil!==old.muteUntil||rec.banReason!==old.banReason)){
       const title=rec.isBanned?'החשבון הוגבל':rec.muteUntil?'החשבון הושתק זמנית':'הגבלת החשבון עודכנה';

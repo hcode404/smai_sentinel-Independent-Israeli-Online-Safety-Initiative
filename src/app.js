@@ -2,6 +2,7 @@ import {remoteStore,request} from './api.js';
 import {initAssistant} from './assistant.js';
 import {authReady,loginEmail,registerEmail,loginGoogle,logoutFirebase,firebaseUser} from './firebase-auth.js';
 import { renderHome } from './home.js';
+import './ticket-fix.css';
 
 /* =====================================================================
    SMAI — Single-file app.  הדבק כאן את פרטי הפרויקט שלך מ-Firebase.
@@ -1170,22 +1171,22 @@ const SEED_MSGS = [
 
 /* ===================== רכיבים משותפים ===================== */
 const NAV = [
-  { p:'#/',          l:'ראשי',        ico:'home' },
-  { p:'#/report',    l:'פתיחת דיווח', ico:'shield-alert' },
-  { p:'#/my',        l:'הפניות שלי',  ico:'file' },
-  { p:'#/track',     l:'מעקב פנייה',  ico:'search' },
-  { p:'#/articles',  l:'מדריכים ומאמרים', ico:'book' },
-  { p:'#/press',     l:'עובדות',      ico:'info' },
-  { p:'#/community', l:'קהילה',       ico:'message' },
-  { p:'#/dm',        l:'הודעות פרטיות', ico:'send' },
-  { p:'#/friends',   l:'חברים',       ico:'users' },
-  { p:'#/join',      l:'הצטרפות לצוות', ico:'users' },
-  { p:'#/updates',   l:'עדכונים',           ico:'download' }
+  { p:'/',          l:'ראשי',        ico:'home' },
+  { p:'/report',    l:'פתיחת דיווח', ico:'shield-alert' },
+  { p:'/my',        l:'הפניות שלי',  ico:'file' },
+  { p:'/track',     l:'מעקב פנייה',  ico:'search' },
+  { p:'/articles',  l:'מדריכים ומאמרים', ico:'book' },
+  { p:'/press',     l:'עובדות',      ico:'info' },
+  { p:'/community', l:'קהילה',       ico:'message' },
+  { p:'/dm',        l:'הודעות פרטיות', ico:'send' },
+  { p:'/friends',   l:'חברים',       ico:'users' },
+  { p:'/join',      l:'הצטרפות לצוות', ico:'users' },
+  { p:'/updates',   l:'עדכונים',           ico:'download' }
 ];
 function renderNav(){
   const cur = location.pathname.split('/')[1] || '';
   const items = NAV.map(n=>{
-    const on = ('#/'+cur) === n.p || (n.p==='#/' && !cur);
+    const on = ('/'+cur) === n.p || (n.p==='/' && !cur);
     return `<a href="${n.p}" class="${on?'on':''}" ${on?'aria-current="page"':''}>${ic(n.ico,18)}<span>${n.l}</span></a>`;
   });
   if(Auth.isStaff()) items.push(`<a href="/admin" class="${cur==='admin'?'on':''}">${ic('shield',14)} פאנל צוות</a>`);
@@ -1197,6 +1198,9 @@ function renderNav(){
        </button>`
     : `<a class="btn btn-p btn-sm" href="/login">${ic('login',15)} כניסה</a>`;
   const mb = $('#meBtn'); if(mb) mb.onclick = userMenu;
+  const notifications=$('#notifBtn');
+  if(notifications)notifications.classList.toggle('hide',!u);
+  syncNotificationBadge();
 }
 function userMenu(){
   const u = Auth.user; if(!u) return;
@@ -2126,8 +2130,8 @@ route('/report', (app)=>{
 
       sessionStorage.removeItem('smai_report_draft');
       toast(`הפנייה ${code} נפתחה והועברה ל${DEPT_BY[dept]?.name||'צוות המתאים'}`);
-      location.hash = `#/ticket/${t.id}`;
-      await render();
+      if(window.navigate)window.navigate(`/ticket/${encodeURIComponent(t.id)}`);
+      else{history.pushState(null,'',`/ticket/${encodeURIComponent(t.id)}`);await render();}
     }catch(err){
       console.error(err);
       $('#rfErr').innerHTML = `<div class="err">שגיאה בשליחה: ${esc(err.message||'נסו שוב')}</div>`;
@@ -4767,15 +4771,18 @@ function initBurger(){
 function initNotif(){
   $('#notifBtn').onclick = async ()=>{
     if(!Auth.user) return toast('התחברו כדי לראות עדכונים','warn');
-    const [tickets, appeals] = await Promise.all([Store.list('tickets'), Store.list('appeals')]);
+    const [tickets, appeals, notifications] = await Promise.all([Store.list('tickets'), Store.list('appeals'),Store.list('notifications')]);
     const mine = tickets.filter(t=>t.reporterId===Auth.user.id).slice(0,6);
     const staff = Auth.can('viewPanel')
       ? tickets.filter(t=>t.status==='new' || (t.priority==='critical' && !['resolved','closed'].includes(t.status))).slice(0,6)
       : [];
     const row = t=>`<a class="ch" href="/ticket/${t.id}" onclick="closeModal()">
       ${ic('file',16)}<span class="nm">${esc(t.title)}</span>${statusBadge(t.status)}</a>`;
+    const notice=n=>`<a class="ch ${n.read?'':'notification-unread'}" href="/ticket/${encodeURIComponent(n.ticketId)}" onclick="closeModal()">
+      ${ic('message',16)}<span class="nm"><b>${esc(n.title||'תשובה חדשה בפנייה')}</b><small>${esc(n.text||'')}</small></span></a>`;
     openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('bell',20)}</span><h3>עדכונים</h3></div>
     <div class="m-b" style="padding:14px">
+      ${notifications.length?`<h4 class="small mute" style="margin:0 0 8px">התראות חדשות</h4><div class="stack" style="gap:4px;margin-bottom:16px">${notifications.slice(0,10).map(notice).join('')}</div>`:''}
       ${staff.length?`<h4 class="small mute" style="margin:0 0 8px">דורש טיפול</h4>
         <div class="stack" style="gap:4px;margin-bottom:16px">${staff.map(row).join('')}</div>`:''}
       <h4 class="small mute" style="margin:0 0 8px">הפניות שלי</h4>
@@ -4786,7 +4793,22 @@ function initNotif(){
            <div>${appeals.filter(a=>a.status==='pending').length} ערעורים ממתינים לבדיקה.
            <a href="/admin" onclick="closeModal()">לפאנל</a></div></div>` : ''}
     </div>`);
+    await Promise.all(notifications.filter(n=>!n.read).map(n=>Store.update('notifications',n.id,{read:true}).catch(()=>{})));
+    syncNotificationBadge();
   };
+}
+let notificationWatchStop=null,notificationWatchUser='';
+function syncNotificationBadge(){
+  const button=$('#notifBtn'),user=Auth.user;
+  if(!button||!user){notificationWatchStop?.();notificationWatchStop=null;notificationWatchUser='';return;}
+  if(notificationWatchUser===user.id)return;
+  notificationWatchStop?.();notificationWatchUser=user.id;
+  notificationWatchStop=Store.watch('notifications',rows=>{
+    const count=rows.filter(n=>!n.read).length;
+    button.innerHTML=`${ic('bell',18)}${count?`<span class="notif-badge">${Math.min(count,99)}</span>`:''}`;
+    button.setAttribute('aria-label',count?`${count} התראות שלא נקראו`:'התראות');
+    button.classList.toggle('has-notifications',count>0);
+  });
 }
 function initDemoStrip(){
   const el = $('#demoStrip');

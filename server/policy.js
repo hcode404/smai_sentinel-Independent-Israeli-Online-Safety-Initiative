@@ -6,7 +6,7 @@ export const publicUser=u=>pick(u,['id','name','avatar','bio','rank','rankLvl','
 export const banned=u=>!!(u?.isBanned&&(!u.banUntil||Date.parse(u.banUntil)>Date.now()));
 export const muted=u=>Date.parse(u?.muteUntil)>Date.now();
 export const ranks={citizen:0,trainee:10,agent:20,senior:30,lead:40,head:50,admin:60,founder:70};
-export const collections=new Set('users tickets messages reports applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends dms dmsgs config updates articles campaigns'.split(' '));
+export const collections=new Set('users tickets messages notifications reports applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends dms dmsgs config updates articles campaigns'.split(' '));
 export const officialIds=new Set(['s-welcome','s-help','s-parents','s-teens','s-gaming','s-security']);
 export async function canRead(col,r,u,get){
   if(!r)return false;
@@ -15,6 +15,7 @@ export async function canRead(col,r,u,get){
   if(col==='config'||col==='updates'||col==='articles'||col==='campaigns')return true;
   if(col==='tickets')return n>=10||!!id&&r.reporterId===id;
   if(col==='messages')return (!r.internal||n>=20)&&await canRead('tickets',await get('tickets',r.ticketId),u,get);
+  if(col==='notifications')return !!id&&r.userId===id;
   if(['applications','verifyApps','trustedApps','partnerApps','appeals'].includes(col))return n>=40||!!id&&r.userId===id;
   if(col==='reports')return n>=20||!!id&&r.byId===id;
   if(col==='modlog')return n>=20;
@@ -85,6 +86,10 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     requireThat(!input.ai&&!input.system&&!muted(u));
     requireThat(!input.internal||n>=20);
     return {ticketId:input.ticketId,text:input.text,internal:!!input.internal,senderId:id,senderName:u.name,senderRank:u.rank,staffSide:n>=10};
+  }
+  if(col==='notifications'){
+    requireThat(old&&old.userId===id&&!isNew,403,'אין הרשאה לעדכן התראה זו');
+    return pick(input,['read']);
   }
   if(['applications','verifyApps','trustedApps','partnerApps','appeals'].includes(col)){
     if(isNew){const p={...input};for(const key of ['id','rank','rankLvl','isOwner'])delete p[key];return {...p,userId:id,status:'pending'};}

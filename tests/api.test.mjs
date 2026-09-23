@@ -86,6 +86,14 @@ test('forged sender IDs are replaced and empty text rejected',async()=>{
  assert.equal(m.data.senderId,'alice');assert.equal(m.data.senderRank,'citizen');
  assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:''})).status,400);f.DB.close();
 });
+test('staff reply creates a persistent notification for the reporter',async()=>{
+ const f=fixture();const t=await f.call('records/tickets','POST',ticket);
+ const reply=await f.call('records/messages','POST',{ticketId:t.data.id,text:'אנחנו מטפלים בפנייה'},'owner');
+ assert.equal(reply.status,201);
+ const notices=(await f.call('records/notifications','GET',null,'alice')).data;
+ assert.equal(notices.length,1);assert.equal(notices[0].ticketId,t.data.id);assert.equal(notices[0].read,false);
+ assert.deepEqual((await f.call('records/notifications','GET',null,'bob')).data,[]);f.DB.close();
+});
 test('reporter can reopen a closed ticket and continue its conversation',async()=>{
  const f=fixture();const t=await f.call('records/tickets','POST',ticket);
  await f.call('records/tickets/'+t.data.id,'PATCH',{status:'closed'},'owner');
