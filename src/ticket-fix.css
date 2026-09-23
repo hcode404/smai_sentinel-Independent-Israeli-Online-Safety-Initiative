@@ -18,3 +18,20 @@
 .notification-unread { background: var(--info-bg) !important; border-color: var(--brand) !important; }
 .notification-unread .nm { display: grid; gap: 2px; }
 .notification-unread small { color: var(--ink3); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (min-width: 1100px) {
+  .mainnav {
+    padding-block: 18px !important;
+    gap: 2px !important;
+    scrollbar-gutter: stable;
+  }
+
+  .mainnav a { padding-block: 9px !important; }
+  .mainnav::before { padding-bottom: 8px !important; }
+  .mainnav::after { padding-block: 14px !important; line-height: 1.65 !important; }
+
+  #notifBtn,
+  #themeBtn,
+  #sfxBtn,
+  #authSlot { flex: 0 0 auto; }
+}

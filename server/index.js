@@ -286,6 +286,9 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     for(const key of ['name','senderName','authorName','ico','cat','rank'])if(typeof rec[key]==='string')rec[key]=rec[key].replace(/[<>"'&]/g,'').slice(0,100);
     await db.put(col,rec,old);
+    if(col==='tickets'&&!old){
+      await db.put('messages',{id:nonce(),createdAt:now(),ticketId:rec.id,system:true,senderId:null,text:`הפנייה ${rec.code} נפתחה ונשלחה לצוות המתאים. אפשר להמשיך להתכתב כאן.`});
+    }
     if(col==='tickets'&&old&&(rec.status!==old.status||rec.assignedTo!==old.assignedTo)){
       const text=rec.assignedTo!==old.assignedTo?'שיוך הפנייה עודכן על ידי הצוות.':'סטטוס הפנייה עודכן: '+rec.status;
       try{await db.put('messages',{id:nonce(),createdAt:now(),ticketId:rec.id,system:true,senderId:null,text});}catch{}

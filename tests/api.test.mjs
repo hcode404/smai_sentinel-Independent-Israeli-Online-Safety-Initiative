@@ -28,6 +28,11 @@ test('ticket persists; identity and tracking code are issued by the server',asyn
  assert.equal(a.status,201);assert.equal(a.data.reporterId,'alice');assert.equal(a.data.status,'new');assert.match(a.data.code,/^SM-[A-F0-9]{32}$/);
  const saved=await f.call('records/tickets/'+a.data.id);assert.equal(saved.data.description,ticket.description);f.DB.close();
 });
+test('a new ticket opens with a server-confirmed chat message',async()=>{
+ const f=fixture();const a=await f.call('records/tickets','POST',ticket);
+ const messages=(await f.call('records/messages','GET')).data;
+ assert.equal(messages.length,1);assert.equal(messages[0].ticketId,a.data.id);assert.equal(messages[0].system,true);f.DB.close();
+});
 test('ordinary accounts cannot read another ticket, or enumerate it',async()=>{
  const f=fixture();const a=await f.call('records/tickets','POST',ticket);
  assert.equal((await f.call('records/tickets/'+a.data.id,'GET',null,'bob')).status,403);
@@ -49,7 +54,8 @@ test('users cannot grant themselves founder, ban others, or forge AI messages',a
 test('internal notes are hidden from reporter; manager can change status',async()=>{
  const f=fixture();const t=await f.call('records/tickets','POST',ticket);
  assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:'private note',internal:true},'owner')).status,201);
- assert.deepEqual((await f.call('records/messages')).data,[]);
+ const reporterMessages=(await f.call('records/messages')).data;
+ assert.equal(reporterMessages.length,1);assert.equal(reporterMessages[0].system,true);
  assert.equal((await f.call('records/tickets/'+t.data.id,'PATCH',{status:'open'},'owner')).status,200);
  assert.equal((await f.call('records/tickets/'+t.data.id,'PATCH',{status:'closed'})).status,403);f.DB.close();
 });
@@ -70,7 +76,7 @@ test('basic guidance can be added to a ticket without Gemini consent',async()=>{
  const f=fixture();const t=await f.call('records/tickets','POST',{...ticket,description:'פרצו לי לחשבון ואני צריך עזרה בהגנה עליו'});
  const result=await f.call('ticket-ai','POST',{ticketId:t.data.id,consent:false});
  assert.equal(result.status,200);assert.equal(result.data.aiMode,'basic');assert.equal(result.data.senderName,'הכוונה אוטומטית');
- assert.equal((await f.db.list('messages')).length,1);f.DB.close();
+ assert.equal((await f.db.list('messages')).length,2);f.DB.close();
 });
 test('private server messages do not leak to other accounts',async()=>{
  const f=fixture();await f.call('records/config/site','PATCH',{serverCreate:'all'},'owner');

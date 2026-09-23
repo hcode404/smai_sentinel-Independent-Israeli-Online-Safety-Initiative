@@ -2130,8 +2130,9 @@ route('/report', (app)=>{
 
       sessionStorage.removeItem('smai_report_draft');
       toast(`הפנייה ${code} נפתחה והועברה ל${DEPT_BY[dept]?.name||'צוות המתאים'}`);
-      if(window.navigate)window.navigate(`/ticket/${encodeURIComponent(t.id)}`);
-      else{history.pushState(null,'',`/ticket/${encodeURIComponent(t.id)}`);await render();}
+      history.pushState(null,'',`/ticket/${encodeURIComponent(t.id)}`);
+      window.scrollTo({top:0});
+      await render();
     }catch(err){
       console.error(err);
       $('#rfErr').innerHTML = `<div class="err">שגיאה בשליחה: ${esc(err.message||'נסו שוב')}</div>`;
@@ -2374,7 +2375,7 @@ route('/ticket', async (app, id)=>{
   const agents = users.filter(u=>isStaffUser(u));
 
   app.innerHTML = `
-  <div class="crumb anim-in"><a href="${staff?'#/admin':'#/my'}">${staff?'פאנל צוות':'הפניות שלי'}</a> ← פנייה ${esc(t.code||'')}</div>
+  <div class="crumb anim-in"><a href="${staff?'/admin':'/my'}">${staff?'פאנל צוות':'הפניות שלי'}</a> ← פנייה ${esc(t.code||'')}</div>
   <div class="split">
     <div class="stack anim-up">
       <div class="card">
@@ -4823,7 +4824,7 @@ function initDemoStrip(){
 (async function boot(){
  initTheme();initSfx();initBurger();initNotif();renderFooter();$('#demoStrip').style.display='none';
  try{await Auth.refresh();await CFG.load();}catch(e){toast(e.message,'warn');}
- const navigate=path=>{history.pushState(null,'',path);closeModal();window.scrollTo({top:0});render();};
+ const navigate=path=>{history.pushState(null,'',path);closeModal();window.scrollTo({top:0});return render();};
  window.navigate=navigate;
  document.addEventListener('click',e=>{const a=e.target.closest('a[href]');if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target||a.hasAttribute('download'))return;const url=new URL(a.href,location.href);if(url.origin!==location.origin||url.pathname.startsWith('/api/'))return;e.preventDefault();navigate(url.pathname+url.search);});
  window.addEventListener('popstate',()=>{closeModal();window.scrollTo({top:0});render();});
