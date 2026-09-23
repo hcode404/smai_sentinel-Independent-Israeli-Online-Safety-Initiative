@@ -1,6 +1,6 @@
 import {remoteStore,request} from './api.js';
 import {initAssistant} from './assistant.js';
-import {authReady,loginEmail,registerEmail,loginGoogle,logoutFirebase,firebaseUser} from './firebase-auth.js';
+import {authReady,loginEmail,registerEmail,loginGoogle,resetPassword,logoutFirebase,firebaseUser} from './firebase-auth.js';
 import { renderHome } from './home.js';
 import './ticket-fix.css';
 
@@ -576,7 +576,7 @@ const Auth={user:null,_cbs:[],onChange(f){this._cbs.push(f);f(this.user);},_emit
   isStaff(){return isStaffUser(this.user);},can(c){return can(this.user,c);},
   banInfo(){const u=this.user;if(!u?.isBanned||u.banUntil&&Date.parse(u.banUntil)<Date.now())return null;return {until:u.banUntil,reason:u.banReason,note:u.banNote,perm:!u.banUntil};},
   muted(){return Date.parse(this.user?.muteUntil)>Date.now();},
-  async changePassword(){if(!firebaseUser()?.email)throw new Error('לא נמצא אימייל בחשבון');await request('/api/auth/password-reset','POST',{email:firebaseUser().email});},
+  async changePassword(){if(!firebaseUser()?.email)throw new Error('לא נמצא אימייל בחשבון');await resetPassword(firebaseUser().email);},
   async changeEmail(){throw new Error('שינוי אימייל דורש אימות מחדש ויתווסף בהמשך')}
 };
 window.smaiLogout=async()=>{await Auth.signOut();location.hash='#/login';await render();};
@@ -4069,9 +4069,9 @@ route('/login',app=>{
  const message=e=>({'auth/invalid-credential':'המייל או הסיסמה אינם נכונים','auth/user-not-found':'לא נמצא חשבון עם כתובת המייל הזו','auth/email-already-in-use':'כבר קיים חשבון עם המייל הזה','auth/weak-password':'הסיסמה חלשה מדי','auth/too-many-requests':'בוצעו יותר מדי ניסיונות. המתינו מעט ונסו שוב','auth/network-request-failed':'אין כרגע חיבור לשירות ההתחברות','auth/popup-closed-by-user':'חלון Google נסגר לפני השלמת הכניסה','auth/unauthorized-domain':'כתובת האתר עדיין לא אושרה במערכת ההתחברות'}[e?.code]||e?.message||'הפעולה נכשלה');
  const finish=async()=>{await Auth.refresh();await CFG.load().catch(()=>{});history.replaceState(null,'','/');await render();};
  $('#authMode').onclick=()=>{signup=!signup;$('#authNameWrap').hidden=!signup;$('#authName').required=signup;submit.textContent=signup?'יצירת חשבון':'כניסה';$('#authMode').textContent=signup?'יש לי חשבון — כניסה':'אין לי חשבון — הרשמה';$('#authPassword').autocomplete=signup?'new-password':'current-password';status.textContent='';};
- $('#googleLogin').onclick=async()=>{status.textContent='פותח את Google…';try{await loginGoogle();await finish();}catch(e){status.textContent=message(e);}};
+ $('#googleLogin').onclick=async()=>{status.textContent='מעביר להתחברות מאובטחת עם Google…';try{await loginGoogle();}catch(e){status.textContent=message(e);}};
  form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;status.textContent=signup?'יוצר חשבון…':'מתחבר…';try{if(signup){await registerEmail($('#authEmail').value.trim(),$('#authPassword').value,$('#authName').value.trim());await Auth.refresh();await request('/api/auth/email-verification','POST',{});status.textContent='החשבון נוצר ונשלח מייל אימות מעוצב.';}else await loginEmail($('#authEmail').value.trim(),$('#authPassword').value);await finish();}catch(e){status.textContent=message(e);}finally{submit.disabled=false;}};
- $('#forgotPassword').onclick=async()=>{const email=$('#authEmail').value.trim();if(!email){status.textContent='הזינו קודם את כתובת המייל.';$('#authEmail').focus();return;}const b=$('#forgotPassword');b.disabled=true;status.textContent='שולח הודעת איפוס מאובטחת…';try{const result=await request('/api/auth/password-reset','POST',{email});status.textContent=result.message;}catch(e){status.textContent=message(e);}finally{b.disabled=false;}};
+ $('#forgotPassword').onclick=async()=>{const email=$('#authEmail').value.trim();if(!email){status.textContent='הזינו קודם את כתובת המייל.';$('#authEmail').focus();return;}const b=$('#forgotPassword');b.disabled=true;status.textContent='שולח הודעת איפוס מאובטחת…';try{await resetPassword(email);status.textContent='אם קיים חשבון עם הכתובת הזו, נשלחה הודעת איפוס.';}catch(e){status.textContent=message(e);}finally{b.disabled=false;}};
 });
 
 route('/account',async app=>{

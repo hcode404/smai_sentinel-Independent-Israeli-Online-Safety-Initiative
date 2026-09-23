@@ -1,5 +1,5 @@
 import {initializeApp} from 'firebase/app';
-import {getAuth,setPersistence,browserLocalPersistence,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmailAndPassword,GoogleAuthProvider,signInWithPopup,signOut,updateProfile} from 'firebase/auth';
+import {getAuth,setPersistence,browserLocalPersistence,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmailAndPassword,GoogleAuthProvider,signInWithRedirect,sendPasswordResetEmail,signOut,updateProfile} from 'firebase/auth';
 
 const app=initializeApp({
   apiKey:'AIzaSyBhKBHABUpTCpY88PdEjFKRnPaIFmBJqB0',
@@ -24,7 +24,8 @@ export async function registerEmail(email,password,name){
 }
 export async function loginGoogle(){
   const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});
-  return signInWithPopup(auth,provider);
+  return signInWithRedirect(auth,provider);
 }
+export const resetPassword=email=>sendPasswordResetEmail(auth,email,{url:'https://smai-support.jo3.org/login',handleCodeInApp:false});
 export const logoutFirebase=()=>signOut(auth);
 export const firebaseUser=()=>auth.currentUser;
