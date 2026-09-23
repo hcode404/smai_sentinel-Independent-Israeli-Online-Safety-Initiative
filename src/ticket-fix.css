@@ -15,12 +15,14 @@
 }
 
 #notifBtn { position: relative; }
+.side-actions { display: flex; align-items: center; gap: 8px; }
 .notification-unread { background: var(--info-bg) !important; border-color: var(--brand) !important; }
 .notification-unread .nm { display: grid; gap: 2px; }
 .notification-unread small { color: var(--ink3); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (min-width: 1100px) {
   .mainnav {
+    bottom: 220px !important;
     padding-block: 18px !important;
     gap: 2px !important;
     scrollbar-gutter: stable;
@@ -28,7 +30,43 @@
 
   .mainnav a { padding-block: 9px !important; }
   .mainnav::before { padding-bottom: 8px !important; }
-  .mainnav::after { padding-block: 14px !important; line-height: 1.65 !important; }
+  .mainnav::after { display: none; }
+
+  .side-actions {
+    position: fixed;
+    z-index: 55;
+    inset-inline-start: 0;
+    bottom: 0;
+    width: 228px;
+    min-height: 220px;
+    padding: 14px 18px 18px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 7px;
+    border-block-start: 1px solid var(--line);
+    border-inline-end: 1px solid var(--line);
+    background: var(--bg);
+  }
+
+  .side-actions .iconbtn,
+  .side-actions #authSlot > * {
+    width: 100% !important;
+    min-height: 42px;
+    padding: 0 13px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 11px !important;
+    border-radius: 8px;
+  }
+
+  .side-actions .iconbtn:hover { transform: translateX(-2px); }
+  .side-actions .iconbtn::after { font-size: 13px; font-weight: 600; }
+  .side-actions #sfxBtn::after { content: 'צלילים'; }
+  .side-actions #themeBtn::after { content: 'תצוגה'; }
+  .side-actions #notifBtn::after { content: 'התראות'; }
+  .side-actions #authSlot { width: 100%; }
+  .side-actions #authSlot .hide-sm { display: inline !important; }
 
   #notifBtn,
   #themeBtn,
