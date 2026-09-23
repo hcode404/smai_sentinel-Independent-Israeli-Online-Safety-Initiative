@@ -2072,7 +2072,7 @@ route('/report', (app)=>{
 
   let last = null;
   const wireStep3 = ()=>{
-    for(const el of $('#rf input,#rf textarea,#rf select')){if(Object.hasOwn(draft,el.id)){if(el.type==='checkbox')el.checked=draft[el.id];else el.value=draft[el.id];}el.addEventListener('input',()=>{draft[el.id]=el.type==='checkbox'?el.checked:el.value;});}
+    for(const el of $$('#rf input,#rf textarea,#rf select')){if(Object.hasOwn(draft,el.id)){if(el.type==='checkbox')el.checked=draft[el.id];else el.value=draft[el.id];}el.addEventListener('input',()=>{draft[el.id]=el.type==='checkbox'?el.checked:el.value;});}
     if(!draft.f_desc)$('#f_desc').value=sessionStorage.getItem('smai_report_draft')||'';
     const dsc = $('#f_desc'), ttl = $('#f_title'), box = $('#aiBox');
     const runAI = ()=>{
