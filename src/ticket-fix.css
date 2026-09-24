@@ -21,11 +21,26 @@
 .notification-unread small { color: var(--ink3); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (min-width: 1100px) {
+  main,
+  footer {
+    margin-inline-start: 252px !important;
+    transition: margin-inline-start .28s ease;
+  }
+
+  .topin {
+    padding-inline-start: 282px !important;
+    transition: padding-inline-start .28s ease;
+  }
+
   .mainnav {
-    bottom: 220px !important;
-    padding-block: 18px !important;
+    z-index: 54;
+    top: 0 !important;
+    bottom: 196px !important;
+    width: 252px !important;
+    padding: 88px 14px 14px !important;
     gap: 2px !important;
     scrollbar-gutter: stable;
+    transition: width .28s ease, padding .28s ease;
   }
 
   .mainnav a { padding-block: 9px !important; }
@@ -33,20 +48,34 @@
   .mainnav::after { display: none; }
 
   .side-actions {
-    position: fixed;
-    z-index: 55;
+    z-index: 54;
     inset-inline-start: 0;
     bottom: 0;
-    width: 228px;
-    min-height: 220px;
-    padding: 14px 18px 18px;
+    width: 252px;
+    min-height: 196px;
+    padding: 12px 14px 14px;
     flex-direction: column;
     align-items: stretch;
     gap: 7px;
     border-block-start: 1px solid var(--line);
     border-inline-end: 1px solid var(--line);
     background: var(--bg);
+    transition: width .28s ease, padding .28s ease;
   }
+
+  #burger {
+    display: grid !important;
+    position: fixed;
+    z-index: 70;
+    inset-inline-start: 18px;
+    top: 19px;
+    width: 42px;
+    height: 42px;
+    border-color: var(--line2);
+    background: var(--surface2);
+  }
+
+  #burger.on { color: var(--brand); border-color: var(--brand); }
 
   .side-actions .iconbtn,
   .side-actions #authSlot > * {
@@ -72,4 +101,22 @@
   #themeBtn,
   #sfxBtn,
   #authSlot { flex: 0 0 auto; }
+
+  body.sidebar-collapsed main,
+  body.sidebar-collapsed footer { margin-inline-start: 68px !important; }
+  body.sidebar-collapsed .topin { padding-inline-start: 98px !important; }
+  body.sidebar-collapsed .mainnav,
+  body.sidebar-collapsed .side-actions { width: 68px !important; padding-inline: 9px !important; }
+  body.sidebar-collapsed .mainnav::before,
+  body.sidebar-collapsed .mainnav a span,
+  body.sidebar-collapsed .side-actions .iconbtn::after,
+  body.sidebar-collapsed .side-actions #authSlot span { display: none !important; }
+  body.sidebar-collapsed .mainnav a,
+  body.sidebar-collapsed .side-actions .iconbtn,
+  body.sidebar-collapsed .side-actions #authSlot > * {
+    justify-content: center !important;
+    padding-inline: 0 !important;
+    gap: 0 !important;
+  }
+  body.sidebar-collapsed #burger { inset-inline-start: 13px; }
 }

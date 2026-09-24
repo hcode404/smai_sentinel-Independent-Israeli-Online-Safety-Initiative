@@ -4766,8 +4766,28 @@ function initSfx(){
 }
 function initBurger(){
   const b = $('#burger'), nav = $('#nav');
-  b.onclick = ()=>{ nav.classList.toggle('open'); b.classList.toggle('on'); };
-  nav.addEventListener('click', e=>{ if(e.target.closest('a')){ nav.classList.remove('open'); b.classList.remove('on'); } });
+  const desktop=()=>matchMedia('(min-width:1100px)').matches;
+  const paint=()=>{
+    if(desktop()){
+      const collapsed=localStorage.getItem('smai_sidebar_collapsed')==='1';
+      document.body.classList.toggle('sidebar-collapsed',collapsed);
+      b.classList.toggle('on',!collapsed);
+      b.setAttribute('aria-expanded',String(!collapsed));
+      b.setAttribute('aria-label',collapsed?'פתיחת סרגל הניווט':'כיווץ סרגל הניווט');
+    }else{
+      document.body.classList.remove('sidebar-collapsed');
+      b.setAttribute('aria-expanded',String(nav.classList.contains('open')));
+      b.setAttribute('aria-label',nav.classList.contains('open')?'סגירת התפריט':'פתיחת התפריט');
+    }
+  };
+  b.onclick=()=>{
+    if(desktop())localStorage.setItem('smai_sidebar_collapsed',document.body.classList.contains('sidebar-collapsed')?'0':'1');
+    else nav.classList.toggle('open');
+    paint();
+  };
+  nav.addEventListener('click',e=>{if(!desktop()&&e.target.closest('a')){nav.classList.remove('open');paint();}});
+  addEventListener('resize',paint,{passive:true});
+  paint();
 }
 function initNotif(){
   $('#notifBtn').onclick = async ()=>{
