@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {localDatabase} from '../scripts/local-db.mjs';
-import {api,database,renderEmail} from '../server/index.js';
+import {api,database,renderEmail,mailPreferenceKey,wantsUserMail} from '../server/index.js';
 import {authorizeWrite} from '../server/policy.js';
 import {SignJWT,exportJWK,generateKeyPair} from 'jose';
 import {readFile} from 'node:fs/promises';
@@ -223,6 +223,17 @@ test('transactional emails are branded HTML with contextual actions',()=>{
  const mention=renderEmail('mention',{sender:'נועה',where:'שיחה פרטית',text:'@בדיקה יש עדכון',href:'/dm/chat-1'});assert.match(mention.html,/תויגת בהודעה חדשה/);assert.match(mention.html,/\/dm\/chat-1/);assert.match(mention.html,/מעבר ישיר לתוכן/);
  const resetLike=renderEmail('securityLogin',{name:'בדיקה',when:'עכשיו'});assert.match(resetLike.html,/\/account/);
  const purchase=renderEmail('purchase',{product:'חבילה',orderId:'A-1',amount:'₪10'});assert.match(purchase.html,/מספר הזמנה/);
+});
+test('every email type respects the matching account preference',()=>{
+ assert.equal(mailPreferenceKey('friendRequest'),'friend');assert.equal(mailPreferenceKey('friendAccepted'),'friend');
+ assert.equal(mailPreferenceKey('dmRequest'),'dm');assert.equal(mailPreferenceKey('teamApplication'),'appStatus');
+ assert.equal(mailPreferenceKey('staffTicketAssigned'),'ticketClaim');
+ assert.equal(wantsUserMail({mailPrefs:{securityLogin:false}},'securityLogin'),false);
+ assert.equal(wantsUserMail({mailPrefs:{moderation:false}},'moderation'),false);
+ assert.equal(wantsUserMail({mailPrefs:{friend:false}},'friendRequest'),false);
+ assert.equal(wantsUserMail({mailPrefs:{dm:false}},'dmRequest'),false);
+ assert.equal(wantsUserMail({mailPrefs:{mention:false}},'mention'),false);
+ assert.equal(wantsUserMail({mailPrefs:{}},'mention'),true);
 });
 test('emergency evidence exports all chats for one hour without notifying the target',async()=>{
  const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'owner');await f.call('session','GET',null,'bob');

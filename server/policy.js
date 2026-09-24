@@ -70,6 +70,10 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     requireThat(old,404,'המשתמש לא נמצא');
     const self=old.id===id;
     let p=self?pick(input,['name','bio','avatar','ageBand','mailPrefs','privacy','socialLinks','installedUpdates','sound','theme']):{};
+    if(p.mailPrefs){
+      const allowed=new Set(['securityLogin','securityAccount','accountDeletion','purchase','friend','ticketReply','ticketClaim','ticketStatus','aiSteps','mention','dm','moderation','appStatus','news']);
+      p.mailPrefs=Object.fromEntries(Object.entries(p.mailPrefs).filter(([key,value])=>allowed.has(key)&&typeof value==='boolean'));
+    }
     if(p.ageBand)requireThat(['under10','10to12','13to17','adult'].includes(p.ageBand),400,'קבוצת הגיל אינה תקינה');
     if(p.privacy){
       p.privacy=pick(p.privacy,['dmFrom','friendRequests','profileVis','onlineStatus','showFollowers','showVerified','showLastSeen','readReceipts']);

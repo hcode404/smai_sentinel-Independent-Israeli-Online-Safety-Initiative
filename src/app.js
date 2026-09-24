@@ -4183,6 +4183,13 @@ route('/account',async app=>{
   </div>
  </form>`;
  $$('[data-settings-tab]').forEach(b=>b.onclick=()=>{$$('[data-settings-tab]').forEach(x=>x.classList.toggle('on',x===b));$$('[data-settings-panel]').forEach(x=>x.classList.toggle('on',x.dataset.settingsPanel===b.dataset.settingsTab));});
+ $$('[data-mail-pref]').forEach(toggle=>toggle.onchange=async()=>{
+   const previous=!toggle.checked,mailPrefs={};$$('[data-mail-pref]').forEach(x=>mailPrefs[x.dataset.mailPref]=x.checked);
+   toggle.disabled=true;$('#profileStatus').textContent='שומר את העדפות המייל…';
+   try{await Store.update('users',u.id,{mailPrefs});await Auth.refresh();$('#profileStatus').textContent='העדפות המייל נשמרו מיד';}
+   catch(error){toggle.checked=previous;$('#profileStatus').textContent=error.message||'שמירת ההעדפה נכשלה';}
+   finally{toggle.disabled=false;}
+ });
  const generalPanel=$('[data-settings-panel="general"]');if(generalPanel)generalPanel.insertAdjacentHTML('beforeend',`<div class="card"><h3>מצב גיל מוגן</h3><p class="small mute">הגדרה עצמית בלבד; אימות חיצוני עתידי לא יעביר אלינו צילום פנים.</p>${choice('ageBand','קבוצת גיל',[['under10','מתחת לגיל 10'],['10to12','10–12'],['13to17','13–17'],['adult','18 ומעלה']],u.ageBand||'13to17')}<p class="small mute">בחשבון מתחת לגיל 10 קישורים שמפרסמים משתמשים מוסתרים. קישורים רשמיים מהמייסד נשארים זמינים.</p><button class="btn btn-g btn-sm" id="reportAgeError" type="button">דיווח על טעות בגיל</button></div>`);
  $('#ageBand').onchange=async e=>{try{await Store.update('users',u.id,{ageBand:e.target.value});await Auth.refresh();$('#profileStatus').textContent='מצב הגיל המוגן נשמר';}catch(err){$('#profileStatus').textContent=err.message;}};
  $('#reportAgeError').onclick=()=>{openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('flag',20)}</span><h3>דיווח על טעות בגיל</h3></div><div class="m-b"><p>הצוות יוכל לתקן את קבוצת הגיל, לאפס אותה או לדרוש אימות חוזר.</p><div class="field"><label>מה לא נכון?</label><textarea id="ageErrorText" minlength="10" maxlength="600"></textarea></div><p id="ageErrorStatus" class="small"></p></div><div class="m-f"><button class="btn btn-g" onclick="closeModal()">ביטול</button><button class="btn btn-p" id="sendAgeError">שליחה לצוות</button></div>`);$('#sendAgeError').onclick=async()=>{const text=$('#ageErrorText').value.trim();if(text.length<10)return $('#ageErrorStatus').textContent='נדרש הסבר קצר של לפחות 10 תווים.';const b=$('#sendAgeError');b.disabled=true;try{await Store.add('reports',{kind:'age_dispute',type:'account',targetId:u.id,reason:'בקשה לתיקון גיל',text});closeModal();toast('הדיווח נשלח לצוות');}catch(err){$('#ageErrorStatus').textContent=err.message;b.disabled=false;}};};

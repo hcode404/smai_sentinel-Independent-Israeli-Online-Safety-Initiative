@@ -101,10 +101,12 @@ async function deliverMail(env,to,message){
   if(env.GMAIL_USER&&env.GMAIL_APP_PASSWORD)return sendGmailSmtp(env,to,message);
   return {ok:false};
 }
+const MAIL_PREF_TYPE={friendRequest:'friend',friendAccepted:'friend',dmRequest:'dm',teamApplication:'appStatus',staffTicketAssigned:'ticketClaim'};
+export const mailPreferenceKey=type=>MAIL_PREF_TYPE[type]||type;
+export const wantsUserMail=(user,type)=>user?.mailPrefs?.[mailPreferenceKey(type)]!==false;
 async function sendUserMail(env,user,type,data){
   if(!user?.email)return {ok:false};
-  const critical=['securityLogin','moderation'].includes(type);
-  if(!critical&&user.mailPrefs?.[type]===false)return {ok:false};
+  if(!wantsUserMail(user,type))return {ok:false,disabled:true};
   return deliverMail(env,user.email,renderEmail(type,{name:user.name,...data},env));
 }
 const scheduleMail=(ctx,promise)=>{try{ctx?.waitUntil?.(Promise.resolve(promise).catch(()=>{}));}catch{}};
