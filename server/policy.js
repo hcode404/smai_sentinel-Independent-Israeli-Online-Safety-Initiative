@@ -38,6 +38,10 @@ export async function canRead(col,r,u,get){
 export function safeRecord(col,r,u){
   if(col==='users'&&u?.id!==r.id&&rank(u)<50)return publicUser(r);
   const out={...r};delete out.pass;delete out.password;
+  if(col==='users'){
+    out.trustedNetworkCount=Array.isArray(r.trustedNetworkHashes)?r.trustedNetworkHashes.length:0;
+    delete out.lastNetworkHash;delete out.trustedNetworkHashes;
+  }
   if(col==='servers'){
     delete out.code;delete out.inviteCode;
     if(!(rank(u)>=40||r.ownerId===u?.id||r.admins?.includes(u?.id)))delete out.invite;

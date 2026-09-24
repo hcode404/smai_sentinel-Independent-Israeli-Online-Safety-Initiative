@@ -142,9 +142,10 @@ async function identity(req,env,db,ctx){
     const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(network+'|'+id));
     const networkHash=[...new Uint8Array(digest)].slice(0,12).map(x=>x.toString(16).padStart(2,'0')).join('');
     if(u.lastNetworkHash!==networkHash){
-      const first=!u.lastNetworkHash,updated={...u,lastNetworkHash:networkHash,lastLoginAt:now(),securityEvents:first?(u.securityEvents||[]):[{type:'new_network',createdAt:now()},...(u.securityEvents||[])].slice(0,10)};
+      const first=!u.lastNetworkHash,trusted=(u.trustedNetworkHashes||[]).includes(networkHash);
+      const updated={...u,lastNetworkHash:networkHash,lastLoginAt:now(),securityEvents:first||trusted?(u.securityEvents||[]):[{type:'new_network',createdAt:now()},...(u.securityEvents||[])].slice(0,10)};
       await db.put('users',updated,u);u=await db.get('users',id);
-      if(!first){
+      if(!first&&!trusted){
         await db.put('notifications',{id:nonce(),userId:u.id,type:'securityLogin',title:'כניסה חדשה לחשבון',text:'זוהתה כניסה מרשת או ממכשיר חדשים. אם זו לא הייתה הכניסה שלך, מומלץ לאפס סיסמה.',href:'/account',read:false,createdAt:now()});
         scheduleMail(ctx,sendUserMail(env,u,'securityLogin',{when:new Date().toLocaleString('he-IL'),device:req.headers.get('User-Agent')?.slice(0,80)||'דפדפן חדש'}));
       }
@@ -288,6 +289,13 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const msg={id:nonce(),createdAt:now(),ticketId:t.id,text,ai:true,aiMode:generated.mode,senderId:'ai-system',senderName:generated.mode==='gemini'?'SMAI Sentinel AI':'SMAI · מנוע מקומי',senderRank:'ai',internal:false};
       await db.put('messages',msg);return json(msg);
     }
+    if(path==='/api/security/trust-current'&&req.method==='POST'){
+      requireThat(u.lastNetworkHash,400,'לא נמצא זיהוי רשת נוכחי');
+      const hashes=[u.lastNetworkHash,...(u.trustedNetworkHashes||[]).filter(x=>x!==u.lastNetworkHash)].slice(0,10);
+      await db.put('users',{...u,trustedNetworkHashes:hashes,trustedNetworkUpdatedAt:now()},u);
+      await db.put('logs',{id:nonce(),createdAt:now(),actorId:u.id,actorName:u.name,type:'trusted_network_added',targetId:u.id,text:'המשתמש סימן את הרשת הנוכחית כמהימנה'});
+      return json({ok:true,count:hashes.length});
+    }
     if(path==='/api/track'&&req.method==='POST'){
       await limit(env,'track:'+u.id,10);
       const code=String(body.code||'').trim().toUpperCase();requireThat(/^SM-[A-F0-9]{32}$/.test(code),404,'קוד המעקב לא נמצא');
@@ -426,11 +434,12 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const thread=await db.get('threads',rec.thread);
       try{await db.put('threads',{...thread,replies:(thread.replies||0)+1,lastAt:now(),lastBy:u.name},thread);}catch{}
     }
-    if(['cmsgs','tmsgs'].includes(col)&&!old&&rec.text?.includes('@')){
+    if(['cmsgs','tmsgs','dmsgs','messages'].includes(col)&&!old&&rec.text?.includes('@')){
       const users=await db.list('users'),lower=rec.text.toLocaleLowerCase('he');
       for(const mentioned of users){
         if(mentioned.id===u.id||!mentioned.name||!lower.includes('@'+mentioned.name.toLocaleLowerCase('he')))continue;
-        const href=col==='tmsgs'?`/thread/${rec.thread}`:`/server/${rec.server}`;
+        if(!await canRead(col,rec,mentioned,db.get))continue;
+        const href=col==='tmsgs'?`/thread/${rec.thread}`:col==='cmsgs'?`/server/${rec.server}`:col==='dmsgs'?`/dm/${rec.convId}`:`/ticket/${rec.ticketId}`;
         await db.put('notifications',{id:nonce(),userId:mentioned.id,type:'mention',title:`${u.name} תייג/ה אותך`,text:rec.text.slice(0,180),href,read:false,createdAt:now()});
       }
     }

@@ -16,8 +16,8 @@ const tokenFor=user=>new SignJWT({email:user+'@example.test',email_verified:true
  .setAudience(project).setIssuedAt().setExpirationTime('10m').sign(privateKey);
 function fixture(){
  const DB=localDatabase(),env={DB,ADMIN_EMAILS:'owner@example.test',FIREBASE_PROJECT_ID:project};
- const call=async(path,method='GET',body,user='alice',origin='https://sentinel.test')=>{
- const headers={'Content-Type':'application/json',Origin:origin};
+ const call=async(path,method='GET',body,user='alice',origin='https://sentinel.test',ip='203.0.113.5')=>{
+ const headers={'Content-Type':'application/json',Origin:origin,'CF-Connecting-IP':ip};
  if(user)headers.Authorization='Bearer '+await tokenFor(user);
  const r=await api(new Request('https://sentinel.test/api/'+path,{method,headers,...(body?{body:JSON.stringify(body)}:{})}),env);
  return {status:r.status,data:await r.json()};};
@@ -46,6 +46,15 @@ test('local ticket triage routes clear account harm and closes only unmistakable
  assert.equal(routed.status,201);assert.equal(routed.data.dept,'account');assert.equal(routed.data.status,'new');assert.equal(routed.data.localTriage,true);
  const spam=await f.call('records/tickets','POST',{title:'מבצע פרסים חינם',description:'קנו עכשיו רובוקס חינם https://a.test https://a.test https://a.test https://a.test https://a.test https://a.test',dept:'other'});
  assert.equal(spam.status,201);assert.equal(spam.data.status,'closed');assert.equal(spam.data.spamClosed,true);f.DB.close();
+});
+test('a trusted network does not create another login warning when it returns',async()=>{
+ const f=fixture();await f.call('session');
+ assert.equal((await f.call('security/trust-current','POST',{})).data.count,1);
+ await f.call('session','GET',null,'alice','https://sentinel.test','203.0.113.99');
+ const afterNew=(await f.call('records/notifications')).data.filter(n=>n.type==='securityLogin').length;
+ await f.call('session','GET',null,'alice','https://sentinel.test','203.0.113.5');
+ const afterTrusted=(await f.call('records/notifications')).data.filter(n=>n.type==='securityLogin').length;
+ assert.equal(afterNew,1);assert.equal(afterTrusted,1);f.DB.close();
 });
 test('ordinary accounts cannot read another ticket, or enumerate it',async()=>{
  const f=fixture();const a=await f.call('records/tickets','POST',ticket);
