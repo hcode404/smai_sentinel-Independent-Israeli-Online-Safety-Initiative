@@ -1,5 +1,5 @@
 import {initializeApp} from 'firebase/app';
-import {getAuth,setPersistence,browserLocalPersistence,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmailAndPassword,GoogleAuthProvider,signInWithRedirect,signOut,updateProfile} from 'firebase/auth';
+import {getAuth,setPersistence,browserLocalPersistence,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmailAndPassword,GoogleAuthProvider,signInWithPopup,signInWithRedirect,signOut,updateProfile,multiFactor,TotpMultiFactorGenerator} from 'firebase/auth';
 
 const FIREBASE_API_KEY='AIzaSyBhKBHABUpTCpY88PdEjFKRnPaIFmBJqB0';
 
@@ -26,7 +26,22 @@ export async function registerEmail(email,password,name){
 }
 export async function loginGoogle(){
   const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});
-  return signInWithRedirect(auth,provider);
+  try{return await signInWithPopup(auth,provider);}catch(error){
+    if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(error?.code))return signInWithRedirect(auth,provider);
+    throw error;
+  }
+}
+export async function beginTotpEnrollment(){
+  await ready;const user=auth.currentUser;if(!user)throw new Error('יש להתחבר מחדש');
+  const session=await multiFactor(user).getSession();
+  const secret=await TotpMultiFactorGenerator.generateSecret(session);
+  return {secret,secretKey:secret.secretKey,qrUrl:secret.generateQrCodeUrl(user.email||'SMAI','SMAI Sentinel')};
+}
+export async function finishTotpEnrollment(secret,code){
+  const user=auth.currentUser;if(!user)throw new Error('יש להתחבר מחדש');
+  const assertion=TotpMultiFactorGenerator.assertionForEnrollment(secret,String(code||'').replace(/\s/g,''));
+  await multiFactor(user).enroll(assertion,'SMAI Authenticator');
+  return true;
 }
 export async function resetPassword(email){
   const response=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(FIREBASE_API_KEY)}`,{

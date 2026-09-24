@@ -36,6 +36,9 @@ export function renderEmail(type,data={},env={}){
   if(type==='ticketStatus')return {subject:`עדכון בפנייה ${data.code||''}: ${data.status||''}`,html:mailShell({title:'סטטוס הפנייה השתנה',preheader:`הפנייה עודכנה ל-${data.status||''}`,icon:'↻',accent:'#a78bfa',content:`<table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}${mailBox('סטטוס חדש',data.status||'עודכן')}</table>`,actionLabel:'צפייה בעדכון המלא',actionUrl:ticketUrl})};
   if(type==='moderation')return {subject:`עדכון אכיפה בחשבון ${MAIL_BRAND}`,html:mailShell({title:'עדכון בנושא אכיפה',preheader:data.title||'בוצע עדכון בחשבון',icon:'⚖️',accent:'#fb7185',content:`<h2 style="font-size:18px;color:#fff;margin-top:0">${mailEsc(data.title||'עדכון בחשבון')}</h2><p>${mailEsc(data.detail||'פרטי הפעולה זמינים בחשבון שלך.')}</p>`,actionLabel:'צפייה בפרטי החשבון',actionUrl:mailUrl(env,'/account'),notice:'אם לדעתך נפלה טעות, אפשר להגיש ערעור מתוך האתר.'})};
   if(type==='purchase')return {subject:`אישור רכישה — ${data.product||MAIL_BRAND}`,html:mailShell({title:'הרכישה הושלמה בהצלחה',preheader:'אישור ופרטי הרכישה שלך',icon:'✓',accent:'#34d399',content:`<p style="margin-top:0">תודה על הרכישה.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מוצר',data.product||'')}${mailBox('מספר הזמנה',data.orderId||'')}${mailBox('סכום',data.amount||'')}</table>`,actionLabel:'צפייה בחשבון',actionUrl:mailUrl(env,'/account')})};
+  if(type==='friendRequest')return {subject:`בקשת חברות חדשה — ${MAIL_BRAND}`,html:mailShell({title:'רוצים להיות חברים',preheader:`${data.sender||'משתמש'} שלח/ה לך בקשת חברות`,icon:'👥',accent:'#72e3cf',content:`<p style="margin-top:0"><b>${mailEsc(data.sender||'משתמש')}</b> שלח/ה לך בקשת חברות בקהילת SMAI.</p><p>אפשר להיכנס לעמוד החברים, לצפות בפרופיל ולאשר או לדחות את הבקשה.</p>`,actionLabel:'צפייה בבקשת החברות',actionUrl:mailUrl(env,'/friends'),notice:'אישור בקשה מאפשר פתיחת שיחה פרטית בהתאם להגדרות הפרטיות שלך.'})};
+  if(type==='friendAccepted')return {subject:`בקשת החברות אושרה — ${MAIL_BRAND}`,html:mailShell({title:'עכשיו אתם חברים',preheader:`${data.sender||'משתמש'} אישר/ה את בקשת החברות`,icon:'✓',accent:'#34d399',content:`<p style="margin-top:0"><b>${mailEsc(data.sender||'משתמש')}</b> אישר/ה את בקשת החברות שלך.</p>`,actionLabel:'מעבר לחברים',actionUrl:mailUrl(env,'/friends')})};
+  if(type==='dmRequest')return {subject:`בקשת הודעה חדשה — ${MAIL_BRAND}`,html:mailShell({title:'ממתינה לך בקשת הודעה',preheader:`הודעה חדשה מאת ${data.sender||'משתמש'}`,icon:'💬',accent:'#38bdf8',content:`<p style="margin-top:0"><b>${mailEsc(data.sender||'משתמש')}</b> שלח/ה לך בקשת שיחה פרטית.</p><div style="margin-top:18px;padding:16px;border-right:3px solid #38bdf8;background:#10283d;border-radius:10px">${mailEsc(data.text||'').replace(/\n/g,'<br>')}</div><p>עד שתאשרו את הבקשה, השולח יכול לשלוח לכל היותר שתי הודעות.</p>`,actionLabel:'בדיקת בקשת ההודעה',actionUrl:mailUrl(env,`/dm/${encodeURIComponent(data.convId||'')}`),notice:'לא חייבים להשיב. אפשר לדחות את הבקשה או לחסום את המשתמש.'})};
   throw new HttpError(400,'סוג הודעת המייל אינו נתמך');
 }
 async function deliverMail(env,to,message){
@@ -266,11 +269,29 @@ export async function api(req,env,ctx={waitUntil(){}}){
       for(const other of targets||[]){
         if(!other||other===u.id)continue;
         const rel=relations.find(f=>[f.a,f.b].includes(u.id)&&[f.a,f.b].includes(other));
-        if(col==='friends'&&req.method==='POST')requireThat(!rel,409,'קיים כבר קשר או בקשה עם המשתמש הזה');
-        if(col!=='friends'&&req.method==='POST')requireThat(rel?.status!=='blocked',403,'לא ניתן לשלוח הודעה למשתמש הזה');
         const target=await db.get('users',other);
-        if(col==='dms'&&!old&&target?.privacy?.dmFrom==='friends')requireThat(rel?.status==='accepted',403,'המשתמש מקבל הודעות מחברים בלבד');
-        if(col==='dms'&&!old)requireThat(target?.privacy?.dmFrom!=='none',403,'המשתמש לא מקבל הודעות פרטיות');
+        if(col==='friends'&&req.method==='POST'){
+          requireThat(!rel,409,'קיים כבר קשר או בקשה עם המשתמש הזה');
+          if(body.status!=='blocked')requireThat(target?.privacy?.friendRequests!=='none',403,'המשתמש אינו מקבל בקשות חברות');
+        }
+        if(col!=='friends'&&req.method==='POST')requireThat(rel?.status!=='blocked',403,'לא ניתן לשלוח הודעה למשתמש הזה');
+        if(col!=='friends'&&req.method==='POST'){
+          const mode=target?.privacy?.dmFrom||'all';
+          if(mode==='friends')requireThat(rel?.status==='accepted'||rank(u)>=10,403,'המשתמש מקבל הודעות מחברים בלבד');
+          if(mode==='staff')requireThat(rank(u)>=10,403,'המשתמש מקבל הודעות מהצוות בלבד');
+          if(mode==='none')requireThat(false,403,'המשתמש אינו מקבל הודעות פרטיות');
+        }
+      }
+    }
+    if(col==='followers'&&req.method==='POST'){
+      const previous=(await db.list('followers')).find(f=>f.from===u.id&&f.to===body.to);
+      requireThat(!previous,409,'אתם כבר עוקבים אחרי המשתמש הזה');
+    }
+    if(col==='dmsgs'&&req.method==='POST'){
+      const conv=await db.get('dms',body.convId);
+      if(conv?.kind==='direct'&&conv.dmAccepted===false&&conv.ownerId===u.id){
+        const sent=(await db.list('dmsgs')).filter(m=>m.convId===conv.id&&m.senderId===u.id&&!m.deleted).length;
+        requireThat(sent<2,403,'אפשר לשלוח עד שתי הודעות עד שהמשתמש יאשר את בקשת השיחה');
       }
     }
     const patch=await authorizeWrite(col,old,body,u,db.get,req.method);
@@ -284,6 +305,7 @@ export async function api(req,env,ctx={waitUntil(){}}){
     if(col==='servers'&&!old)rec.invite=nonce().slice(0,24).toUpperCase();
     if(col==='dms'&&!old){
       rec.key=rec.members.length===2?[...rec.members].sort().join('__'):'g:'+rec.id;
+      if(rec.members.length===2)rec.dmAccepted=false;
       rec.names={};for(const member of rec.members)rec.names[member]=(await db.get('users',member))?.name||'משתמש';
       const previous=(await db.list('dms')).find(d=>d.key===rec.key);if(previous)return json(safeRecord(col,previous,u));
     }
@@ -325,8 +347,13 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     if(col==='friends'&&!old){
       await db.put('notifications',{id:nonce(),userId:rec.to,type:'friendRequest',title:'בקשת חברות חדשה',text:`${u.name} שלח/ה לך בקשת חברות.`,href:'/friends',read:false,createdAt:now()});
+      scheduleMail(ctx,sendUserMail(env,await db.get('users',rec.to),'friendRequest',{sender:u.name}));
     }else if(col==='friends'&&old&&rec.status!==old.status&&rec.status==='accepted'){
       await db.put('notifications',{id:nonce(),userId:rec.from,type:'friendAccepted',title:'בקשת החברות אושרה',text:`${u.name} אישר/ה את בקשת החברות שלך.`,href:'/friends',read:false,createdAt:now()});
+      scheduleMail(ctx,sendUserMail(env,await db.get('users',rec.from),'friendAccepted',{sender:u.name}));
+    }
+    if(col==='followers'&&!old){
+      await db.put('notifications',{id:nonce(),userId:rec.to,type:'newFollower',title:'עוקב חדש',text:`${u.name} התחיל/ה לעקוב אחריך.`,href:'/friends',read:false,createdAt:now()});
     }
     if(col==='tmsgs'&&!old){
       const thread=await db.get('threads',rec.thread);
@@ -347,6 +374,7 @@ export async function api(req,env,ctx={waitUntil(){}}){
       for(const member of conv?.members||[]){
         if(member===u.id)continue;
         await db.put('notifications',{id:nonce(),userId:member,type:rec.callUrl?'callInvite':'directMessage',title:rec.callUrl?(rec.callType==='video'?'הזמנה לשיחת וידאו':'הזמנה לשיחת קול'):`הודעה חדשה מ־${u.name}`,text:rec.callUrl?'לחצו כדי להצטרף לשיחה':rec.text.slice(0,180),href:`/dm/${conv.id}`,read:false,createdAt:now()});
+        if(conv.kind==='direct'&&conv.dmAccepted===false)scheduleMail(ctx,sendUserMail(env,await db.get('users',member),'dmRequest',{sender:u.name,text:rec.text.slice(0,500),convId:conv.id}));
       }
     }
     if(rank(u)>=10&&col!=='logs'){

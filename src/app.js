@@ -1,6 +1,6 @@
 import {remoteStore,request} from './api.js';
 import {initAssistant} from './assistant.js';
-import {authReady,loginEmail,registerEmail,loginGoogle,resetPassword,requestEmailChange,logoutFirebase,firebaseUser} from './firebase-auth.js';
+import {authReady,loginEmail,registerEmail,loginGoogle,resetPassword,requestEmailChange,logoutFirebase,firebaseUser,beginTotpEnrollment,finishTotpEnrollment} from './firebase-auth.js';
 import { renderHome } from './home.js';
 import './ticket-fix.css';
 
@@ -1189,7 +1189,8 @@ function renderNav(){
     return `<a href="${n.p}" class="${on?'on':''}" title="${n.l}" ${on?'aria-current="page"':''}>${ic(n.ico,18)}<span>${n.l}</span></a>`;
   });
   if(Auth.isStaff()) items.push(`<a href="/admin" class="${cur==='admin'?'on':''}">${ic('shield',14)} פאנל צוות</a>`);
-  $('#nav').innerHTML = items.join('');
+  $('#nav').innerHTML = `<form id="userQuickSearch" class="nav-user-search" role="search"><input id="userQuickName" aria-label="חיפוש משתמש לפי שם מדויק" placeholder="חיפוש שם משתמש מדויק"><button class="iconbtn" aria-label="חיפוש">${ic('search',15)}</button></form>`+items.join('');
+  $('#userQuickSearch').onsubmit=async e=>{e.preventDefault();const q=$('#userQuickName').value.trim().toLocaleLowerCase('he');if(!q)return;const users=await Store.list('users');const found=users.find(x=>String(x.name||'').trim().toLocaleLowerCase('he')===q);if(!found)return toast('לא נמצא משתמש בשם המדויק הזה','warn');openProfile(found.id);};
   const u = Auth.user;
   $('#authSlot').innerHTML = u
     ? `<button class="iconbtn" id="meBtn" title="${esc(u.name||u.email)}" style="width:auto;padding:0 6px;gap:7px;display:flex">
@@ -1420,6 +1421,7 @@ route('/friends', async (app)=>{
 /* קישורים בטוחים בתוך טקסט: מסננים קודם, מקשרים אחר כך */
 function linkify(txt){
   const safe = esc(String(txt==null?'':txt));
+  if(Auth.user?.ageBand==='under10'&&Auth.user?.rank!=='founder')return safe.replace(/https?:\/\/[^\s<]{4,300}/g,'[קישור מוסתר בחשבון מוגן]');
   return safe.replace(/(https?:\/\/[^\s<]{4,300})/g, (u)=>{
     const clean = u.replace(/[.,;:!?)]+$/,'');
     const tail = u.slice(clean.length);
@@ -1427,6 +1429,7 @@ function linkify(txt){
   }).replace(/@([֐-׿a-zA-Z0-9_.\-]{2,30})/g, '<span class="mention">@$1</span>');
 }
 window.linkify = linkify;
+function campaignRichText(txt){return esc(String(txt||'')).replace(/\[([^\]]{1,80})\]\((https:\/\/[^\s)]+)\)/g,(_,label,url)=>`<a href="${url}" target="_blank" rel="noopener noreferrer nofollow">${label}</a>`).replace(/\n/g,'<br>');}
 
 /* ===================== ניהול ערוצים ===================== */
 function channelModal(srv, existing){
@@ -3543,10 +3546,12 @@ function renderBanned(app){
    ===================================================================== */
 async function openProfile(userId){
   if(!userId) return;
-  const u = await Store.get('users', userId);
+  const [u,follows,rels] = await Promise.all([Store.get('users', userId),Store.list('followers').catch(()=>[]),Auth.user?Friends.mine(Auth.user.id):[]]);
   if(!u){ toast('המשתמש לא נמצא','warn'); return; }
   const me = Auth.user;
   const r = RANKS[u.rank] || RANKS.citizen;
+  const followers=follows.filter(f=>f.to===userId),following=follows.filter(f=>f.from===userId),myFollow=me&&followers.find(f=>f.from===me.id),friendState=me?Friends.status(rels,me.id,userId):'none';
+  const socials=(me?.ageBand==='under10'&&u.rank!=='founder'?[]:[['instagram','Instagram'],['tiktok','TikTok'],['roblox','Roblox']]).filter(([k])=>u.socialLinks?.[k]);
   openModal(`
   <div class="m-h"><span>${avatar({ ...u, id:userId },'l')}</span>
     <div style="flex:1"><h3 style="margin:0">${esc(u.name||'משתמש')}
@@ -3563,14 +3568,20 @@ async function openProfile(userId){
     <dl class="kv small"><dt>דרגה</dt><dd>${esc(r.l)}</dd>
       ${u.dept?`<dt>מחלקה</dt><dd>${esc((DEPT_BY[u.dept]||DEPT_BY.other).short)}</dd>`:''}
     </dl>
+    ${u.privacy?.showFollowers===false&&me?.id!==userId?'<p class="small mute">המשתמש הסתיר את רשימות העוקבים.</p>':`<div class="profile-stats"><div class="profile-stat"><b>${followers.length}</b><small>עוקבים</small></div><div class="profile-stat"><b>${following.length}</b><small>נעקבים</small></div></div>`}
+    ${socials.length?`<div class="row" style="margin-top:13px">${socials.map(([k,l])=>`<a class="btn btn-g btn-sm" href="${esc(u.socialLinks[k])}" target="_blank" rel="noopener noreferrer nofollow">${esc(l)}</a>`).join('')}</div>`:''}
   </div>
   <div class="m-f">
     <button class="btn btn-g" onclick="closeModal()">סגירה</button>
     ${me && me.id!==userId ? `<button class="btn btn-ghost" id="pfReport">${ic('flag',15)} דיווח על הפרופיל</button>
+      <button class="btn btn-g" id="pfFollow">${myFollow?'הפסקת מעקב':'מעקב'}</button>
+      ${friendState==='none'?`<button class="btn btn-g" id="pfFriend">${ic('plus',15)} בקשת חברות</button>`:''}
       <button class="btn btn-p" id="pfDm">${ic('message',15)} הודעה פרטית</button>`:''}
   </div>`);
   const rp = $('#pfReport'); if(rp) rp.onclick = ()=>reportProfileModal({ ...u, id:userId });
   const dm = $('#pfDm'); if(dm) dm.onclick = async ()=>{ closeModal(); const c = await openDM(userId, u.name||u.email); location.hash = '#/dm/'+c.id; };
+  const follow=$('#pfFollow');if(follow)follow.onclick=async()=>{follow.disabled=true;try{if(myFollow)await Store.remove('followers',myFollow.id);else await Store.add('followers',{to:userId});closeModal();toast(myFollow?'המעקב הופסק':'התחלת לעקוב');openProfile(userId);}catch(e){toast(e.message||'הפעולה נכשלה','err');follow.disabled=false;}};
+  const friend=$('#pfFriend');if(friend)friend.onclick=async()=>{friend.disabled=true;try{await Friends.request(userId,u.name);friend.textContent='הבקשה נשלחה';toast('בקשת החברות נשלחה');}catch(e){toast(e.message||'הפעולה נכשלה','err');friend.disabled=false;}};
 }
 window.openProfile = openProfile;
 
@@ -3724,6 +3735,8 @@ route('/dm', async (app, id)=>{
       </div>
       <div class="hm-b chat" id="dchat" style="max-height:none">${loader()}</div>
       <div class="hm-f">
+        ${!isGroup(cur)&&cur.dmAccepted===false&&cur.ownerId!==me.id?`<div class="callout c-info" id="dmRequestBar"><span class="ic">${ic('message',18)}</span><div style="flex:1"><b>בקשת הודעה חדשה</b><div class="small">אפשר לקרוא עד שתי הודעות לפני שמחליטים.</div></div><button class="btn btn-p btn-sm" id="acceptDm" type="button">אישור השיחה</button><button class="btn btn-g btn-sm" id="rejectDm" type="button">חסימה</button></div>`:''}
+        ${!isGroup(cur)&&cur.dmAccepted===false&&cur.ownerId===me.id?`<div class="callout c-warn"><span class="ic">${ic('clock',18)}</span><div>זו בקשת הודעה. אפשר לשלוח עד שתי הודעות עד שהנמען יאשר את השיחה.</div></div>`:''}
         ${Auth.muted()
           ? `<div class="callout c-warn" style="padding:11px 13px;font-size:.86rem"><span class="ic">${ic('volume-x',17)}</span>
              <div>אתם מושתקים עד ${fmtTime(me.muteUntil)} ${fmtDate(me.muteUntil)}.</div></div>`
@@ -3742,6 +3755,8 @@ route('/dm', async (app, id)=>{
   const dp = $('#dmProf'); if(dp) dp.onclick = ()=>openProfile(other);
   const dmem = $('#dmMem'); if(dmem) dmem.onclick = ()=>groupMembersModal(cur, users);
   if(!cur) return;
+  const acceptDm=$('#acceptDm');if(acceptDm)acceptDm.onclick=async()=>{acceptDm.disabled=true;try{await Store.update('dms',cur.id,{dmAccepted:true});toast('בקשת ההודעה אושרה');render();}catch(e){toast(e.message||'לא ניתן לאשר','err');acceptDm.disabled=false;}};
+  const rejectDm=$('#rejectDm');if(rejectDm)rejectDm.onclick=async()=>{rejectDm.disabled=true;try{await Friends.block(other);toast('הבקשה נחסמה');location.hash='#/dm';render();}catch(e){toast(e.message||'לא ניתן לחסום','err');rejectDm.disabled=false;}};
 
   const box = $('#dchat');
   const paint = (list)=>{
@@ -4090,9 +4105,33 @@ route('/login',app=>{
 
 route('/account',async app=>{
  if(!Auth.user){app.innerHTML=requireLogin();return;}
- const u=Auth.user,prefs={...mailPrefDefaults(),...(u.mailPrefs||{})};
- app.innerHTML=`<div class="page-h"><div class="eyebrow">החשבון שלי</div><h1>הפרופיל וההעדפות שלך</h1></div><form id="profileForm" class="stack" style="max-width:760px"><section class="card"><div class="row">${avatar(u,'l')}<div><h2>${esc(u.name)}</h2>${rankBadge(u.rank)}</div></div><div class="field"><label for="profileName">שם תצוגה</label><input id="profileName" required maxlength="80" value="${esc(u.name)}"></div><div class="field"><label for="profileBio">ביו</label><textarea id="profileBio" maxlength="500" placeholder="ספרו בקצרה על עצמכם">${esc(u.bio||'')}</textarea></div><div class="field"><label for="profileAvatar">כתובת תמונת פרופיל (HTTPS)</label><input id="profileAvatar" type="url" value="${esc(u.avatar||'')}" placeholder="https://..."></div><p class="small mute">אימייל: ${esc(u.email)} · ${u.emailVerified?'מאומת':'טרם אומת'}</p></section><section class="card"><div class="card-h"><span class="ico-tile i-brand">${ic('mail',19)}</span><div><h3>החלפת כתובת מייל</h3><p class="small mute" style="margin:3px 0 0">יישלח קישור אימות לכתובת החדשה. המייל יתחלף רק לאחר האישור.</p></div></div><div class="row"><input id="newEmail" type="email" autocomplete="email" placeholder="המייל החדש" style="flex:1"><button id="changeEmail" class="btn btn-g" type="button">שליחת אימות</button></div></section><section class="card"><div class="card-h"><span class="ico-tile i-brand">${ic('bell',19)}</span><div><h3>התראות במייל</h3><p class="small mute" style="margin:3px 0 0">בחרו אילו עדכונים תרצו לקבל. הודעות אבטחה קריטיות תמיד נשמרות בחשבון.</p></div></div><div class="stack">${MAIL_PREFS.map(p=>`<label class="row" style="align-items:flex-start"><input type="checkbox" data-mail-pref="${p.id}" ${prefs[p.id]?'checked':''}><span><b>${esc(p.l)}</b><small class="mute" style="display:block">${esc(p.d)}</small></span></label>`).join('')}</div></section><section class="card"><h3>אבטחת החשבון</h3><p class="small mute">אימות הרשמה ואיפוס סיסמה נשלחים דרך שירות ההתחברות המאובטח. אימות TOTP יופעל לאחר השלמת הגדרת ספק האימות בפרויקט.</p>${u.securityEvents?.length?`<div class="callout c-warn"><span class="ic">${ic('shield',18)}</span><div>זוהתה כניסה מרשת חדשה ב־${fmtDate(u.securityEvents[0].createdAt)}. אם זו לא הייתה הכניסה שלך, אפס את הסיסמה.</div></div>`:''}<div class="row"><button id="changePassword" class="btn btn-g" type="button">איפוס סיסמה</button>${u.emailVerified?'':`<button id="resendVerify" class="btn btn-g" type="button">שליחת אימות מחדש</button>`}<button class="btn btn-g" type="button" disabled title="דורש הפעלת TOTP בפרויקט Firebase">אימות דו־שלבי TOTP</button><button id="requestDeletion" class="btn btn-d" type="button">בקשת מחיקת חשבון</button></div></section><div class="row"><button class="btn btn-p">שמירת כל ההגדרות</button><button id="accountLogout" class="btn btn-g" type="button">יציאה מהחשבון</button></div><p id="profileStatus" role="status"></p></form>`;
- $('#profileForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('[type=submit]');b.disabled=true;const mailPrefs={};$$('[data-mail-pref]').forEach(x=>mailPrefs[x.dataset.mailPref]=x.checked);const avatarUrl=$('#profileAvatar').value.trim();try{if(avatarUrl&&!/^https:\/\//.test(avatarUrl))throw new Error('תמונת הפרופיל חייבת להשתמש בכתובת HTTPS');await Store.update('users',u.id,{name:$('#profileName').value.trim(),bio:$('#profileBio').value.trim(),avatar:avatarUrl,mailPrefs});await Auth.refresh();$('#profileStatus').textContent='הפרופיל והעדפות ההתראות נשמרו';renderNav();}catch(e){$('#profileStatus').textContent=e.message;}finally{b.disabled=false;}};
+ const u=Auth.user,prefs={...mailPrefDefaults(),...(u.mailPrefs||{})},privacy={dmFrom:'all',friendRequests:'all',profileVis:'public',onlineStatus:'friends',showFollowers:true,...(u.privacy||{})};
+ const choice=(id,label,items,value)=>`<div class="field"><label for="${id}">${label}</label><select id="${id}">${items.map(([v,l])=>`<option value="${v}" ${value===v?'selected':''}>${l}</option>`).join('')}</select></div>`;
+ app.innerHTML=`<div class="page-h"><div class="eyebrow">מרכז ההגדרות</div><h1>החשבון שלך, בדרך שלך</h1><p>ההגדרות מחולקות לקטגוריות כדי שיהיה קל למצוא ולשנות כל דבר.</p></div>
+ <form id="profileForm" class="settings-shell">
+  <nav class="settings-nav" aria-label="קטגוריות הגדרות">
+   <button type="button" class="on" data-settings-tab="general">${ic('user',17)} כללי</button>
+   <button type="button" data-settings-tab="updates">${ic('bell',17)} עדכונים</button>
+   <button type="button" data-settings-tab="privacy">${ic('message',17)} פרטיות ו-DM</button>
+   <button type="button" data-settings-tab="social">${ic('link',17)} רשתות חברתיות</button>
+   <button type="button" data-settings-tab="security">${ic('shield',17)} אבטחה</button>
+   <button type="button" data-settings-tab="display">${ic('sparkle',17)} תצוגה ונגישות</button>
+  </nav>
+  <div class="settings-content">
+   <section class="settings-panel on" data-settings-panel="general"><div class="settings-title"><span class="ico-tile i-brand">${ic('user',20)}</span><div><h2>כללי</h2><p>הפרטים שיוצגו בפרופיל ובקהילה.</p></div></div><div class="card"><div class="row">${avatar(u,'l')}<div><h3>${esc(u.name)}</h3>${rankBadge(u.rank)}<div class="small mute">${esc(u.email)} · ${u.emailVerified?'מאומת':'טרם אומת'}</div></div></div><div class="field"><label for="profileName">שם תצוגה</label><input id="profileName" required maxlength="80" value="${esc(u.name)}"></div><div class="field"><label for="profileBio">ביו</label><textarea id="profileBio" maxlength="500" placeholder="ספרו בקצרה על עצמכם">${esc(u.bio||'')}</textarea><div class="hint">עד 500 תווים. אין לפרסם מידע רגיש.</div></div><div class="field"><label for="profileAvatar">כתובת תמונת פרופיל מאובטחת</label><input id="profileAvatar" type="url" value="${esc(u.avatar||'')}" placeholder="https://..."></div></div><div class="card"><h3>כתובת המייל</h3><p class="small mute">השינוי יושלם רק אחרי אישור מהכתובת החדשה.</p><div class="row"><input id="newEmail" type="email" autocomplete="email" placeholder="המייל החדש" style="flex:1"><button id="changeEmail" class="btn btn-g" type="button">שליחת אימות</button></div></div></section>
+   <section class="settings-panel" data-settings-panel="updates"><div class="settings-title"><span class="ico-tile i-brand">${ic('bell',20)}</span><div><h2>עדכונים והתראות</h2><p>בחרו אילו הודעות יישלחו גם למייל.</p></div></div><div class="card settings-options">${MAIL_PREFS.map(p=>`<label class="setting-row"><span><b>${esc(p.l)}</b><small>${esc(p.d)}</small></span><input type="checkbox" data-mail-pref="${p.id}" ${prefs[p.id]?'checked':''}></label>`).join('')}</div><div class="callout c-info"><span class="ic">${ic('shield',18)}</span><div>התראות אבטחה קריטיות יישמרו בחשבון גם אם כיביתם עדכוני מייל.</div></div></section>
+   <section class="settings-panel" data-settings-panel="privacy"><div class="settings-title"><span class="ico-tile i-brand">${ic('message',20)}</span><div><h2>פרטיות והודעות פרטיות</h2><p>אתם מחליטים מי יכול לפנות אליכם.</p></div></div><div class="card"><h3>הודעות פרטיות (DM)</h3>${choice('dmFrom','מי יכול לשלוח לי הודעה פרטית',[['all','כולם'],['friends','חברים בלבד'],['staff','צוות SMAI בלבד'],['none','אף אחד — חסימת DM']],privacy.dmFrom)}<p class="small mute">הבחירה נאכפת בשרת גם בשיחות קיימות. משתמש שחסמתם לעולם לא יוכל לשלוח לכם הודעה.</p></div><div class="card"><h3>חברים ופרופיל</h3>${choice('friendRequests','מי יכול לשלוח בקשת חברות',[['all','כולם'],['none','אף אחד — ביטול בקשות חדשות']],privacy.friendRequests)}${choice('profileVis','מי יכול לראות את הפרופיל',[['public','כל חברי הקהילה'],['private','רק אני וצוות מורשה']],privacy.profileVis)}${choice('onlineStatus','מי יכול לראות אם אני פעיל/ה',[['all','כולם'],['friends','חברים בלבד'],['none','אף אחד']],privacy.onlineStatus)}<label class="setting-row"><span><b>הצגת עוקבים ונעקבים</b><small>כיבוי מסתיר מאחרים את הרשימות והמספרים</small></span><input id="showFollowers" type="checkbox" ${privacy.showFollowers!==false?'checked':''}></label><a class="btn btn-g btn-sm" href="/friends">${ic('users',15)} ניהול חברים ובקשות</a></div></section>
+   <section class="settings-panel" data-settings-panel="social"><div class="settings-title"><span class="ico-tile i-brand">${ic('link',20)}</span><div><h2>רשתות חברתיות</h2><p>הוסיפו לפרופיל קישורים רשמיים שלכם.</p></div></div><div class="card"><div class="field"><label for="socialInstagram">Instagram</label><input id="socialInstagram" type="url" value="${esc(u.socialLinks?.instagram||'')}" placeholder="https://www.instagram.com/username"></div><div class="field"><label for="socialTiktok">TikTok</label><input id="socialTiktok" type="url" value="${esc(u.socialLinks?.tiktok||'')}" placeholder="https://www.tiktok.com/@username"></div><div class="field"><label for="socialRoblox">Roblox</label><input id="socialRoblox" type="url" value="${esc(u.socialLinks?.roblox||'')}" placeholder="https://www.roblox.com/users/..."></div><div class="callout c-info"><span class="ic">${ic('info',18)}</span><div>הקישורים יופיעו בפרופיל. סימון „מחובר ומאומת” יתווסף רק לאחר חיבור OAuth רשמי של כל שירות.</div></div></div></section>
+   <section class="settings-panel" data-settings-panel="security"><div class="settings-title"><span class="ico-tile i-brand">${ic('shield',20)}</span><div><h2>אבטחה</h2><p>סיסמה, אימות ופעילות חשודה.</p></div></div><div class="card"><h3>הגנת החשבון</h3><p class="small mute">אימות הרשמה ואיפוס סיסמה נשלחים דרך שירות ההתחברות המאובטח.</p>${u.securityEvents?.length?`<div class="callout c-warn"><span class="ic">${ic('shield',18)}</span><div>זוהתה כניסה מרשת חדשה ב־${fmtDate(u.securityEvents[0].createdAt)}. אם זו לא הייתה הכניסה שלך, אפס את הסיסמה.</div></div>`:''}<div class="row"><button id="changePassword" class="btn btn-g" type="button">איפוס סיסמה</button>${u.emailVerified?'':`<button id="resendVerify" class="btn btn-g" type="button">שליחת אימות מחדש</button>`}<button class="btn btn-g" type="button" disabled title="דורש הפעלת TOTP בפרויקט Firebase">אימות דו־שלבי TOTP — בקרוב</button></div></div><div class="card danger-zone"><h3>אזור רגיש</h3><p class="small mute">בקשת מחיקה עוברת לבדיקה לפני שהמידע מוסר.</p><button id="requestDeletion" class="btn btn-d" type="button">בקשת מחיקת חשבון</button></div></section>
+   <section class="settings-panel" data-settings-panel="display"><div class="settings-title"><span class="ico-tile i-brand">${ic('sparkle',20)}</span><div><h2>תצוגה ונגישות</h2><p>התאימו את חוויית השימוש.</p></div></div><div class="card">${choice('accountTheme','ערכת נושא',[['system','לפי המכשיר'],['dark','כהה'],['light','בהירה']],u.theme||'system')}<label class="setting-row"><span><b>צלילי מערכת</b><small>צליל בקבלת הודעה ובפעולות חשובות</small></span><input id="accountSound" type="checkbox" ${u.sound!==false?'checked':''}></label></div></section>
+   <div class="settings-save"><p id="profileStatus" role="status"></p><button id="accountLogout" class="btn btn-g" type="button">יציאה</button><button class="btn btn-p" type="submit">שמירת השינויים</button></div>
+  </div>
+ </form>`;
+ $$('[data-settings-tab]').forEach(b=>b.onclick=()=>{$$('[data-settings-tab]').forEach(x=>x.classList.toggle('on',x===b));$$('[data-settings-panel]').forEach(x=>x.classList.toggle('on',x.dataset.settingsPanel===b.dataset.settingsTab));});
+ const generalPanel=$('[data-settings-panel="general"]');if(generalPanel)generalPanel.insertAdjacentHTML('beforeend',`<div class="card"><h3>מצב גיל מוגן</h3><p class="small mute">הגדרה עצמית בלבד; אימות מצלמה יתווסף רק דרך ספק חיצוני מאושר שלא מעביר אלינו צילום פנים.</p>${choice('ageBand','קבוצת גיל',[['under10','מתחת לגיל 10'],['10to12','10–12'],['13to17','13–17'],['adult','18 ומעלה']],u.ageBand||'13to17')}<p class="small mute">בחשבון מתחת לגיל 10 קישורים שמפרסמים משתמשים מוסתרים. קישורים רשמיים מהמייסד נשארים זמינים.</p></div>`);
+ $('#ageBand').onchange=async e=>{try{await Store.update('users',u.id,{ageBand:e.target.value});await Auth.refresh();$('#profileStatus').textContent='מצב הגיל המוגן נשמר';}catch(err){$('#profileStatus').textContent=err.message;}};
+ const totpButton=$('[title*="TOTP"]');if(totpButton){totpButton.disabled=false;totpButton.removeAttribute('title');totpButton.textContent='הפעלת אימות דו־שלבי TOTP';totpButton.onclick=async()=>{totpButton.disabled=true;$('#profileStatus').textContent='מכין חיבור מאובטח לאפליקציית אימות…';try{const setup=await beginTotpEnrollment();openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('shield',20)}</span><h3>אימות דו־שלבי</h3></div><div class="m-b"><p>העתיקו את המפתח לאפליקציית אימות כמו Google Authenticator או Microsoft Authenticator.</p><div class="card mono" style="user-select:all;direction:ltr;text-align:center">${esc(setup.secretKey)}</div><div class="field"><label for="totpCode">הקוד בן 6 הספרות</label><input id="totpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div><p id="totpStatus" class="small"></p></div><div class="m-f"><button class="btn btn-g" onclick="closeModal()">ביטול</button><button class="btn btn-p" id="confirmTotp">הפעלה</button></div>`);$('#confirmTotp').onclick=async()=>{const b=$('#confirmTotp');b.disabled=true;try{await finishTotpEnrollment(setup.secret,$('#totpCode').value);closeModal();toast('האימות הדו־שלבי הופעל');}catch(e){$('#totpStatus').textContent=e?.code==='auth/operation-not-allowed'?'צריך להפעיל TOTP במסוף Firebase לפני שניתן להשלים את החיבור.':(e.message||'הקוד לא תקין');b.disabled=false;}};}catch(e){$('#profileStatus').textContent=e?.code==='auth/operation-not-allowed'?'ספק TOTP עדיין לא מופעל בפרויקט Firebase.':(e.message||'לא ניתן להתחיל את החיבור');}finally{totpButton.disabled=false;}};}
+ $('#profileForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('[type=submit]');b.disabled=true;const mailPrefs={};$$('[data-mail-pref]').forEach(x=>mailPrefs[x.dataset.mailPref]=x.checked);const avatarUrl=$('#profileAvatar').value.trim();const nextPrivacy={dmFrom:$('#dmFrom').value,friendRequests:$('#friendRequests').value,profileVis:$('#profileVis').value,onlineStatus:$('#onlineStatus').value,showFollowers:$('#showFollowers').checked};const socialLinks={instagram:$('#socialInstagram').value.trim(),tiktok:$('#socialTiktok').value.trim(),roblox:$('#socialRoblox').value.trim()};try{if(avatarUrl&&!/^https:\/\//.test(avatarUrl))throw new Error('תמונת הפרופיל חייבת להשתמש בכתובת HTTPS');await Store.update('users',u.id,{name:$('#profileName').value.trim(),bio:$('#profileBio').value.trim(),avatar:avatarUrl,mailPrefs,privacy:nextPrivacy,socialLinks,theme:$('#accountTheme').value,sound:$('#accountSound').checked});await Auth.refresh();$('#profileStatus').textContent='כל ההגדרות נשמרו בהצלחה';renderNav();}catch(e){$('#profileStatus').textContent=e.message;}finally{b.disabled=false;}};
  $('#accountLogout').onclick=async()=>{await Auth.signOut();location.hash='#/';await render();};
  if($('#resendVerify'))$('#resendVerify').onclick=async()=>{const result=await request('/api/auth/email-verification','POST',{});$('#profileStatus').textContent=result.message;};
  $('#changePassword').onclick=async()=>{await Auth.changePassword();$('#profileStatus').textContent='קישור מאובטח לאיפוס הסיסמה נשלח למייל.';};
@@ -4462,6 +4501,7 @@ route('/admin', async (app)=>{
       : tab==='appeals' ? tAppeals() : tab==='apps' ? tApps() : tab==='verify' ? tVerify()
       : tab==='system' ? tSystem() : tab==='campaigns' ? tCampaigns() : tab==='backup' ? tBackup() : tUsers();
     if(tab==='campaigns'){
+      const type=$('#campaignType'),media=$('#campaignMedia'),body=$('#campaignBody');if(type&&!type.querySelector('[value="text"]'))type.insertAdjacentHTML('afterbegin','<option value="text">טקסט בלבד</option>');if(media)media.required=false;if(body){body.maxLength=1000;body.insertAdjacentHTML('afterend','<button class="btn btn-g btn-sm" type="button" id="campaignAddLink">הוספת קישור לטקסט המסומן</button>');$('#campaignAddLink').onclick=()=>{const label=body.value.slice(body.selectionStart,body.selectionEnd)||'כאן',url=prompt('כתובת HTTPS לקישור:','https://');if(!url||!/^https:\/\//.test(url))return;body.setRangeText(`[${label}](${url})`,body.selectionStart,body.selectionEnd,'end');body.focus();};}
       $('#campaignForm').onsubmit=async e=>{e.preventDefault();const val=id=>$('#'+id).value;await Store.add('campaigns',{title:val('campaignTitle').trim(),body:val('campaignBody').trim(),mediaType:val('campaignType'),mediaUrl:val('campaignMedia').trim(),linkUrl:val('campaignLink').trim(),audience:val('campaignAudience'),placement:'site',startAt:val('campaignStart')?new Date(val('campaignStart')).toISOString():'',endAt:val('campaignEnd')?new Date(val('campaignEnd')).toISOString():'',seconds:Number(val('campaignSeconds')),frequency:val('campaignFrequency'),active:$('#campaignActive').checked,notifyUsers:$('#campaignNotify').checked});toast('הקמפיין פורסם');await loadAll();paint();};
       $$('[data-campaign-toggle]').forEach(b=>b.onclick=async()=>{await Store.update('campaigns',b.dataset.campaignToggle,{active:b.dataset.active!=='1'});await loadAll();paint();});
     }
@@ -4710,8 +4750,8 @@ async function renderCampaign(app,path){
     const c=eligible.find(x=>{const key='smai_campaign_'+x.id;return x.frequency==='always'||!localStorage.getItem(key)||(x.frequency==='daily'&&at-Number(localStorage.getItem(key))>86400000);});
     if(!c)return;
     localStorage.setItem('smai_campaign_'+c.id,String(at));
-    const media=c.mediaType==='video'?`<video class="campaign-media" src="${esc(c.mediaUrl)}" autoplay muted loop playsinline></video>`:`<img class="campaign-media" src="${esc(c.mediaUrl)}" alt="">`;
-    app.insertAdjacentHTML('afterbegin',`<aside id="siteCampaign" class="site-campaign anim-up"><div class="campaign-copy"><span class="eyebrow">עדכון מ־SMAI SENTINEL</span><h2>${esc(c.title)}</h2><p>${esc(c.body||'')}</p>${c.linkUrl?`<a class="btn btn-p btn-sm" href="${esc(c.linkUrl)}" target="_blank" rel="noopener">למידע נוסף</a>`:''}</div>${media}<button class="campaign-close" aria-label="סגירת הפרסומת">×</button></aside>`);
+    const media=c.mediaType==='video'?`<video class="campaign-media" src="${esc(c.mediaUrl)}" autoplay muted loop playsinline></video>`:c.mediaType==='image'?`<img class="campaign-media" src="${esc(c.mediaUrl)}" alt="">`:'';
+    app.insertAdjacentHTML('afterbegin',`<aside id="siteCampaign" class="site-campaign anim-up ${media?'':'campaign-text-only'}"><div class="campaign-copy"><span class="eyebrow">עדכון מ־SMAI SENTINEL</span><h2>${esc(c.title)}</h2><p>${campaignRichText(c.body||'')}</p>${c.linkUrl?`<a class="btn btn-p btn-sm" href="${esc(c.linkUrl)}" target="_blank" rel="noopener">למידע נוסף</a>`:''}</div>${media}<button class="campaign-close" aria-label="סגירת הפרסומת">×</button></aside>`);
     $('.campaign-close').onclick=()=>$('#siteCampaign')?.remove();
     if(Number(c.seconds)>0)setTimeout(()=>$('#siteCampaign')?.remove(),Number(c.seconds)*1000);
   }catch{}

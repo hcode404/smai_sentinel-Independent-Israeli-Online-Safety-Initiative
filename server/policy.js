@@ -2,11 +2,11 @@ export class HttpError extends Error {constructor(status,message){super(message)
 export const requireThat=(condition,status=403,message='אין הרשאה לפעולה זו')=>{if(!condition)throw new HttpError(status,message);};
 export const pick=(obj,keys)=>Object.fromEntries(keys.filter(k=>Object.hasOwn(obj,k)).map(k=>[k,obj[k]]));
 export const rank=u=>Number(u?.rankLvl)||0;
-export const publicUser=u=>pick(u,['id','name','avatar','bio','rank','rankLvl','verified','dept','createdAt']);
+export const publicUser=u=>pick(u,['id','name','avatar','bio','rank','rankLvl','verified','dept','socialLinks','createdAt']);
 export const banned=u=>!!(u?.isBanned&&(!u.banUntil||Date.parse(u.banUntil)>Date.now()));
 export const muted=u=>Date.parse(u?.muteUntil)>Date.now();
 export const ranks={citizen:0,trainee:10,agent:20,senior:30,lead:40,head:50,admin:60,founder:70};
-export const collections=new Set('users tickets messages notifications reports applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends dms dmsgs config updates articles campaigns'.split(' '));
+export const collections=new Set('users tickets messages notifications reports applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends followers dms dmsgs config updates articles campaigns'.split(' '));
 export const officialIds=new Set(['s-welcome','s-help','s-parents','s-teens','s-gaming','s-security']);
 export async function canRead(col,r,u,get){
   if(!r)return false;
@@ -25,6 +25,11 @@ export async function canRead(col,r,u,get){
   if(col==='threads'||col==='cmsgs')return await canRead('channels',await get('channels',r.channel||'gen:'+r.server),u,get);
   if(col==='tmsgs')return await canRead('threads',await get('threads',r.thread),u,get);
   if(col==='friends')return !!id&&[r.a,r.b,r.from,r.to].includes(id);
+  if(col==='followers'){
+    if(!id)return false;
+    if(id===r.from||id===r.to)return true;
+    const target=await get('users',r.to);return target?.privacy?.showFollowers!==false;
+  }
   if(col==='dms')return !!id&&r.members?.includes(id);
   if(col==='dmsgs')return await canRead('dms',await get('dms',r.convId),u,get);
   return false;
@@ -48,6 +53,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
   if(method==='DELETE'){
     requireThat(old,404,'הפריט לא נמצא');
     if(col==='friends'){requireThat(await canRead(col,old,u,get)&&(old.status!=='blocked'||old.by===id));return null;}
+    if(col==='followers'){requireThat(old.from===id);return null;}
     if(col==='servers'){requireThat(n>=40||old.ownerId===id);return null;}
     if(['cmsgs','threads','tmsgs','dmsgs'].includes(col)){requireThat(await canRead(col,old,u,get)&&(owns||n>=20));return null;}
     requireThat(n>=60&&!['users','tickets','messages'].includes(col));return null;
@@ -55,7 +61,20 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
   if(col==='users'){
     requireThat(old,404,'המשתמש לא נמצא');
     const self=old.id===id;
-    let p=self?pick(input,['name','bio','avatar','mailPrefs','privacy','installedUpdates','sound','theme']):{};
+    let p=self?pick(input,['name','bio','avatar','ageBand','mailPrefs','privacy','socialLinks','installedUpdates','sound','theme']):{};
+    if(p.ageBand)requireThat(['under10','10to12','13to17','adult'].includes(p.ageBand),400,'קבוצת הגיל אינה תקינה');
+    if(p.privacy){
+      p.privacy=pick(p.privacy,['dmFrom','friendRequests','profileVis','onlineStatus','showFollowers']);
+      requireThat(!p.privacy.dmFrom||['all','friends','staff','none'].includes(p.privacy.dmFrom),400,'הגדרת הודעות פרטיות אינה תקינה');
+      requireThat(!p.privacy.friendRequests||['all','none'].includes(p.privacy.friendRequests),400,'הגדרת בקשות חברות אינה תקינה');
+      requireThat(!p.privacy.profileVis||['public','private'].includes(p.privacy.profileVis),400,'הגדרת פרטיות הפרופיל אינה תקינה');
+      requireThat(!p.privacy.onlineStatus||['all','friends','none'].includes(p.privacy.onlineStatus),400,'הגדרת נראות אינה תקינה');
+    }
+    if(p.socialLinks){
+      p.socialLinks=pick(p.socialLinks,['instagram','tiktok','roblox']);
+      const hosts={instagram:['instagram.com','www.instagram.com'],tiktok:['tiktok.com','www.tiktok.com'],roblox:['roblox.com','www.roblox.com']};
+      for(const [network,value] of Object.entries(p.socialLinks)){if(!value)continue;let url;try{url=new URL(value);}catch{throw new HttpError(400,'קישור לרשת חברתית אינו תקין');}requireThat(url.protocol==='https:'&&hosts[network]?.includes(url.hostname),400,'קישור לרשת חברתית אינו תקין');p.socialLinks[network]=url.href.slice(0,500);}
+    }
     if(n>=30&&n>rank(old))Object.assign(p,pick(input,['muteUntil']));
     if(n>=40&&n>rank(old)){const b=pick(input,['isBanned','banReason','banUntil','banNote','banItem','bannedAt']);requireThat(!b.isBanned||b.banUntil||n>=50);Object.assign(p,b);}
     if(n>=50&&n>rank(old)){
@@ -101,8 +120,8 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
   if(col==='campaigns'){
     requireThat(n>=70,403,'ניהול קמפיינים זמין למייסד בלבד');
     const p=pick(input,['title','body','mediaType','mediaUrl','linkUrl','audience','placement','startAt','endAt','seconds','active','frequency','notifyUsers']);
-    requireThat(['image','video'].includes(p.mediaType),400,'סוג המדיה אינו תקין');
-    requireThat(/^https:\/\//.test(p.mediaUrl||''),400,'נדרשת כתובת HTTPS לתמונה או לסרטון');
+    requireThat(['text','image','video'].includes(p.mediaType),400,'סוג המדיה אינו תקין');
+    requireThat(p.mediaType==='text'||/^https:\/\//.test(p.mediaUrl||''),400,'נדרשת כתובת HTTPS לתמונה או לסרטון');
     requireThat(['all','members','staff'].includes(p.audience),400,'קהל היעד אינו תקין');
     return p;
   }
@@ -136,10 +155,16 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     if(isNew){const to=input.to||input.b;requireThat(to&&to!==id&&await get('users',to),400,'משתמש לא תקין');return {a:id,b:to,from:id,to,by:id,key:[id,to].sort().join('|'),status:input.status==='blocked'?'blocked':'pending'};}
     requireThat(await canRead(col,old,u,get));requireThat(old.to===id&&input.status==='accepted'&&old.status==='pending'||input.status==='blocked'&&(old.status!=='blocked'||old.by===id));return {status:input.status,...(input.status==='blocked'?{by:id}:{})};
   }
+  if(col==='followers'){
+    requireThat(isNew,403,'אין הרשאה לעדכן מעקב');
+    const to=input.to;requireThat(to&&to!==id&&await get('users',to),400,'משתמש לא תקין');
+    return {from:id,to};
+  }
   if(col==='dms'){
     if(isNew){const members=[...new Set(input.members||[])];requireThat(members.includes(id)&&members.length>=2&&members.length<=50);for(const member of members)requireThat(await get('users',member),400,'משתמש לא תקין');return {members,kind:members.length===2?'direct':'group',ownerId:id,name:String(input.name||'').slice(0,100)};}
     requireThat(await canRead(col,old,u,get));
     if(input.members){const next=[...new Set(input.members)];requireThat(next.length<=50&&(old.ownerId===id||next.sort().join()===old.members.filter(x=>x!==id).sort().join()));return {members:next};}
+    if(input.dmAccepted===true){requireThat(old.kind==='direct'&&old.ownerId!==id&&old.members.includes(id));return {dmAccepted:true,acceptedAt:new Date().toISOString()};}
     requireThat(old.ownerId===id);return pick(input,['name']);
   }
   if(col==='dmsgs'){
