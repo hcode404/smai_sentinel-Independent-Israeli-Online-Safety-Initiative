@@ -17,7 +17,8 @@
 #notifBtn { position: relative; }
 .side-actions { display: flex; align-items: center; gap: 8px; }
 .top-utility { display: flex; align-items: center; gap: 8px; }
-.top-utility a {
+.top-utility a,
+.top-utility button {
   min-height: 38px;
   padding: 8px 14px;
   display: inline-flex;
@@ -28,13 +29,17 @@
   color: var(--ink2);
   font-size: 13px;
   font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
 }
-.top-utility a:hover { color: var(--brand); border-color: var(--brand); text-decoration: none; }
+.top-utility a:hover,
+.top-utility button:hover { color: var(--brand); border-color: var(--brand); text-decoration: none; }
 .notification-unread { background: var(--info-bg) !important; border-color: var(--brand) !important; }
 .notification-unread .nm { display: grid; gap: 2px; }
 .notification-unread small { color: var(--ink3); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (min-width: 761px) {
+  .topbar { backdrop-filter: none !important; }
   main,
   footer {
     margin-right: 252px !important;
@@ -51,7 +56,7 @@
   .top-utility {
     position: absolute;
     z-index: 60;
-    left: 24px;
+    left: 16px;
     top: 20px;
   }
 
@@ -141,6 +146,7 @@
   #themeBtn,
   #sfxBtn,
   #authSlot { flex: 0 0 auto; }
+  .side-actions #authSlot { display: none; }
 
   body.sidebar-collapsed main,
   body.sidebar-collapsed footer { margin-right: 68px !important; }

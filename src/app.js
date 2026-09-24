@@ -1196,6 +1196,8 @@ function renderNav(){
          ${avatar(u,'s')}<span class="hide-sm" style="font-size:.84rem;font-weight:700;padding-inline-end:4px">${esc((u.name||u.email).split(' ')[0])}</span>
        </button>`
     : `<a class="btn btn-p btn-sm" href="/login">${ic('login',15)} כניסה</a>`;
+  const topAccount=$('#topAccount');
+  if(topAccount){topAccount.href=u?'/account':'/login';topAccount.textContent=u?'החשבון שלי':'כניסה';}
   const mb = $('#meBtn'); if(mb) mb.onclick = userMenu;
   const notifications=$('#notifBtn');
   if(notifications)notifications.classList.toggle('hide',!u);
@@ -4789,7 +4791,7 @@ function initBurger(){
   paint();
 }
 function initNotif(){
-  $('#notifBtn').onclick = async ()=>{
+  const openNotifications = async ()=>{
     if(!Auth.user) return toast('התחברו כדי לראות עדכונים','warn');
     const [tickets, appeals, notifications] = await Promise.all([Store.list('tickets'), Store.list('appeals'),Store.list('notifications')]);
     const mine = tickets.filter(t=>t.reporterId===Auth.user.id).slice(0,6);
@@ -4816,6 +4818,8 @@ function initNotif(){
     await Promise.all(notifications.filter(n=>!n.read).map(n=>Store.update('notifications',n.id,{read:true}).catch(()=>{})));
     syncNotificationBadge();
   };
+  $('#notifBtn').onclick=openNotifications;
+  const topShortcut=$('#topNotifShortcut');if(topShortcut)topShortcut.onclick=openNotifications;
 }
 let notificationWatchStop=null,notificationWatchUser='';
 function syncNotificationBadge(){
@@ -4828,6 +4832,8 @@ function syncNotificationBadge(){
     button.innerHTML=`${ic('bell',18)}${count?`<span class="notif-badge">${Math.min(count,99)}</span>`:''}`;
     button.setAttribute('aria-label',count?`${count} התראות שלא נקראו`:'התראות');
     button.classList.toggle('has-notifications',count>0);
+    const topShortcut=$('#topNotifShortcut');
+    if(topShortcut){topShortcut.textContent=count?`התראות (${Math.min(count,99)})`:'התראות';topShortcut.classList.toggle('has-notifications',count>0);}
   });
 }
 function initDemoStrip(){
