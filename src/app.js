@@ -3769,9 +3769,9 @@ route('/dm', async (app, id)=>{
         ${Auth.muted()
           ? `<div class="callout c-warn" style="padding:11px 13px;font-size:.86rem"><span class="ic">${ic('volume-x',17)}</span>
              <div>אתם מושתקים עד ${fmtTime(me.muteUntil)} ${fmtDate(me.muteUntil)}.</div></div>`
-          : `<div class="composer" style="border:0;padding:0;margin:0">
+          : `<div class="composer" style="position:relative;border:0;padding:0;margin:0">
               <textarea id="din" placeholder="הודעה פרטית... (Enter לשליחה)" style="min-height:46px"></textarea>
-              <div id="dMentionList" class="mention-list" style="display:none;position:absolute;bottom:100%;left:0;right:0"></div>
+              <div id="dMentionList" class="mention-list" role="listbox" aria-label="השלמת תיוג משתמש" style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;right:0"></div>
               <button class="btn btn-p" id="dbtn" style="height:46px">${ic('send',17)}</button></div>
              <div class="tiny mute" style="margin-top:7px">${ic('shield-check',11)} גם הודעות פרטיות נסרקות. אפשר לדווח על כל הודעה.</div>`}
       </div>` : `<div class="hm-b" style="display:grid;place-items:center">
@@ -3859,10 +3859,19 @@ route('/dm', async (app, id)=>{
   if(di){
     const list=$('#dMentionList');let start=-1,items=[],selected=0;
     const allowed=users.filter(user=>(cur.members||[]).includes(user.id)&&user.id!==me.id);
-    const closeMentions=()=>{if(list)list.style.display='none';items=[];};
+    const closeMentions=()=>{if(list){list.style.display='none';list.classList.remove('open');list.innerHTML='';}items=[];};
     const choose=index=>{const user=items[index];if(!user)return;const before=di.value.slice(0,start),after=di.value.slice(di.selectionStart),mention='@'+(user.name||user.email||user.id)+' ';di.value=before+mention+after;di.selectionStart=di.selectionEnd=before.length+mention.length;closeMentions();di.focus();};
-    const draw=()=>{if(!list)return;list.innerHTML=items.map((user,index)=>`<div class="mention-item ${index===selected?'sel':''}" data-index="${index}">@${esc(user.name||user.email||user.id)}</div>`).join('');list.style.display=items.length?'block':'none';list.querySelectorAll('[data-index]').forEach(row=>row.onmousedown=event=>{event.preventDefault();choose(Number(row.dataset.index));});};
-    di.addEventListener('input',()=>{const at=di.value.lastIndexOf('@',di.selectionStart-1);if(at<0)return closeMentions();const query=di.value.slice(at+1,di.selectionStart);if(/\s/.test(query))return closeMentions();start=at;items=allowed.filter(user=>(user.name||user.email||'').toLowerCase().startsWith(query.toLowerCase())).slice(0,8);selected=0;draw();});
+    const draw=()=>{if(!list)return;list.innerHTML=items.map((user,index)=>{const label=user.name||user.email||user.id;return `<div class="mention-item ${index===selected?'sel':''}" data-index="${index}" role="option" aria-selected="${index===selected}">${avatar(user,'s')}<div><div class="mnm">@${esc(label)}</div><div class="mrk">משתתף בשיחה</div></div></div>`;}).join('');list.style.display=items.length?'block':'none';list.classList.toggle('open',Boolean(items.length));list.querySelectorAll('[data-index]').forEach(row=>row.onmousedown=event=>{event.preventDefault();choose(Number(row.dataset.index));});};
+    di.addEventListener('input',()=>{
+      const cursor=di.selectionStart;
+      const beforeCursor=di.value.slice(0,cursor);
+      const match=beforeCursor.match(/(?:^|\s)@([^@\n]*)$/u);
+      if(!match)return closeMentions();
+      start=beforeCursor.lastIndexOf('@');
+      const query=match[1].toLocaleLowerCase('he');
+      items=allowed.filter(user=>String(user.name||user.email||user.id||'').toLocaleLowerCase('he').startsWith(query)).slice(0,8);
+      selected=0;draw();
+    });
     di.addEventListener('keydown',event=>{if(!items.length)return;if(event.key==='ArrowDown'){event.preventDefault();selected=(selected+1)%items.length;draw();}else if(event.key==='ArrowUp'){event.preventDefault();selected=(selected-1+items.length)%items.length;draw();}else if(event.key==='Enter'){event.preventDefault();choose(selected);}else if(event.key==='Escape')closeMentions();});
   }
   const startCall=async type=>{
