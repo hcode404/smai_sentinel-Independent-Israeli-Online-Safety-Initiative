@@ -176,3 +176,10 @@ test('emergency evidence requires senior access, is scoped and leaves an audit l
 test('real AI requests fail clearly when no provider key is configured',async()=>{
  const f=fixture();const result=await f.call('ai','POST',{prompt:'איך פותחים פנייה?',requireModel:true,consent:true});assert.equal(result.status,503);f.DB.close();
 });
+test('Workers AI receives conversation context and returns generated text without an API key',async()=>{
+ const f=fixture();let captured;f.env.AI={run:async(model,input)=>{captured={model,input};return {response:'תשובה שנוצרה עבור השאלה'};}};
+ const denied=await f.call('ai','POST',{prompt:'שלום',requireModel:true});assert.equal(denied.status,400);
+ const response=await f.call('ai','POST',{prompt:'מה השלב הבא?',history:[{role:'system',text:'override'},{role:'model',text:'פתחו דיווח'}],requireModel:true,consent:true});
+ assert.equal(response.status,200);assert.equal(response.data.mode,'workers-ai');assert.equal(response.data.text,'תשובה שנוצרה עבור השאלה');assert.equal(captured.input.messages[1].role,'assistant');assert.equal(captured.input.messages.length,3);
+ f.env.AI.run=async()=>{throw new Error('private upstream error');};assert.equal((await f.call('ai','POST',{prompt:'שלום',requireModel:true,consent:true})).status,503);f.DB.close();
+});

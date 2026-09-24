@@ -197,6 +197,14 @@ function localTicketTriage(ticket){
   return {dept,critical,priority,spam,question};
 }
 async function generate(env,prompt,history=[]){
+  if(env.AI){
+    await limit(env,'ai:inference-budget',100,86400);
+    const context='מידע על האתר: SMAI Sentinel היא יוזמה ישראלית עצמאית לבטיחות ברשת, לא גוף ממשלתי. /report פתיחת דיווח; /my הפניות שלי; /track מעקב פנייה; /community קהילה; /dm הודעות פרטיות; /friends חברים; /account הגדרות חשבון; /articles מדריכים; /join בקשת הצטרפות לצוות. הפניות מטופלות בצאט עם צוות. אין לך גישה לחשבון או לתוכן פרטי מעבר למה שנכתב בשיחה. ענה בשפת המשתמש, בעברית כשכותבים בעברית. אל תמציא מיקומי כפתורים או סטטוס טיפול.';
+    const messages=[{role:'system',content:AI_SYSTEM+'\n'+context},...history.slice(-6).filter(m=>m&&['user','model'].includes(m.role)&&typeof m.text==='string').map(m=>({role:m.role==='model'?'assistant':'user',content:m.text.slice(0,1500)})),{role:'user',content:prompt.slice(0,6000)}];
+    let result;try{result=await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8',{messages,max_tokens:700,temperature:0.35});}catch{throw new HttpError(503,'שירות ה-AI עמוס או שהמכסה הסתיימה. נסו שוב מאוחר יותר.');}
+    const text=typeof result?.response==='string'?result.response.trim():'';
+    requireThat(text,502,'לא התקבלה תשובה מהעוזר. נסו שוב.');return {text,mode:'workers-ai'};
+  }
   if(!env.GEMINI_API_KEY)return {text:basicGuidance(prompt),mode:'basic'};
   const model=env.GEMINI_MODEL||'gemini-flash-latest';
   requireThat(/^gemini-[a-z0-9.-]+$/.test(model),503,'הגדרת מודל לא תקינה');
@@ -221,7 +229,7 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     const db=database(env),u=await identity(req,env,db,ctx);
     if(path==='/api/session')return json({user:u?safeRecord('users',u,u):null});
-    if(path==='/api/status')return json({database:true,ai:true,aiMode:env.GEMINI_API_KEY?'gemini':'basic',mail:!!(env.MAIL_GATEWAY_URL&&env.MAIL_GATEWAY_SECRET||env.RESEND_API_KEY&&env.MAIL_FROM),mailFrom:rank(u)>=60?(env.MAIL_FROM||MAIL_BRAND):undefined,migration:'new-database',version:'2.1',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
+    if(path==='/api/status')return json({database:true,ai:true,aiMode:env.AI?'workers-ai':env.GEMINI_API_KEY?'gemini':'basic',mail:!!(env.MAIL_GATEWAY_URL&&env.MAIL_GATEWAY_SECRET||env.RESEND_API_KEY&&env.MAIL_FROM),mailFrom:rank(u)>=60?(env.MAIL_FROM||MAIL_BRAND):undefined,migration:'new-database',version:'2.1',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
     if(path==='/api/auth/password-reset'&&req.method==='POST'){
       const raw=await req.text();requireThat(raw.length<=2000,413,'הבקשה גדולה מדי');let body;
       try{body=JSON.parse(raw);}catch{throw new HttpError(400,'בקשה לא תקינה');}
@@ -244,12 +252,12 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const raw=await req.text();requireThat(raw.length<=60000,413,'הבקשה גדולה מדי');let body;
       try{body=JSON.parse(raw);}catch{throw new HttpError(400,'בקשה לא תקינה');}
       requireThat(body&&typeof body==='object'&&!Array.isArray(body),400,'בקשה לא תקינה');
-      if(env.GEMINI_API_KEY)requireThat(body.consent===true,400,'נדרש אישור חד־פעמי לפני העברת ההודעה לשירות AI חיצוני');
+      if(env.GEMINI_API_KEY||env.AI)requireThat(body.consent===true,400,'נדרש אישור חד־פעמי לפני העברת ההודעה לשירות AI חיצוני');
       if(u)requireThat(!banned(u));const actor=u?.id||req.headers.get('CF-Connecting-IP')||'anonymous';await limit(env,'ai:'+actor,12,3600);await limit(env,'ai:site',200,86400);
-      if(body.requireModel)requireThat(env.GEMINI_API_KEY,503,'שירות ה-AI עדיין לא מחובר. נדרשת הגדרת מפתח בשרת.');
+      if(body.requireModel)requireThat(env.GEMINI_API_KEY||env.AI,503,'שירות ה-AI עדיין לא מחובר.');
       const prompt=String(body.prompt||'').trim();requireThat(prompt.length>0&&prompt.length<=12000,400,'נא להזין הודעה באורך מתאים');
       const result=await generate(env,prompt,Array.isArray(body.history)?body.history:[]);
-      if(body.requireModel)requireThat(result.mode==='gemini',503,'ספק ה-AI לא קיבל את הבקשה. יש לבדוק את המפתח, המודל והמכסה בשרת.');
+      if(body.requireModel)requireThat(['gemini','workers-ai'].includes(result.mode),503,'ספק ה-AI לא קיבל את הבקשה. יש לבדוק את המפתח, המודל והמכסה בשרת.');
       return json(result);
     }
     requireThat(u,401,'יש להתחבר כדי להמשיך');
@@ -283,14 +291,14 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const t=await db.get('tickets',body.ticketId);requireThat(await canRead('tickets',t,u,db.get));requireThat(!banned(u));
       if(['closed','resolved','escalated'].includes(t.status))return json({skipped:true});
       const localOnly=body.localOnly===true;
-      if(env.GEMINI_API_KEY&&!localOnly)requireThat(body.consent===true,400,'נדרש אישור לשיתוף תוכן הפנייה עם ספק AI');
+      if((env.GEMINI_API_KEY||env.AI)&&!localOnly)requireThat(body.consent===true,400,'נדרש אישור לשיתוף תוכן הפנייה עם ספק AI');
       await limit(env,'ticket-ai:'+u.id,12,3600);
       const hist=(await db.list('messages')).filter(m=>m.ticketId===t.id&&!m.internal).slice(0,8).reverse();
       const prompt=`פנייה: ${t.title}\nתיאור: ${t.description}\nשיחה אחרונה:\n${hist.map(m=>(m.ai?'AI: ':'משתמש: ')+m.text).join('\n')}\nהצע עזרה. אל תטען שהפנייה הועברה או טופלה.`;
       const generated=localOnly?{text:basicGuidance(prompt),mode:'local'}:await generate(env,prompt),text=generated.text;
       const current=await db.get('tickets',t.id);
       if(['closed','resolved','escalated'].includes(current.status))return json({skipped:true});
-      const msg={id:nonce(),createdAt:now(),ticketId:t.id,text,ai:true,aiMode:generated.mode,senderId:'ai-system',senderName:generated.mode==='gemini'?'SMAI Sentinel AI':'SMAI · מנוע מקומי',senderRank:'ai',internal:false};
+      const msg={id:nonce(),createdAt:now(),ticketId:t.id,text,ai:true,aiMode:generated.mode,senderId:'ai-system',senderName:['gemini','workers-ai'].includes(generated.mode)?'SMAI Sentinel AI':'SMAI · מנוע מקומי',senderRank:'ai',internal:false};
       await db.put('messages',msg);return json(msg);
     }
     if(path==='/api/security/trust-current'&&req.method==='POST'){

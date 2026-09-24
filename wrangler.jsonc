@@ -2,6 +2,7 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "smai-sentinel-api",
 	"main": "server/index.js",
+	"ai": { "binding": "AI" },
 	"compatibility_date": "2026-09-16",
 	"compatibility_flags": [
 		"nodejs_compat"

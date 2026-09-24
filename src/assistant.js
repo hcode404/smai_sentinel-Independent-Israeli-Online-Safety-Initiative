@@ -21,7 +21,7 @@ export function initAssistant(){
     dialog.querySelector('.assistant-suggestions')?.remove();const indicator=typing();
     try{
       const result=await request('/api/ai','POST',{prompt,history:history.slice(-8),consent:true,requireModel:true});
-      if(result.mode!=='gemini')throw new Error('שירות ה-AI עדיין לא מחובר. נדרשת הגדרת מפתח בשרת.');
+      if(!['gemini','workers-ai'].includes(result.mode))throw new Error('שירות ה-AI עדיין לא מחובר.');
       add(result.text,'model');history.push({role:'user',text:prompt},{role:'model',text:result.text});history.splice(0,Math.max(0,history.length-8));
     }catch(e){error.textContent=e.message;input.value=prompt;resize();}
     finally{indicator.remove();button.disabled=false;input.focus();}
