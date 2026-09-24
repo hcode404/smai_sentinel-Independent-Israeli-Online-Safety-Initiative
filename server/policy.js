@@ -2,7 +2,7 @@ export class HttpError extends Error {constructor(status,message){super(message)
 export const requireThat=(condition,status=403,message='אין הרשאה לפעולה זו')=>{if(!condition)throw new HttpError(status,message);};
 export const pick=(obj,keys)=>Object.fromEntries(keys.filter(k=>Object.hasOwn(obj,k)).map(k=>[k,obj[k]]));
 export const rank=u=>Number(u?.rankLvl)||0;
-export const publicUser=u=>pick(u,['id','name','avatar','bio','rank','rankLvl','verified','dept','socialLinks','createdAt']);
+export const publicUser=u=>({...pick(u,['id','name','avatar','bio','rank','rankLvl','verified','dept','socialLinks','createdAt']),privacy:{showVerified:u.privacy?.showVerified!==false}});
 export const banned=u=>!!(u?.isBanned&&(!u.banUntil||Date.parse(u.banUntil)>Date.now()));
 export const muted=u=>Date.parse(u?.muteUntil)>Date.now();
 export const ranks={citizen:0,trainee:10,agent:20,senior:30,lead:40,head:50,admin:60,founder:70};
@@ -70,7 +70,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     let p=self?pick(input,['name','bio','avatar','ageBand','mailPrefs','privacy','socialLinks','installedUpdates','sound','theme']):{};
     if(p.ageBand)requireThat(['under10','10to12','13to17','adult'].includes(p.ageBand),400,'קבוצת הגיל אינה תקינה');
     if(p.privacy){
-      p.privacy=pick(p.privacy,['dmFrom','friendRequests','profileVis','onlineStatus','showFollowers']);
+      p.privacy=pick(p.privacy,['dmFrom','friendRequests','profileVis','onlineStatus','showFollowers','showVerified','readReceipts']);
       requireThat(!p.privacy.dmFrom||['all','friends','staff','none'].includes(p.privacy.dmFrom),400,'הגדרת הודעות פרטיות אינה תקינה');
       requireThat(!p.privacy.friendRequests||['all','none'].includes(p.privacy.friendRequests),400,'הגדרת בקשות חברות אינה תקינה');
       requireThat(!p.privacy.profileVis||['public','private'].includes(p.privacy.profileVis),400,'הגדרת פרטיות הפרופיל אינה תקינה');
@@ -194,11 +194,12 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     requireThat(await canRead(col,old||input,u,get)&&!muted(u));
     if(isNew){
       requireThat(!input.system);
-      const p={convId:input.convId,text:input.text,senderId:id,senderName:u.name,senderRank:u.rank};
+      const p={convId:input.convId,text:input.text,senderId:id,senderName:u.name,senderRank:u.rank,deliveredAt:new Date().toISOString()};
       if(input.callUrl){requireThat(/^https:\/\/meet\.jit\.si\/SMAI-Sentinel-[A-Za-z0-9-]{12,160}(?:#.*)?$/.test(input.callUrl),400,'קישור השיחה אינו תקין');p.callUrl=input.callUrl;p.callType=input.callType==='video'?'video':'audio';}
       return p;
     }
-    requireThat(old.senderId===id);return pick(input,['text']);
+    if(old.senderId!==id){requireThat(input.readAt&&!old.readAt);return {readAt:new Date().toISOString()};}
+    return pick(input,['text']);
   }
   if(col==='reports'){
     if(isNew)return {...pick(input,['targetId','msgId','server','type','kind','reason','text']),byId:id,status:'pending'};
