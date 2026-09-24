@@ -188,6 +188,14 @@ test('direct messages and call invitations notify the other participant',async()
  const notices=(await f.call('records/notifications','GET',null,'bob')).data;
  assert.equal(notices.length,1);assert.equal(notices[0].type,'callInvite');assert.equal(notices[0].href,`/dm/${conv.data.id}`);f.DB.close();
 });
+test('a private chat mention creates a dedicated alert for the mentioned user',async()=>{
+ const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'bob');
+ const conv=await f.call('records/dms','POST',{members:['alice','bob']});assert.equal(conv.status,201);
+ const sent=await f.call('records/dmsgs','POST',{convId:conv.data.id,text:'@bob יש עדכון חשוב בשבילך'});assert.equal(sent.status,201);
+ const notices=(await f.call('records/notifications','GET',null,'bob')).data;
+ const mention=notices.find(n=>n.type==='mention');assert.ok(mention);assert.equal(mention.href,`/dm/${conv.data.id}`);assert.match(mention.title,/תייג/);
+ f.DB.close();
+});
 test('reporter can reopen a closed ticket and continue its conversation',async()=>{
  const f=fixture();const t=await f.call('records/tickets','POST',ticket);
  await f.call('records/tickets/'+t.data.id,'PATCH',{status:'closed'},'owner');
