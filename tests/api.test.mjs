@@ -37,7 +37,15 @@ test('ticket persists; identity and tracking code are issued by the server',asyn
 test('a new ticket opens with a server-confirmed chat message',async()=>{
  const f=fixture();const a=await f.call('records/tickets','POST',ticket);
  const messages=(await f.call('records/messages','GET')).data;
- assert.equal(messages.length,1);assert.equal(messages[0].ticketId,a.data.id);assert.equal(messages[0].system,true);f.DB.close();
+ assert.equal(messages.length,2);assert.ok(messages.every(m=>m.ticketId===a.data.id));
+ assert.ok(messages.some(m=>m.system));assert.ok(messages.some(m=>m.ai&&m.aiMode==='local'));f.DB.close();
+});
+test('local ticket triage routes clear account harm and closes only unmistakable spam',async()=>{
+ const f=fixture();
+ const routed=await f.call('records/tickets','POST',{title:'פרצו לי לחשבון',description:'מישהו שינה את הסיסמה ואין לי גישה לחשבון שלי',dept:'other'});
+ assert.equal(routed.status,201);assert.equal(routed.data.dept,'account');assert.equal(routed.data.status,'new');assert.equal(routed.data.localTriage,true);
+ const spam=await f.call('records/tickets','POST',{title:'מבצע פרסים חינם',description:'קנו עכשיו רובוקס חינם https://a.test https://a.test https://a.test https://a.test https://a.test https://a.test',dept:'other'});
+ assert.equal(spam.status,201);assert.equal(spam.data.status,'closed');assert.equal(spam.data.spamClosed,true);f.DB.close();
 });
 test('ordinary accounts cannot read another ticket, or enumerate it',async()=>{
  const f=fixture();const a=await f.call('records/tickets','POST',ticket);
@@ -61,7 +69,7 @@ test('internal notes are hidden from reporter; manager can change status',async(
  const f=fixture();const t=await f.call('records/tickets','POST',ticket);
  assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:'private note',internal:true},'owner')).status,201);
  const reporterMessages=(await f.call('records/messages')).data;
- assert.equal(reporterMessages.length,1);assert.equal(reporterMessages[0].system,true);
+ assert.equal(reporterMessages.length,2);assert.ok(reporterMessages.some(m=>m.system));assert.ok(reporterMessages.some(m=>m.ai));
  assert.equal((await f.call('records/tickets/'+t.data.id,'PATCH',{status:'open'},'owner')).status,200);
  assert.equal((await f.call('records/tickets/'+t.data.id,'PATCH',{status:'closed'})).status,403);f.DB.close();
 });
@@ -81,8 +89,8 @@ test('external AI asks anonymous visitors for one-time consent instead of login'
 test('basic guidance can be added to a ticket without Gemini consent',async()=>{
  const f=fixture();const t=await f.call('records/tickets','POST',{...ticket,description:'פרצו לי לחשבון ואני צריך עזרה בהגנה עליו'});
  const result=await f.call('ticket-ai','POST',{ticketId:t.data.id,consent:false});
- assert.equal(result.status,200);assert.equal(result.data.aiMode,'basic');assert.equal(result.data.senderName,'הכוונה אוטומטית');
- assert.equal((await f.db.list('messages')).length,2);f.DB.close();
+ assert.equal(result.status,200);assert.equal(result.data.aiMode,'basic');assert.equal(result.data.senderName,'SMAI · מנוע מקומי');
+ assert.equal((await f.db.list('messages')).length,3);f.DB.close();
 });
 test('private server messages do not leak to other accounts',async()=>{
  const f=fixture();await f.call('records/config/site','PATCH',{serverCreate:'all'},'owner');
@@ -137,6 +145,8 @@ test('transactional emails are branded HTML with contextual actions',()=>{
  assert.throws(()=>renderEmail('emailVerification',{verifyUrl:'https://example.org/verify'}));
  const reply=renderEmail('ticketReply',{ticketId:'ticket-1',code:'SM-123',title:'בדיקה',sender:'נציג',text:'יש עדכון'});
  assert.match(reply.html,/<!doctype html>/i);assert.match(reply.html,/SMAI Sytem/);assert.match(reply.html,/\/ticket\/ticket-1/);assert.match(reply.html,/פתיחת הצ׳אט בפנייה/);
+ const staff=renderEmail('staffTicketAssigned',{ticketId:'ticket-2',code:'SM-456',title:'בדיקת צוות',department:'account',priority:'high',name:'נציג'});
+ assert.match(staff.html,/לחץ כאן למעבר לדיווח/);assert.match(staff.html,/\/ticket\/ticket-2/);assert.match(staff.html,/מוגבלות להרשאות/);
  const resetLike=renderEmail('securityLogin',{name:'בדיקה',when:'עכשיו'});assert.match(resetLike.html,/\/account/);
  const purchase=renderEmail('purchase',{product:'חבילה',orderId:'A-1',amount:'₪10'});assert.match(purchase.html,/מספר הזמנה/);
 });

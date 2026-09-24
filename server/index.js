@@ -33,12 +33,14 @@ export function renderEmail(type,data={},env={}){
   if(type==='securityLogin')return {subject:`כניסה חדשה לחשבון ${MAIL_BRAND}`,html:mailShell({title:'זוהתה כניסה חדשה',preheader:'כניסה חדשה לחשבון שלך',icon:'🛡️',accent:'#38bdf8',content:`<p style="margin-top:0">שלום ${mailEsc(data.name||'')}, זיהינו כניסה לחשבון מרשת חדשה.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מועד',data.when||'כעת')}${mailBox('מכשיר',data.device||'דפדפן חדש')}</table><p>אם זו לא הייתה הכניסה שלך, מומלץ לאפס מיד את הסיסמה.</p>`,actionLabel:'בדיקת אבטחת החשבון',actionUrl:mailUrl(env,'/account'),notice:'ההתראה אינה כוללת את כתובת ה-IP המלאה כדי לשמור על פרטיותך.'})};
   if(type==='ticketReply')return {subject:`תשובה חדשה בפנייה ${data.code||''}`,html:mailShell({title:'התקבלה תשובה חדשה',preheader:`עדכון בפנייה ${data.code||''}`,icon:'💬',accent:'#22d3ee',content:`<p style="margin-top:0"><b>${mailEsc(data.sender||'צוות SMAI')}</b> השיב/ה בפנייה שלך.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}</table><div style="margin-top:18px;padding:16px;border-right:3px solid #22d3ee;background:#10283d;border-radius:10px">${mailEsc(data.text||'').replace(/\n/g,'<br>')}</div>`,actionLabel:'פתיחת הצ׳אט בפנייה',actionUrl:ticketUrl,notice:'במצב סכנה מיידית מתקשרים למשטרה 100.'})};
   if(type==='ticketClaim')return {subject:`הפנייה ${data.code||''} התקבלה לטיפול`,html:mailShell({title:'נציג קיבל את הפנייה',preheader:'הפנייה שלך נמצאת כעת בטיפול',icon:'🎫',accent:'#34d399',content:`<p style="margin-top:0">הפנייה שלך הועברה לטיפול אישי.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}${mailBox('נציג מטפל',data.agent||'צוות SMAI')}</table><p>אפשר להמשיך להתכתב עם הנציג ישירות בחלון הפנייה.</p>`,actionLabel:'מעבר לשיחה עם הנציג',actionUrl:ticketUrl})};
+  if(type==='staffTicketAssigned')return {subject:`פנייה ${data.code||''} שויכה אליך — ${MAIL_BRAND}`,html:mailShell({title:'פנייה חדשה ממתינה לטיפולך',preheader:`הפנייה ${data.code||''} שויכה אליך`,icon:'🎧',accent:'#22d3ee',content:`<p style="margin-top:0">שלום ${mailEsc(data.name||'')}, פנייה חדשה שויכה אליך לטיפול אנושי.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}${mailBox('מחלקה',data.department||'כללי')}${mailBox('עדיפות',data.priority||'רגילה')}</table><p>הכפתור פותח את סביבת הצוות ישירות בצ׳אט של הפנייה. הצגת מידע ופעולות ניהול נשארות מוגבלות להרשאות החשבון שלך.</p>`,actionLabel:'לחץ כאן למעבר לדיווח',actionUrl:ticketUrl,notice:'אין להעביר את המייל או את קישור הפנייה לאדם אחר. במצב סכנה מיידית מתקשרים למשטרה 100.'})};
   if(type==='ticketStatus')return {subject:`עדכון בפנייה ${data.code||''}: ${data.status||''}`,html:mailShell({title:'סטטוס הפנייה השתנה',preheader:`הפנייה עודכנה ל-${data.status||''}`,icon:'↻',accent:'#a78bfa',content:`<table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מספר פנייה',data.code||'')}${mailBox('נושא',data.title||'')}${mailBox('סטטוס חדש',data.status||'עודכן')}</table>`,actionLabel:'צפייה בעדכון המלא',actionUrl:ticketUrl})};
   if(type==='moderation')return {subject:`עדכון אכיפה בחשבון ${MAIL_BRAND}`,html:mailShell({title:'עדכון בנושא אכיפה',preheader:data.title||'בוצע עדכון בחשבון',icon:'⚖️',accent:'#fb7185',content:`<h2 style="font-size:18px;color:#fff;margin-top:0">${mailEsc(data.title||'עדכון בחשבון')}</h2><p>${mailEsc(data.detail||'פרטי הפעולה זמינים בחשבון שלך.')}</p>`,actionLabel:'צפייה בפרטי החשבון',actionUrl:mailUrl(env,'/account'),notice:'אם לדעתך נפלה טעות, אפשר להגיש ערעור מתוך האתר.'})};
   if(type==='purchase')return {subject:`אישור רכישה — ${data.product||MAIL_BRAND}`,html:mailShell({title:'הרכישה הושלמה בהצלחה',preheader:'אישור ופרטי הרכישה שלך',icon:'✓',accent:'#34d399',content:`<p style="margin-top:0">תודה על הרכישה.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('מוצר',data.product||'')}${mailBox('מספר הזמנה',data.orderId||'')}${mailBox('סכום',data.amount||'')}</table>`,actionLabel:'צפייה בחשבון',actionUrl:mailUrl(env,'/account')})};
   if(type==='friendRequest')return {subject:`בקשת חברות חדשה — ${MAIL_BRAND}`,html:mailShell({title:'רוצים להיות חברים',preheader:`${data.sender||'משתמש'} שלח/ה לך בקשת חברות`,icon:'👥',accent:'#72e3cf',content:`<p style="margin-top:0"><b>${mailEsc(data.sender||'משתמש')}</b> שלח/ה לך בקשת חברות בקהילת SMAI.</p><p>אפשר להיכנס לעמוד החברים, לצפות בפרופיל ולאשר או לדחות את הבקשה.</p>`,actionLabel:'צפייה בבקשת החברות',actionUrl:mailUrl(env,'/friends'),notice:'אישור בקשה מאפשר פתיחת שיחה פרטית בהתאם להגדרות הפרטיות שלך.'})};
   if(type==='friendAccepted')return {subject:`בקשת החברות אושרה — ${MAIL_BRAND}`,html:mailShell({title:'עכשיו אתם חברים',preheader:`${data.sender||'משתמש'} אישר/ה את בקשת החברות`,icon:'✓',accent:'#34d399',content:`<p style="margin-top:0"><b>${mailEsc(data.sender||'משתמש')}</b> אישר/ה את בקשת החברות שלך.</p>`,actionLabel:'מעבר לחברים',actionUrl:mailUrl(env,'/friends')})};
   if(type==='dmRequest')return {subject:`בקשת הודעה חדשה — ${MAIL_BRAND}`,html:mailShell({title:'ממתינה לך בקשת הודעה',preheader:`הודעה חדשה מאת ${data.sender||'משתמש'}`,icon:'💬',accent:'#38bdf8',content:`<p style="margin-top:0"><b>${mailEsc(data.sender||'משתמש')}</b> שלח/ה לך בקשת שיחה פרטית.</p><div style="margin-top:18px;padding:16px;border-right:3px solid #38bdf8;background:#10283d;border-radius:10px">${mailEsc(data.text||'').replace(/\n/g,'<br>')}</div><p>עד שתאשרו את הבקשה, השולח יכול לשלוח לכל היותר שתי הודעות.</p>`,actionLabel:'בדיקת בקשת ההודעה',actionUrl:mailUrl(env,`/dm/${encodeURIComponent(data.convId||'')}`),notice:'לא חייבים להשיב. אפשר לדחות את הבקשה או לחסום את המשתמש.'})};
+  if(type==='teamApplication')return {subject:data.accepted?`התקבלת לצוות ${MAIL_BRAND}`:`עדכון במועמדות לצוות ${MAIL_BRAND}`,html:mailShell({title:data.accepted?'ברוכים הבאים לצוות SMAI':'המועמדות שלך עודכנה',preheader:data.accepted?'המועמדות אושרה והחשבון עודכן':'התקבלה החלטה במועמדות שלך',icon:data.accepted?'🎉':'📋',accent:data.accepted?'#34d399':'#a78bfa',content:data.accepted?`<p style="margin-top:0">שמחים לעדכן שהמועמדות שלך אושרה.</p><table role="presentation" width="100%" style="background:#0a1625;border-radius:13px;padding:10px 16px">${mailBox('דרגה','מתמחה')}${mailBox('מחלקה',data.department||'צוות SMAI')}</table><p>אפשר להיכנס לחשבון ולפתוח את פאנל הצוות בהתאם להרשאות שניתנו.</p>`:`<p style="margin-top:0">המועמדות שלך נבדקה, ובשלב זה לא אושרה. אפשר לפנות לצוות לקבלת מידע נוסף.</p>`,actionLabel:data.accepted?'כניסה לחשבון הצוות':'צפייה בחשבון',actionUrl:mailUrl(env,data.accepted?'/admin':'/account')})};
   throw new HttpError(400,'סוג הודעת המייל אינו נתמך');
 }
 async function deliverMail(env,to,message){
@@ -166,6 +168,33 @@ function basicGuidance(prompt){
   if(/תמונה|סרטון|דיפ.?פייק|הפיצ|פרסמ/.test(t))return 'שמרו קישורים וצילומי מסך לפני דיווח או חסימה. השתמשו במסלול הסרת התוכן של הפלטפורמה ואל תעבירו את התוכן הלאה. אם מדובר בתוכן אינטימי של קטין, פנו גם למוקד 105. אפשר לפתוח כאן פנייה כדי לרכז את הפרטים.';
   return 'אפשר להתחיל בשלושה צעדים: לשמור תיעוד, לא למסור סיסמאות או קודי אימות, ולחסום קשר שמרגיש מסוכן. כתבו באיזו פלטפורמה זה קרה ומה הפעולה האחרונה שבוצעה, בלי פרטים מזהים מיותרים, ואכוון לצעד הבא. במצב סכנה מיידית מתקשרים ל־100.';
 }
+function localTicketTriage(ticket){
+  const text=`${ticket.title||''} ${ticket.description||''}`.toLowerCase();
+  const rules=[
+    ['sextortion',/סחיט|תמונה אינטימ|עירום|גרומינג|פגיעה מינית/],
+    ['account',/פרצ|נפרץ|גנב.*חשבון|פישינג|התחז|סיסמ/],
+    ['content',/הפיצ|פרסמ|תמונה|סרטון|דיפ.?פייק|הסרת תוכן/],
+    ['harassment',/הטרד|בריונות|מאיים|איום|חרם|קלל/],
+    ['child',/ילד|ילדה|קטין|קטינה|הורה|בית ספר/]
+  ];
+  const dept=rules.find(([,pattern])=>pattern.test(text))?.[0]||ticket.dept||'other';
+  const critical=/להתאבד|סכנת חיים|אקדח|סכין|יהרוג|לרצוח|אונס|בדרך אלי|יודע איפה אני גר/.test(text);
+  const urls=(text.match(/https?:\/\/|www\.|discord\.gg|t\.me\//g)||[]).length;
+  const promo=/קנו עכשיו|הנחה מיוחדת|עקבו אחריי|follow me|פרסים חינם|רובוקס חינם/.test(text);
+  const repeated=/(.{8,})\1{2,}/.test(text)||/(.)\1{14,}/.test(text);
+  // Auto-close only unmistakable promotion/flood combinations. Ambiguous reports stay open.
+  const spam=!critical&&text.length<900&&((promo&&urls>0)||(urls>=4&&repeated));
+  const priority=critical?'critical':dept==='sextortion'?'high':'normal';
+  const question={
+    account:'כדי שנוכל לכוון נכון: האם עדיין יש לכם גישה לחשבון, ובאיזו פלטפורמה זה קרה?',
+    harassment:'כדי להבין את הדחיפות: האם האיום כולל מקום, זמן או כוונה ממשית לפגיעה?',
+    sextortion:'אל תשלחו עוד תוכן ואל תשלמו. האם מעורב קטין, והאם נשמרו שם המשתמש והקישור לפרופיל?',
+    content:'האם התוכן עדיין זמין, ובאיזו פלטפורמה פורסם? אל תעבירו אותו הלאה.',
+    child:'האם קיימת סכנה מיידית כרגע, והאם מבוגר מהימן כבר מעורב?',
+    other:'כדי להעביר לצוות המדויק, באיזו פלטפורמה זה קרה ומה התוצאה שאתם צריכים?'
+  }[dept];
+  return {dept,critical,priority,spam,question};
+}
 async function generate(env,prompt,history=[]){
   if(!env.GEMINI_API_KEY)return {text:basicGuidance(prompt),mode:'basic'};
   const model=env.GEMINI_MODEL||'gemini-flash-latest';
@@ -248,13 +277,15 @@ export async function api(req,env,ctx={waitUntil(){}}){
     if(path==='/api/ticket-ai'&&req.method==='POST'){
       const t=await db.get('tickets',body.ticketId);requireThat(await canRead('tickets',t,u,db.get));requireThat(!banned(u));
       if(['closed','resolved','escalated'].includes(t.status))return json({skipped:true});
-      if(env.GEMINI_API_KEY)requireThat(body.consent===true,400,'נדרש אישור לשיתוף תוכן הפנייה עם ספק AI');
+      const localOnly=body.localOnly===true;
+      if(env.GEMINI_API_KEY&&!localOnly)requireThat(body.consent===true,400,'נדרש אישור לשיתוף תוכן הפנייה עם ספק AI');
       await limit(env,'ticket-ai:'+u.id,12,3600);
       const hist=(await db.list('messages')).filter(m=>m.ticketId===t.id&&!m.internal).slice(0,8).reverse();
-      const generated=await generate(env,`פנייה: ${t.title}\nתיאור: ${t.description}\nשיחה אחרונה:\n${hist.map(m=>(m.ai?'AI: ':'משתמש: ')+m.text).join('\n')}\nהצע עזרה. אל תטען שהפנייה הועברה או טופלה.`),text=generated.text;
+      const prompt=`פנייה: ${t.title}\nתיאור: ${t.description}\nשיחה אחרונה:\n${hist.map(m=>(m.ai?'AI: ':'משתמש: ')+m.text).join('\n')}\nהצע עזרה. אל תטען שהפנייה הועברה או טופלה.`;
+      const generated=localOnly?{text:basicGuidance(prompt),mode:'local'}:await generate(env,prompt),text=generated.text;
       const current=await db.get('tickets',t.id);
       if(['closed','resolved','escalated'].includes(current.status))return json({skipped:true});
-      const msg={id:nonce(),createdAt:now(),ticketId:t.id,text,ai:true,aiMode:generated.mode,senderId:'ai-system',senderName:generated.mode==='gemini'?'SMAI Sentinel AI':'הכוונה אוטומטית',senderRank:'ai',internal:false};
+      const msg={id:nonce(),createdAt:now(),ticketId:t.id,text,ai:true,aiMode:generated.mode,senderId:'ai-system',senderName:generated.mode==='gemini'?'SMAI Sentinel AI':'SMAI · מנוע מקומי',senderRank:'ai',internal:false};
       await db.put('messages',msg);return json(msg);
     }
     if(path==='/api/track'&&req.method==='POST'){
@@ -320,7 +351,12 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     if('text' in patch)requireThat(typeof patch.text==='string'&&patch.text.trim().length>0&&patch.text.length<=12000,400,'נא להזין טקסט עד 12,000 תווים');
     const rec={...old,...patch,id:old?.id||(col==='config'?id:null)||nonce(),createdAt:old?.createdAt||now(),updatedAt:now()};
-    if(col==='tickets'&&!old)rec.code='SM-'+nonce().toUpperCase();
+    if(col==='tickets'&&!old){
+      rec.code='SM-'+nonce().toUpperCase();
+      const triage=localTicketTriage(rec);
+      Object.assign(rec,{dept:triage.dept,priority:triage.priority,critical:triage.critical,status:triage.spam?'closed':'new',localTriage:true,spamClosed:triage.spam});
+      rec.localQuestion=triage.question;
+    }
     if(col==='servers'&&!old)rec.invite=nonce().slice(0,24).toUpperCase();
     if(col==='dms'&&!old){
       rec.key=rec.members.length===2?[...rec.members].sort().join('__'):'g:'+rec.id;
@@ -336,12 +372,23 @@ export async function api(req,env,ctx={waitUntil(){}}){
       await Promise.all(recipients.map(x=>db.put('notifications',{id:nonce(),userId:x.id,type:'founderAnnouncement',title:rec.title,text:rec.body||'פורסמה הודעה חדשה מטעם SMAI Sentinel',href:rec.linkUrl||'/',read:false,createdAt:now()})));
     }
     if(col==='tickets'&&!old){
-      await db.put('messages',{id:nonce(),createdAt:now(),ticketId:rec.id,system:true,senderId:null,text:`הפנייה ${rec.code} נפתחה ונשלחה לצוות המתאים. אפשר להמשיך להתכתב כאן.`});
+      const opening=rec.spamClosed
+        ? `הפנייה ${rec.code} נסגרה אוטומטית לאחר שזוהתה כפרסום או הצפה מובהקים. אם זו טעות, אפשר להשיב כאן והפנייה תיפתח לבדיקה אנושית.`
+        : `הפנייה ${rec.code} נבדקה מקומית, סווגה ונשלחה לצוות המתאים. אפשר להמשיך להתכתב כאן.`;
+      await db.put('messages',{id:nonce(),createdAt:now(),ticketId:rec.id,system:true,senderId:null,text:opening});
+      if(!rec.spamClosed)await db.put('messages',{id:nonce(),createdAt:now(),ticketId:rec.id,ai:true,aiMode:'local',senderId:'ai-system',senderName:'SMAI · בוט מיון מקומי',senderRank:'ai',internal:false,text:rec.localQuestion});
     }
     if(col==='tickets'&&old&&(rec.status!==old.status||rec.assignedTo!==old.assignedTo)){
       const text=rec.assignedTo!==old.assignedTo?'שיוך הפנייה עודכן על ידי הצוות.':'סטטוס הפנייה עודכן: '+rec.status;
       try{await db.put('messages',{id:nonce(),createdAt:now(),ticketId:rec.id,system:true,senderId:null,text});}catch{}
       const reporter=await db.get('users',rec.reporterId);
+      if(rec.assignedTo!==old.assignedTo&&rec.assignedTo){
+        const assigned=await db.get('users',rec.assignedTo);
+        if(assigned){
+          await db.put('notifications',{id:nonce(),userId:assigned.id,ticketId:rec.id,type:'staffTicketAssigned',title:`פנייה ${rec.code||''} שויכה אליך`,text:rec.title||'פנייה חדשה לטיפול',href:`/ticket/${rec.id}`,read:false,createdAt:now()});
+          scheduleMail(ctx,sendUserMail(env,assigned,'staffTicketAssigned',{ticketId:rec.id,code:rec.code,title:rec.title,department:rec.dept,priority:rec.priority}));
+        }
+      }
       if(reporter&&reporter.id!==u.id)await db.put('notifications',{id:nonce(),userId:reporter.id,ticketId:rec.id,type:'ticketUpdate',title:`עדכון בפנייה ${rec.code||''}`,text,href:`/ticket/${rec.id}`,read:false,createdAt:now()});
       if(reporter&&rec.assignedTo!==old.assignedTo&&rec.assignedTo)scheduleMail(ctx,sendUserMail(env,reporter,'ticketClaim',{ticketId:rec.id,code:rec.code,title:rec.title,agent:rec.assignedName||u.name}));
       else if(reporter&&rec.status!==old.status)scheduleMail(ctx,sendUserMail(env,reporter,'ticketStatus',{ticketId:rec.id,code:rec.code,title:rec.title,status:rec.status}));
@@ -362,7 +409,8 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     if(['applications','verifyApps','trustedApps','partnerApps','appeals'].includes(col)&&old&&rec.status!==old.status){
       const labels={accepted:'אושרה',approved:'אושרה',rejected:'נדחתה',closed:'נסגרה',pending:'ממתינה לבדיקה'};
-      await db.put('notifications',{id:nonce(),userId:rec.userId,type:'requestStatus',title:'עדכון בבקשה שלך',text:`הבקשה ${labels[rec.status]||'עודכנה'}.`,href:'/account',read:false,createdAt:now()});
+      if(rec.userId)await db.put('notifications',{id:nonce(),userId:rec.userId,type:'requestStatus',title:col==='applications'&&rec.status==='accepted'?'התקבלת לצוות SMAI':'עדכון בבקשה שלך',text:col==='applications'&&rec.status==='accepted'?'המועמדות אושרה והחשבון יעודכן לדרגת מתמחה.':`הבקשה ${labels[rec.status]||'עודכנה'}.`,href:col==='applications'&&rec.status==='accepted'?'/admin':'/account',read:false,createdAt:now()});
+      if(col==='applications'){const candidate=rec.userId?await db.get('users',rec.userId):(await db.list('users')).find(x=>x.email===rec.email);if(candidate)scheduleMail(ctx,sendUserMail(env,candidate,'teamApplication',{accepted:rec.status==='accepted',department:rec.dept||''}));}
     }
     if(col==='friends'&&!old){
       await db.put('notifications',{id:nonce(),userId:rec.to,type:'friendRequest',title:'בקשת חברות חדשה',text:`${u.name} שלח/ה לך בקשת חברות.`,href:'/friends',read:false,createdAt:now()});

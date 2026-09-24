@@ -361,11 +361,8 @@ async function submitBanAppeal(){
 async function callAI(prompt){return (await request('/api/ai','POST',{prompt})).text;}
 async function smaiAIReply(ticketId){
   try{
-    const status=await request('/api/status');
-    const gemini=status.aiMode==='gemini';
-    if(gemini&&!await confirmBox('סיוע AI לפנייה','תיאור הפנייה וההודעות הגלויות האחרונות יישלחו לספק AI חיצוני. אין לשלוח מידע מזהה מיותר.','אישור ושליחה'))return;
-    await request('/api/ticket-ai','POST',{ticketId,consent:gemini});
-    toast(gemini?'תשובת SMAI AI נוספה לפנייה':'הכוונה אוטומטית נוספה לפנייה');await render();
+    await request('/api/ticket-ai','POST',{ticketId,localOnly:true});
+    toast('הכוונה מהמנוע המקומי נוספה לפנייה');await render();
   }catch(e){toast(e.message,'warn');}
 }
 async function smaiAutoReply(){ /* AI is explicitly requested, never silently sent. */ }
@@ -1892,7 +1889,7 @@ route('/press', async app => {
 function aiCard(a, compact=false){
   const d = DEPT_BY[a.dept] || DEPT_BY.other;
   return `<div class="ai-box">
-    ${compact?'':`<div class="ai-h">${ic('sparkle',16)} בדיקת מילות מפתח ראשונית</div>`}
+    ${compact?'':`<div class="ai-h">${ic('sparkle',16)} מנוע מקומי · בדיקה וניתוב ראשוניים</div>`}
     <div class="row" style="gap:7px;margin-bottom:11px">
       <span class="b b-${d.cls}">${ic(d.ico,12)} ${esc(d.short)}</span>
       ${prioBadge(a.prio)}
@@ -2085,8 +2082,8 @@ route('/report', (app)=>{
     const runAI = ()=>{
       const txt = (ttl.value + ' ' + dsc.value).trim();
       if(txt.length < 12){ box.innerHTML=''; last=null; return; }
-      box.innerHTML = `<div class="ai-box"><div class="ai-h">${ic('sparkle',16)} בדיקת מילות מפתח ראשונית</div>
-        <div class="ai-scan">מנתח את הפנייה</div></div>`;
+      box.innerHTML = `<div class="ai-box"><div class="ai-h">${ic('sparkle',16)} בדיקה מקומית ראשונית · המידע נשאר במכשיר</div>
+        <div class="ai-scan">מנתח ומנתב את הפנייה</div></div>`;
       setTimeout(()=>{ if(!$('#aiBox')) return; last = analyze(txt); $('#aiBox').innerHTML = aiCard(last);
         if(last.minor && $('#f_minor')) $('#f_minor').checked = true; }, 420);
     };
