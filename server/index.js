@@ -151,6 +151,7 @@ async function identity(req,env,db,ctx){
       }
     }
   }
+  if(!u.lastSeenAt||Date.now()-Date.parse(u.lastSeenAt)>60000){const updated={...u,lastSeenAt:now()};await db.put('users',updated,u);u=await db.get('users',id);}
   return {...u,email};
 }
 async function limit(env,key,max,seconds=60){

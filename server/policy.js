@@ -2,7 +2,7 @@ export class HttpError extends Error {constructor(status,message){super(message)
 export const requireThat=(condition,status=403,message='אין הרשאה לפעולה זו')=>{if(!condition)throw new HttpError(status,message);};
 export const pick=(obj,keys)=>Object.fromEntries(keys.filter(k=>Object.hasOwn(obj,k)).map(k=>[k,obj[k]]));
 export const rank=u=>Number(u?.rankLvl)||0;
-export const publicUser=u=>({...pick(u,['id','name','avatar','bio','rank','rankLvl','verified','dept','socialLinks','createdAt']),privacy:{showVerified:u.privacy?.showVerified!==false}});
+export const publicUser=(u,viewer)=>({...pick(u,['id','name','avatar','bio','rank','rankLvl','verified','dept','socialLinks','createdAt']),...(rank(viewer)>=70||u.privacy?.showLastSeen!==false?{lastSeenAt:u.lastSeenAt||u.lastLoginAt||u.createdAt}:{}),privacy:{showVerified:u.privacy?.showVerified!==false,showLastSeen:u.privacy?.showLastSeen!==false}});
 export const banned=u=>!!(u?.isBanned&&(!u.banUntil||Date.parse(u.banUntil)>Date.now()));
 export const muted=u=>Date.parse(u?.muteUntil)>Date.now();
 export const ranks={citizen:0,trainee:10,agent:20,senior:30,lead:40,head:50,admin:60,founder:70};
@@ -36,7 +36,7 @@ export async function canRead(col,r,u,get){
   return false;
 }
 export function safeRecord(col,r,u){
-  if(col==='users'&&u?.id!==r.id&&rank(u)<50)return publicUser(r);
+  if(col==='users'&&u?.id!==r.id&&rank(u)<50)return publicUser(r,u);
   const out={...r};delete out.pass;delete out.password;
   if(col==='users'){
     out.trustedNetworkCount=Array.isArray(r.trustedNetworkHashes)?r.trustedNetworkHashes.length:0;
@@ -70,15 +70,15 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     let p=self?pick(input,['name','bio','avatar','ageBand','mailPrefs','privacy','socialLinks','installedUpdates','sound','theme']):{};
     if(p.ageBand)requireThat(['under10','10to12','13to17','adult'].includes(p.ageBand),400,'קבוצת הגיל אינה תקינה');
     if(p.privacy){
-      p.privacy=pick(p.privacy,['dmFrom','friendRequests','profileVis','onlineStatus','showFollowers','showVerified','readReceipts']);
+      p.privacy=pick(p.privacy,['dmFrom','friendRequests','profileVis','onlineStatus','showFollowers','showVerified','showLastSeen','readReceipts']);
       requireThat(!p.privacy.dmFrom||['all','friends','staff','none'].includes(p.privacy.dmFrom),400,'הגדרת הודעות פרטיות אינה תקינה');
       requireThat(!p.privacy.friendRequests||['all','none'].includes(p.privacy.friendRequests),400,'הגדרת בקשות חברות אינה תקינה');
       requireThat(!p.privacy.profileVis||['public','private'].includes(p.privacy.profileVis),400,'הגדרת פרטיות הפרופיל אינה תקינה');
       requireThat(!p.privacy.onlineStatus||['all','friends','none'].includes(p.privacy.onlineStatus),400,'הגדרת נראות אינה תקינה');
     }
     if(p.socialLinks){
-      p.socialLinks=pick(p.socialLinks,['instagram','tiktok','roblox']);
-      const hosts={instagram:['instagram.com','www.instagram.com'],tiktok:['tiktok.com','www.tiktok.com'],roblox:['roblox.com','www.roblox.com']};
+      p.socialLinks=pick(p.socialLinks,['instagram','tiktok','roblox','twitter','youtube','discord','facebook','linkedin','twitch']);
+      const hosts={instagram:['instagram.com','www.instagram.com'],tiktok:['tiktok.com','www.tiktok.com'],roblox:['roblox.com','www.roblox.com'],twitter:['x.com','www.x.com','twitter.com','www.twitter.com'],youtube:['youtube.com','www.youtube.com','youtu.be'],discord:['discord.com','www.discord.com','discord.gg'],facebook:['facebook.com','www.facebook.com'],linkedin:['linkedin.com','www.linkedin.com'],twitch:['twitch.tv','www.twitch.tv']};
       for(const [network,value] of Object.entries(p.socialLinks)){if(!value)continue;let url;try{url=new URL(value);}catch{throw new HttpError(400,'קישור לרשת חברתית אינו תקין');}requireThat(url.protocol==='https:'&&hosts[network]?.includes(url.hostname),400,'קישור לרשת חברתית אינו תקין');p.socialLinks[network]=url.href.slice(0,500);}
     }
     if(n>=30&&n>rank(old))Object.assign(p,pick(input,['muteUntil']));

@@ -74,6 +74,22 @@ test('users cannot grant themselves founder, ban others, or forge AI messages',a
  assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:'forged',ai:true})).status,403);
  assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:'forged',system:true})).status,403);f.DB.close();
 });
+test('last seen privacy hides activity from regular users but not the founder',async()=>{
+ const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'bob');await f.call('session','GET',null,'owner');
+ assert.equal((await f.call('records/users/alice','PATCH',{privacy:{showLastSeen:false}})).status,200);
+ const regular=(await f.call('records/users/alice','GET',null,'bob')).data;assert.equal(regular.lastSeenAt,undefined);
+ const founder=(await f.call('records/users/alice','GET',null,'owner')).data;assert.ok(founder.lastSeenAt);f.DB.close();
+});
+test('social links accept known networks and reject lookalike domains',async()=>{
+ const f=fixture();await f.call('session');
+ assert.equal((await f.call('records/users/alice','PATCH',{socialLinks:{twitter:'https://x.com/smai',youtube:'https://www.youtube.com/@smai',discord:'https://discord.gg/smai'}})).status,200);
+ assert.equal((await f.call('records/users/alice','PATCH',{socialLinks:{twitter:'https://x.com.evil.test/smai'}})).status,400);f.DB.close();
+});
+test('bug reports persist for the reporter and are visible to maintenance staff',async()=>{
+ const f=fixture();await f.call('session');const bug=await f.call('records/reports','POST',{kind:'bug',type:'maintenance',reason:'כפתור לא נפתח',text:'הכפתור בעמוד הבדיקה אינו מגיב ללחיצה',targetId:'/test'});
+ assert.equal(bug.status,201);assert.equal(bug.data.byId,'alice');assert.equal((await f.call('records/reports','GET')).data.length,1);
+ assert.equal((await f.call('records/reports','GET',null,'owner')).data.length,1);f.DB.close();
+});
 test('internal notes are hidden from reporter; manager can change status',async()=>{
  const f=fixture();const t=await f.call('records/tickets','POST',ticket);
  assert.equal((await f.call('records/messages','POST',{ticketId:t.data.id,text:'private note',internal:true},'owner')).status,201);
