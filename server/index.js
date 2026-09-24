@@ -1,5 +1,6 @@
 import {HttpError,requireThat,pick,rank,isFounder,banned,collections,officialIds,canRead,safeRecord,authorizeWrite} from './policy.js';
 import {createRemoteJWKSet,jwtVerify} from 'jose';
+import {connect as tlsConnect} from 'node:tls';
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const nonce=()=>crypto.randomUUID().replaceAll('-','');
@@ -13,6 +14,40 @@ const MAIL_BRAND='SMAI Sytem';
 const MAIL_SITE='https://smai-support.jo3.org';
 const mailEsc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const mailUrl=(env,path='')=>(env.PUBLIC_SITE_URL||MAIL_SITE).replace(/\/$/,'')+'/'+String(path).replace(/^\//,'');
+const mailB64=value=>{const bytes=new TextEncoder().encode(String(value));let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary);};
+const mailHeader=value=>`=?UTF-8?B?${mailB64(String(value).replace(/[\r\n]+/g,' '))}?=`;
+async function sendGmailSmtp(env,to,message){
+  const from=String(env.GMAIL_USER||'').trim(),password=String(env.GMAIL_APP_PASSWORD||'').replace(/\s/g,'');
+  requireThat(/^[^\s@]+@gmail\.com$/i.test(from)&&/^[^\s@]+@[^\s@]+$/.test(to)&&password,503,'שירות המייל אינו מוגדר');
+  const socket=tlsConnect({host:'smtp.gmail.com',port:465,servername:'smtp.gmail.com'});
+  socket.setTimeout(15000,()=>socket.destroy(new Error('smtp timeout')));
+  let buffered='',waiting=null,failed=null;
+  const drain=()=>{if(!waiting)return;const lines=buffered.split('\r\n');buffered=lines.pop()||'';for(const line of lines){const match=line.match(/^(\d{3})([ -])/);if(match?.[2]===' '){const current=waiting;waiting=null;const code=Number(match[1]);current.expected.includes(code)?current.resolve(code):current.reject(new Error(`smtp rejected command (${code})`));return;}}};
+  socket.on('data',chunk=>{buffered+=chunk.toString('utf8');drain();});
+  socket.on('error',error=>{failed=error;if(waiting){const current=waiting;waiting=null;current.reject(error);}});
+  await new Promise((resolve,reject)=>{socket.once('secureConnect',resolve);socket.once('error',reject);});
+  const readReply=expected=>failed?Promise.reject(failed):new Promise((resolve,reject)=>{waiting={expected,resolve,reject};drain();});
+  const command=async(value,codes)=>{await new Promise((resolve,reject)=>socket.write(value+'\r\n',error=>error?reject(error):resolve()));return readReply(codes);};
+  try{
+    await readReply([220]);
+    await command('EHLO smai-support.jo3.org',[250]);
+    await command('AUTH LOGIN',[334]);
+    await command(btoa(from),[334]);
+    await command(btoa(password),[235]);
+    await command(`MAIL FROM:<${from}>`,[250]);
+    await command(`RCPT TO:<${to}>`,[250,251]);
+    await command('DATA',[354]);
+    const headers=[
+      `From: ${mailHeader(MAIL_BRAND)} <${from}>`,`To: <${to}>`,`Subject: ${mailHeader(message.subject)}`,
+      `Date: ${new Date().toUTCString()}`,`Message-ID: <${nonce()}@smai-support.jo3.org>`,
+      'MIME-Version: 1.0','Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: base64'
+    ].join('\r\n');
+    await new Promise((resolve,reject)=>socket.write(`${headers}\r\n\r\n${mailB64(message.html).replace(/(.{76})/g,'$1\r\n')}\r\n.\r\n`,error=>error?reject(error):resolve()));
+    await readReply([250]);
+    await command('QUIT',[221]);
+    return {ok:true};
+  }finally{socket.destroy();}
+}
 const mailBox=(label,value)=>`<tr><td style="padding:9px 0;color:#8eabc2;font-size:13px">${mailEsc(label)}</td><td style="padding:9px 0;color:#f4f9ff;font-weight:700;text-align:left">${mailEsc(value)}</td></tr>`;
 function mailShell({title,preheader='',icon='✦',accent='#22d3ee',content,actionLabel='פתיחת SMAI',actionUrl,notice=''}){
   const url=actionUrl||MAIL_SITE;
@@ -63,6 +98,7 @@ async function deliverMail(env,to,message){
     const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:`${MAIL_BRAND} <${env.MAIL_FROM}>`,to:[to],subject:message.subject,html:message.html}),signal:AbortSignal.timeout(15000)});
     if(!response.ok)throw new Error('mail provider failed');return {ok:true};
   }
+  if(env.GMAIL_USER&&env.GMAIL_APP_PASSWORD)return sendGmailSmtp(env,to,message);
   return {ok:false};
 }
 async function sendUserMail(env,user,type,data){
@@ -237,7 +273,7 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     const db=database(env),u=await identity(req,env,db,ctx);
     if(path==='/api/session')return json({user:u?safeRecord('users',u,u):null});
-    if(path==='/api/status')return json({database:true,ai:true,aiMode:env.AI?'workers-ai':env.GEMINI_API_KEY?'gemini':'basic',mail:!!(env.MAIL_GATEWAY_URL&&env.MAIL_GATEWAY_SECRET||env.RESEND_API_KEY&&env.MAIL_FROM),mailFrom:rank(u)>=60?(env.MAIL_FROM||MAIL_BRAND):undefined,migration:'new-database',version:'2.1',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
+    if(path==='/api/status')return json({database:true,ai:true,aiMode:env.AI?'workers-ai':env.GEMINI_API_KEY?'gemini':'basic',mail:!!(env.MAIL_GATEWAY_URL&&env.MAIL_GATEWAY_SECRET||env.RESEND_API_KEY&&env.MAIL_FROM||env.GMAIL_USER&&env.GMAIL_APP_PASSWORD),mailFrom:rank(u)>=60?(env.MAIL_FROM||env.GMAIL_USER||MAIL_BRAND):undefined,migration:'new-database',version:'2.1',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
     if(path==='/api/auth/password-reset'&&req.method==='POST'){
       const raw=await req.text();requireThat(raw.length<=2000,413,'הבקשה גדולה מדי');let body;
       try{body=JSON.parse(raw);}catch{throw new HttpError(400,'בקשה לא תקינה');}

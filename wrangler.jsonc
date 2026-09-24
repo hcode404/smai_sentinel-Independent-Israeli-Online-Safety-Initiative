@@ -10,6 +10,7 @@
 	"vars": {
 		"FIREBASE_PROJECT_ID": "smai-support",
 		"ADMIN_EMAILS": "minipro.7548@gmail.com",
+		"GMAIL_USER": "minipro.7548@gmail.com",
 		"GEMINI_MODEL": "gemini-flash-latest",
 		"PUBLIC_SITE_URL": "https://smai-support.jo3.org"
 	},
