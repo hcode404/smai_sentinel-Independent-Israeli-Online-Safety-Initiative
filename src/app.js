@@ -4765,7 +4765,7 @@ function initSfx(){
 }
 function initBurger(){
   const b = $('#burger'), nav = $('#nav');
-  const desktop=()=>matchMedia('(min-width:1100px)').matches;
+  const desktop=()=>matchMedia('(min-width:761px)').matches;
   const paint=()=>{
     if(desktop()){
       const collapsed=localStorage.getItem('smai_sidebar_collapsed')==='1';
