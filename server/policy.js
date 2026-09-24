@@ -19,7 +19,7 @@ export async function canRead(col,r,u,get){
   if(col==='notifications')return !!id&&r.userId===id;
   if(['applications','verifyApps','trustedApps','partnerApps','appeals'].includes(col))return n>=40||!!id&&r.userId===id;
   if(col==='reports')return n>=20||!!id&&r.byId===id;
-  if(col==='feedback')return n>=20||!!id&&r.byId===id;
+  if(col==='feedback')return isFounder(u)||!!id&&(r.byId===id||r.targetId===id||r.staffId===id);
   if(col==='modlog')return n>=20;
   if(col==='logs'||col==='mail')return n>=60;
   if(col==='emergencyRequests')return n>=60;
@@ -210,17 +210,18 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
   if(col==='feedback'){
     requireThat(isNew,403,'לא ניתן לשנות משוב לאחר השליחה');
     const kind=input.kind;
-    requireThat(['ticket_rating','staff_praise'].includes(kind),400,'סוג המשוב אינו תקין');
-    const target=await get('users',input.staffId);requireThat(target&&rank(target)>=10,400,'יש לבחור חבר צוות תקין');
+    requireThat(['ticket_rating','staff_praise','praise'].includes(kind),400,'סוג המשוב אינו תקין');
+    const target=await get('users',input.targetId||input.staffId);requireThat(target,400,'יש לבחור משתמש תקין');
     const text=String(input.text||'').trim();requireThat(text.length>=5&&text.length<=2000,400,'יש לכתוב משוב של 5 עד 2,000 תווים');
     if(kind==='ticket_rating'){
       const ticket=await get('tickets',input.ticketId);
       requireThat(ticket&&ticket.reporterId===id,403,'אפשר לדרג רק פנייה השייכת לך');
       requireThat(ticket.assignedTo===target.id&&['closed','resolved'].includes(ticket.status),400,'אפשר לדרג לאחר סיום הטיפול בפנייה');
       const rating=Number(input.rating);requireThat(Number.isInteger(rating)&&rating>=1&&rating<=5,400,'הדירוג חייב להיות בין 1 ל־5');
-      return {kind,ticketId:ticket.id,ticketCode:ticket.code,staffId:target.id,staffName:target.name,rating,text,byId:id,status:'published'};
+      requireThat(rank(target)>=10,400,'אפשר לדרג רק חבר צוות שטיפל בפנייה');
+      return {kind,ticketId:ticket.id,ticketCode:ticket.code,targetId:target.id,targetName:target.name,staffId:target.id,staffName:target.name,rating,text,byId:id,byName:u.name,status:'published'};
     }
-    return {kind,staffId:target.id,staffName:target.name,text,byId:id,status:'published'};
+    return {kind:'praise',targetId:target.id,targetName:target.name,text,byId:id,byName:u.name,status:'published'};
   }
   throw new HttpError(403,'הפעולה זמינה לשרת בלבד');
 }

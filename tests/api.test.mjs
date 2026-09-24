@@ -97,11 +97,14 @@ test('ticket feedback is limited to the reporter, assigned staff and completed t
  assert.equal((await f.call('records/feedback','POST',{kind:'ticket_rating',ticketId:created.id,staffId:'staff',rating:4,text:'ניסיון לדירוג כפול'})).status,409);
  assert.equal((await f.call('records/feedback','GET',null,'bob')).data.length,0);f.DB.close();
 });
-test('signed-in users can praise real staff but not ordinary accounts',async()=>{
+test('signed-in users can praise any real account and founder can review all praise',async()=>{
  const f=fixture();await f.call('session','GET',null,'staff');await f.call('session','GET',null,'owner');
  await f.call('records/users/staff','PATCH',{rank:'agent'},'owner');
  assert.equal((await f.call('records/feedback','POST',{kind:'staff_praise',staffId:'staff',text:'תודה על העזרה והסבלנות'})).status,201);
- assert.equal((await f.call('records/feedback','POST',{kind:'staff_praise',staffId:'bob',text:'משוב לא חוקי'})).status,400);f.DB.close();
+ await f.call('session','GET',null,'bob');
+ assert.equal((await f.call('records/feedback','POST',{kind:'praise',targetId:'bob',text:'תודה על העזרה בקהילה'})).status,201);
+ assert.equal((await f.call('records/feedback','GET',null,'bob')).data.length,1);
+ assert.equal((await f.call('records/feedback','GET',null,'owner')).data.length,2);f.DB.close();
 });
 test('social links accept known networks and reject lookalike domains',async()=>{
  const f=fixture();await f.call('session');

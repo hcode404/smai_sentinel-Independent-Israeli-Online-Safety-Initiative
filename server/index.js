@@ -392,8 +392,9 @@ export async function api(req,env,ctx={waitUntil(){}}){
     for(const key of ['name','senderName','authorName','ico','cat','rank'])if(typeof rec[key]==='string')rec[key]=rec[key].replace(/[<>"'&]/g,'').slice(0,100);
     await db.put(col,rec,old);
     if(col==='feedback'&&!old){
-      const target=await db.get('users',rec.staffId);
-      if(target)await db.put('notifications',{id:nonce(),userId:target.id,type:rec.kind==='staff_praise'?'staffPraise':'ticketRating',title:rec.kind==='staff_praise'?'קיבלת מילה טובה':'התקבל דירוג חדש על טיפול בפנייה',text:rec.kind==='staff_praise'?rec.text.slice(0,180):`${rec.rating}/5 · ${rec.text.slice(0,150)}`,href:rec.ticketId?`/ticket/${rec.ticketId}`:'/team-praise',read:false,createdAt:now()});
+      const target=await db.get('users',rec.targetId||rec.staffId);
+      const praise=['praise','staff_praise'].includes(rec.kind);
+      if(target)await db.put('notifications',{id:nonce(),userId:target.id,type:praise?'praise':'ticketRating',title:praise?'קיבלת מילה טובה':'התקבל דירוג חדש על טיפול בפנייה',text:praise?rec.text.slice(0,180):`${rec.rating}/5 · ${rec.text.slice(0,150)}`,href:rec.ticketId?`/ticket/${rec.ticketId}`:'/team-praise',read:false,createdAt:now()});
     }
     if(col==='campaigns'&&!old&&rec.active&&rec.notifyUsers){
       const users=await db.list('users');
