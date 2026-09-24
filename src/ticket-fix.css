@@ -23,17 +23,22 @@
 @media (min-width: 1100px) {
   main,
   footer {
-    margin-inline-start: 252px !important;
-    transition: margin-inline-start .28s ease;
+    margin-right: 252px !important;
+    margin-left: 0 !important;
+    transition: margin-right .28s ease;
   }
 
   .topin {
-    padding-inline-start: 282px !important;
-    transition: padding-inline-start .28s ease;
+    padding-right: 282px !important;
+    transition: padding-right .28s ease;
   }
 
   .mainnav {
+    position: fixed !important;
     z-index: 54;
+    inset-inline: auto !important;
+    right: 0 !important;
+    left: auto !important;
     top: 0 !important;
     bottom: 196px !important;
     width: 252px !important;
@@ -48,8 +53,11 @@
   .mainnav::after { display: none; }
 
   .side-actions {
+    position: fixed !important;
     z-index: 54;
-    inset-inline-start: 0;
+    inset-inline: auto !important;
+    right: 0 !important;
+    left: auto !important;
     bottom: 0;
     width: 252px;
     min-height: 196px;
@@ -58,7 +66,7 @@
     align-items: stretch;
     gap: 7px;
     border-block-start: 1px solid var(--line);
-    border-inline-end: 1px solid var(--line);
+    border-left: 1px solid var(--line);
     background: var(--bg);
     transition: width .28s ease, padding .28s ease;
   }
@@ -67,7 +75,8 @@
     display: grid !important;
     position: fixed;
     z-index: 70;
-    inset-inline-start: 18px;
+    right: 18px;
+    left: auto;
     top: 19px;
     width: 42px;
     height: 42px;
@@ -103,8 +112,8 @@
   #authSlot { flex: 0 0 auto; }
 
   body.sidebar-collapsed main,
-  body.sidebar-collapsed footer { margin-inline-start: 68px !important; }
-  body.sidebar-collapsed .topin { padding-inline-start: 98px !important; }
+  body.sidebar-collapsed footer { margin-right: 68px !important; }
+  body.sidebar-collapsed .topin { padding-right: 98px !important; }
   body.sidebar-collapsed .mainnav,
   body.sidebar-collapsed .side-actions { width: 68px !important; padding-inline: 9px !important; }
   body.sidebar-collapsed .mainnav::before,
@@ -118,5 +127,5 @@
     padding-inline: 0 !important;
     gap: 0 !important;
   }
-  body.sidebar-collapsed #burger { inset-inline-start: 13px; }
+  body.sidebar-collapsed #burger { right: 13px; left: auto; }
 }

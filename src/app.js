@@ -1187,7 +1187,7 @@ function renderNav(){
   const cur = location.pathname.split('/')[1] || '';
   const items = NAV.map(n=>{
     const on = ('/'+cur) === n.p || (n.p==='/' && !cur);
-    return `<a href="${n.p}" class="${on?'on':''}" ${on?'aria-current="page"':''}>${ic(n.ico,18)}<span>${n.l}</span></a>`;
+    return `<a href="${n.p}" class="${on?'on':''}" title="${n.l}" ${on?'aria-current="page"':''}>${ic(n.ico,18)}<span>${n.l}</span></a>`;
   });
   if(Auth.isStaff()) items.push(`<a href="/admin" class="${cur==='admin'?'on':''}">${ic('shield',14)} פאנל צוות</a>`);
   $('#nav').innerHTML = items.join('');
