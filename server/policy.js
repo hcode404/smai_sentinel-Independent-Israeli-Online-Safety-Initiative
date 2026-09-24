@@ -100,7 +100,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
   if(col==='articles'){requireThat(n>=60);return pick(input,['title','sum','body','dept','tags','read']);}
   if(col==='campaigns'){
     requireThat(n>=70,403,'ניהול קמפיינים זמין למייסד בלבד');
-    const p=pick(input,['title','body','mediaType','mediaUrl','linkUrl','audience','placement','startAt','endAt','seconds','active','frequency']);
+    const p=pick(input,['title','body','mediaType','mediaUrl','linkUrl','audience','placement','startAt','endAt','seconds','active','frequency','notifyUsers']);
     requireThat(['image','video'].includes(p.mediaType),400,'סוג המדיה אינו תקין');
     requireThat(/^https:\/\//.test(p.mediaUrl||''),400,'נדרשת כתובת HTTPS לתמונה או לסרטון');
     requireThat(['all','members','staff'].includes(p.audience),400,'קהל היעד אינו תקין');
@@ -144,7 +144,12 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
   }
   if(col==='dmsgs'){
     requireThat(await canRead(col,old||input,u,get)&&!muted(u));
-    if(isNew){requireThat(!input.system);return {convId:input.convId,text:input.text,senderId:id,senderName:u.name,senderRank:u.rank};}
+    if(isNew){
+      requireThat(!input.system);
+      const p={convId:input.convId,text:input.text,senderId:id,senderName:u.name,senderRank:u.rank};
+      if(input.callUrl){requireThat(/^https:\/\/meet\.jit\.si\/SMAI-Sentinel-[A-Za-z0-9-]{12,160}(?:#.*)?$/.test(input.callUrl),400,'קישור השיחה אינו תקין');p.callUrl=input.callUrl;p.callType=input.callType==='video'?'video':'audio';}
+      return p;
+    }
     requireThat(old.senderId===id);return pick(input,['text']);
   }
   if(col==='reports'){

@@ -106,6 +106,15 @@ test('staff reply creates a persistent notification for the reporter',async()=>{
  assert.equal(notices.length,1);assert.equal(notices[0].ticketId,t.data.id);assert.equal(notices[0].read,false);
  assert.deepEqual((await f.call('records/notifications','GET',null,'bob')).data,[]);f.DB.close();
 });
+test('direct messages and call invitations notify the other participant',async()=>{
+ const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'bob');
+ const conv=await f.call('records/dms','POST',{members:['alice','bob']});assert.equal(conv.status,201);
+ const url='https://meet.jit.si/SMAI-Sentinel-conversation123-call123456';
+ const sent=await f.call('records/dmsgs','POST',{convId:conv.data.id,text:'הזמנה לשיחת וידאו',callType:'video',callUrl:url});
+ assert.equal(sent.status,201);assert.equal(sent.data.callUrl,url);
+ const notices=(await f.call('records/notifications','GET',null,'bob')).data;
+ assert.equal(notices.length,1);assert.equal(notices[0].type,'callInvite');assert.equal(notices[0].href,`/dm/${conv.data.id}`);f.DB.close();
+});
 test('reporter can reopen a closed ticket and continue its conversation',async()=>{
  const f=fixture();const t=await f.call('records/tickets','POST',ticket);
  await f.call('records/tickets/'+t.data.id,'PATCH',{status:'closed'},'owner');

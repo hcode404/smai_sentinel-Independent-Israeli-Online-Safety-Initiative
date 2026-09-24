@@ -39,5 +39,18 @@ export async function resetPassword(email){
     throw error;
   }
 }
+export async function requestEmailChange(newEmail){
+  const idToken=await getAuthToken(true);
+  if(!idToken)throw new Error('יש להתחבר מחדש כדי לשנות מייל');
+  const response=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(FIREBASE_API_KEY)}`,{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestType:'VERIFY_AND_CHANGE_EMAIL',idToken,newEmail})
+  });
+  if(!response.ok){
+    const data=await response.json().catch(()=>({}));
+    const error=new Error(data?.error?.message==='EMAIL_EXISTS'?'כתובת המייל כבר משמשת חשבון אחר':'לא ניתן להתחיל כרגע את החלפת המייל');
+    error.code=`auth/${String(data?.error?.message||'request-failed').toLowerCase().replaceAll('_','-')}`;
+    throw error;
+  }
+}
 export const logoutFirebase=()=>signOut(auth);
 export const firebaseUser=()=>auth.currentUser;

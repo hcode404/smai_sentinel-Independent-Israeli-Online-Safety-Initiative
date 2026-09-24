@@ -139,7 +139,10 @@ async function identity(req,env,db,ctx){
     if(u.lastNetworkHash!==networkHash){
       const first=!u.lastNetworkHash,updated={...u,lastNetworkHash:networkHash,lastLoginAt:now(),securityEvents:first?(u.securityEvents||[]):[{type:'new_network',createdAt:now()},...(u.securityEvents||[])].slice(0,10)};
       await db.put('users',updated,u);u=await db.get('users',id);
-      if(!first)scheduleMail(ctx,sendUserMail(env,u,'securityLogin',{when:new Date().toLocaleString('he-IL'),device:req.headers.get('User-Agent')?.slice(0,80)||'דפדפן חדש'}));
+      if(!first){
+        await db.put('notifications',{id:nonce(),userId:u.id,type:'securityLogin',title:'כניסה חדשה לחשבון',text:'זוהתה כניסה מרשת או ממכשיר חדשים. אם זו לא הייתה הכניסה שלך, מומלץ לאפס סיסמה.',href:'/account',read:false,createdAt:now()});
+        scheduleMail(ctx,sendUserMail(env,u,'securityLogin',{when:new Date().toLocaleString('he-IL'),device:req.headers.get('User-Agent')?.slice(0,80)||'דפדפן חדש'}));
+      }
     }
   }
   return {...u,email};
@@ -286,6 +289,11 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     for(const key of ['name','senderName','authorName','ico','cat','rank'])if(typeof rec[key]==='string')rec[key]=rec[key].replace(/[<>"'&]/g,'').slice(0,100);
     await db.put(col,rec,old);
+    if(col==='campaigns'&&!old&&rec.active&&rec.notifyUsers){
+      const users=await db.list('users');
+      const recipients=users.filter(x=>rec.audience==='all'||rec.audience==='members'||rec.audience==='staff'&&rank(x)>=10);
+      await Promise.all(recipients.map(x=>db.put('notifications',{id:nonce(),userId:x.id,type:'founderAnnouncement',title:rec.title,text:rec.body||'פורסמה הודעה חדשה מטעם SMAI Sentinel',href:rec.linkUrl||'/',read:false,createdAt:now()})));
+    }
     if(col==='tickets'&&!old){
       await db.put('messages',{id:nonce(),createdAt:now(),ticketId:rec.id,system:true,senderId:null,text:`הפנייה ${rec.code} נפתחה ונשלחה לצוות המתאים. אפשר להמשיך להתכתב כאן.`});
     }
@@ -293,6 +301,7 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const text=rec.assignedTo!==old.assignedTo?'שיוך הפנייה עודכן על ידי הצוות.':'סטטוס הפנייה עודכן: '+rec.status;
       try{await db.put('messages',{id:nonce(),createdAt:now(),ticketId:rec.id,system:true,senderId:null,text});}catch{}
       const reporter=await db.get('users',rec.reporterId);
+      if(reporter&&reporter.id!==u.id)await db.put('notifications',{id:nonce(),userId:reporter.id,ticketId:rec.id,type:'ticketUpdate',title:`עדכון בפנייה ${rec.code||''}`,text,href:`/ticket/${rec.id}`,read:false,createdAt:now()});
       if(reporter&&rec.assignedTo!==old.assignedTo&&rec.assignedTo)scheduleMail(ctx,sendUserMail(env,reporter,'ticketClaim',{ticketId:rec.id,code:rec.code,title:rec.title,agent:rec.assignedName||u.name}));
       else if(reporter&&rec.status!==old.status)scheduleMail(ctx,sendUserMail(env,reporter,'ticketStatus',{ticketId:rec.id,code:rec.code,title:rec.title,status:rec.status}));
     }
@@ -307,16 +316,38 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     if(col==='users'&&old&&old.id!==u.id&&(rec.isBanned!==old.isBanned||rec.muteUntil!==old.muteUntil||rec.banReason!==old.banReason)){
       const title=rec.isBanned?'החשבון הוגבל':rec.muteUntil?'החשבון הושתק זמנית':'הגבלת החשבון עודכנה';
+      await db.put('notifications',{id:nonce(),userId:rec.id,type:'moderation',title,text:rec.banReason||rec.banNote||'פרטי הפעולה זמינים בחשבון שלך.',href:'/account',read:false,createdAt:now()});
       scheduleMail(ctx,sendUserMail(env,rec,'moderation',{title,detail:rec.banReason||rec.banNote||'פרטי הפעולה זמינים בחשבון שלך.'}));
+    }
+    if(['applications','verifyApps','trustedApps','partnerApps','appeals'].includes(col)&&old&&rec.status!==old.status){
+      const labels={accepted:'אושרה',approved:'אושרה',rejected:'נדחתה',closed:'נסגרה',pending:'ממתינה לבדיקה'};
+      await db.put('notifications',{id:nonce(),userId:rec.userId,type:'requestStatus',title:'עדכון בבקשה שלך',text:`הבקשה ${labels[rec.status]||'עודכנה'}.`,href:'/account',read:false,createdAt:now()});
+    }
+    if(col==='friends'&&!old){
+      await db.put('notifications',{id:nonce(),userId:rec.to,type:'friendRequest',title:'בקשת חברות חדשה',text:`${u.name} שלח/ה לך בקשת חברות.`,href:'/friends',read:false,createdAt:now()});
+    }else if(col==='friends'&&old&&rec.status!==old.status&&rec.status==='accepted'){
+      await db.put('notifications',{id:nonce(),userId:rec.from,type:'friendAccepted',title:'בקשת החברות אושרה',text:`${u.name} אישר/ה את בקשת החברות שלך.`,href:'/friends',read:false,createdAt:now()});
     }
     if(col==='tmsgs'&&!old){
       const thread=await db.get('threads',rec.thread);
       try{await db.put('threads',{...thread,replies:(thread.replies||0)+1,lastAt:now(),lastBy:u.name},thread);}catch{}
     }
+    if(['cmsgs','tmsgs'].includes(col)&&!old&&rec.text?.includes('@')){
+      const users=await db.list('users'),lower=rec.text.toLocaleLowerCase('he');
+      for(const mentioned of users){
+        if(mentioned.id===u.id||!mentioned.name||!lower.includes('@'+mentioned.name.toLocaleLowerCase('he')))continue;
+        const href=col==='tmsgs'?`/thread/${rec.thread}`:`/server/${rec.server}`;
+        await db.put('notifications',{id:nonce(),userId:mentioned.id,type:'mention',title:`${u.name} תייג/ה אותך`,text:rec.text.slice(0,180),href,read:false,createdAt:now()});
+      }
+    }
     if(col==='dmsgs'&&!old){
       // This preview metadata does not affect delivery: the message is already durable.
       const conv=await db.get('dms',rec.convId);
       try{await db.put('dms',{...conv,lastText:rec.text.slice(0,60),lastAt:rec.createdAt},conv);}catch{}
+      for(const member of conv?.members||[]){
+        if(member===u.id)continue;
+        await db.put('notifications',{id:nonce(),userId:member,type:rec.callUrl?'callInvite':'directMessage',title:rec.callUrl?(rec.callType==='video'?'הזמנה לשיחת וידאו':'הזמנה לשיחת קול'):`הודעה חדשה מ־${u.name}`,text:rec.callUrl?'לחצו כדי להצטרף לשיחה':rec.text.slice(0,180),href:`/dm/${conv.id}`,read:false,createdAt:now()});
+      }
     }
     if(rank(u)>=10&&col!=='logs'){
       const log={id:nonce(),createdAt:now(),actorId:u.id,actorName:u.name,byId:u.id,byName:u.name,action:req.method,type:col==='users'?'user_update':col+'_update',collection:col,targetId:rec.id,targetName:rec.name||'',text:'בוצע שינוי מורשה בשרת'};
