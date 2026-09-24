@@ -1,4 +1,5 @@
 /* SMAI 2026 — human-first digital response center */
+html .b-brand{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
 @media(prefers-reduced-motion:no-preference){.scroll-reveal{opacity:.25;translate:0 20px;transition:opacity .55s ease,translate .55s cubic-bezier(.2,.8,.2,1)}.scroll-reveal.seen,.scroll-reveal:focus-visible{opacity:1;translate:0 0}}
 html .btn-g,html .btn-ghost,html .btn-secondary,html .iconbtn,html .chip{color:var(--ink);background:var(--surface2)}
 .btn-g,.btn-ghost,.btn-secondary,.iconbtn,.chip{color:var(--ink);background:var(--surface2);border-color:var(--line2)}
