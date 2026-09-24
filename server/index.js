@@ -358,6 +358,10 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const previous=(await db.list('followers')).find(f=>f.from===u.id&&f.to===body.to);
       requireThat(!previous,409,'אתם כבר עוקבים אחרי המשתמש הזה');
     }
+    if(col==='feedback'&&req.method==='POST'&&body.kind==='ticket_rating'){
+      const previous=(await db.list('feedback')).find(x=>x.kind==='ticket_rating'&&x.ticketId===body.ticketId&&x.byId===u.id);
+      requireThat(!previous,409,'כבר דירגת את הטיפול בפנייה הזאת');
+    }
     if(col==='dmsgs'&&req.method==='POST'){
       const conv=await db.get('dms',body.convId);
       if(conv?.kind==='direct'&&conv.dmAccepted===false&&conv.ownerId===u.id){
@@ -387,6 +391,10 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     for(const key of ['name','senderName','authorName','ico','cat','rank'])if(typeof rec[key]==='string')rec[key]=rec[key].replace(/[<>"'&]/g,'').slice(0,100);
     await db.put(col,rec,old);
+    if(col==='feedback'&&!old){
+      const target=await db.get('users',rec.staffId);
+      if(target)await db.put('notifications',{id:nonce(),userId:target.id,type:rec.kind==='staff_praise'?'staffPraise':'ticketRating',title:rec.kind==='staff_praise'?'קיבלת מילה טובה':'התקבל דירוג חדש על טיפול בפנייה',text:rec.kind==='staff_praise'?rec.text.slice(0,180):`${rec.rating}/5 · ${rec.text.slice(0,150)}`,href:rec.ticketId?`/ticket/${rec.ticketId}`:'/team-praise',read:false,createdAt:now()});
+    }
     if(col==='campaigns'&&!old&&rec.active&&rec.notifyUsers){
       const users=await db.list('users');
       const recipients=users.filter(x=>rec.audience==='all'||rec.audience==='members'||rec.audience==='staff'&&rank(x)>=10);

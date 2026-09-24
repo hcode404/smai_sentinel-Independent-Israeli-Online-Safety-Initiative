@@ -87,6 +87,22 @@ test('founder can see hidden last seen for staff accounts too',async()=>{
  const hidden=(await f.call('records/users/staff','GET',null,'alice')).data;assert.equal(hidden.lastSeenAt,undefined);
  const founder=(await f.call('records/users/staff','GET',null,'owner')).data;assert.ok(founder.lastSeenAt);f.DB.close();
 });
+test('ticket feedback is limited to the reporter, assigned staff and completed tickets',async()=>{
+ const f=fixture();await f.call('session','GET',null,'staff');await f.call('session','GET',null,'owner');
+ await f.call('records/users/staff','PATCH',{rank:'agent'},'owner');
+ const created=(await f.call('records/tickets','POST',ticket)).data;
+ assert.equal((await f.call('records/feedback','POST',{kind:'ticket_rating',ticketId:created.id,staffId:'staff',rating:5,text:'טיפול מצוין ומהיר'})).status,400);
+ await f.call('records/tickets/'+created.id,'PATCH',{assignedTo:'staff',assignedName:'staff',status:'resolved'},'owner');
+ assert.equal((await f.call('records/feedback','POST',{kind:'ticket_rating',ticketId:created.id,staffId:'staff',rating:5,text:'טיפול מצוין ומהיר'})).status,201);
+ assert.equal((await f.call('records/feedback','POST',{kind:'ticket_rating',ticketId:created.id,staffId:'staff',rating:4,text:'ניסיון לדירוג כפול'})).status,409);
+ assert.equal((await f.call('records/feedback','GET',null,'bob')).data.length,0);f.DB.close();
+});
+test('signed-in users can praise real staff but not ordinary accounts',async()=>{
+ const f=fixture();await f.call('session','GET',null,'staff');await f.call('session','GET',null,'owner');
+ await f.call('records/users/staff','PATCH',{rank:'agent'},'owner');
+ assert.equal((await f.call('records/feedback','POST',{kind:'staff_praise',staffId:'staff',text:'תודה על העזרה והסבלנות'})).status,201);
+ assert.equal((await f.call('records/feedback','POST',{kind:'staff_praise',staffId:'bob',text:'משוב לא חוקי'})).status,400);f.DB.close();
+});
 test('social links accept known networks and reject lookalike domains',async()=>{
  const f=fixture();await f.call('session');
  assert.equal((await f.call('records/users/alice','PATCH',{socialLinks:{twitter:'https://x.com/smai',youtube:'https://www.youtube.com/@smai',discord:'https://discord.gg/smai'}})).status,200);

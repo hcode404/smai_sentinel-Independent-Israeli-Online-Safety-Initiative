@@ -1179,11 +1179,12 @@ const NAV = [
   { p:'/dm',        l:'הודעות פרטיות', ico:'send' },
   { p:'/friends',   l:'חברים',       ico:'users' },
   { p:'/community', l:'קהילה',       ico:'message' },
+  { p:'/team-praise', l:'מילה טובה לצוות', ico:'heart' },
   { p:'/partners', l:'שיתופי פעולה', ico:'link' },
   { p:'/improve',   l:'באגים והצעות', ico:'sparkle' },
   { p:'/join',      l:'הצטרפות לצוות', ico:'users' }
 ];
-const NAV_EN={'/':'Home','/report':'New report','/my':'My cases','/track':'Track case','/articles':'Guides & articles','/press':'Facts','/dm':'Direct messages','/friends':'Friends','/community':'Community','/join':'Join the team','/partners':'Partners & resources','/improve':'Bugs & suggestions'};
+const NAV_EN={'/':'Home','/report':'New report','/my':'My cases','/track':'Track case','/articles':'Guides & articles','/press':'Facts','/dm':'Direct messages','/friends':'Friends','/community':'Community','/team-praise':'Praise the team','/join':'Join the team','/partners':'Partners & resources','/improve':'Bugs & suggestions'};
 const currentLang=()=>localStorage.getItem('smai_lang')==='en'?'en':'he';
 function renderNav(){
   const cur = location.pathname.split('/')[1] || '';
@@ -1987,6 +1988,8 @@ route('/report', (app)=>{
   const cats = ()=>{
     const base = REPORT_CATS.slice();
     if(W.plat === 'smai'){
+      base.unshift({ id:'smai_staff', l:'דיווח על התנהלות של חבר צוות', dept:'other', sev:3, ico:'flag',
+        d:'יחס לא מכבד, ניצול הרשאה או טיפול שאינו מקצועי מצד חבר צוות.' });
       base.unshift({ id:'smai_user', l:'דיווח על משתמש בקהילת SMAI', dept:'harassment', sev:3, ico:'user-x',
         d:'הודעות, פרופיל או התנהגות של משתמש בקהילה שלנו.' });
       base.unshift({ id:'smai_verify', l:'בקשת תג מאומת בקהילה', dept:'other', sev:0, ico:'check',
@@ -2035,7 +2038,7 @@ route('/report', (app)=>{
   const step3 = ()=>{
     const c = cats().find(x=>x.id===W.cat) || REPORT_CATS[REPORT_CATS.length-1];
     const pl = PLAT_BY[W.plat];
-    const isUser = W.cat === 'smai_user';
+    const isUser = W.cat === 'smai_user' || W.cat === 'smai_staff';
     return `
     <form id="rf" class="card" novalidate>
       <div class="card-h"><span class="ico-tile i-brand">${ic(c.ico||'message',20)}</span>
@@ -2046,8 +2049,8 @@ route('/report', (app)=>{
         <label class="fl" for="f_title">כותרת קצרה <span class="req">*</span></label>
         <input type="text" id="f_title" maxlength="110" required placeholder="במשפט אחד — מה הדבר המרכזי שקרה">
       </div>
-      ${isUser ? `<div class="field"><label class="fl" for="f_target">שם המשתמש שעליו מדווחים <span class="req">*</span></label>
-        <input type="text" id="f_target" placeholder="השם כפי שהוא מופיע בקהילה"></div>` : ''}
+      ${isUser ? `<div class="field"><label class="fl" for="f_target">${W.cat==='smai_staff'?'שם חבר הצוות':'שם המשתמש שעליו מדווחים'} <span class="req">*</span></label>
+        <input type="text" id="f_target" placeholder="השם המדויק כפי שהוא מופיע באתר"></div>` : ''}
       <div class="field">
         <label class="fl" for="f_desc">ספרו במילים שלכם מה קרה <span class="req">*</span></label>
         <textarea id="f_desc" required minlength="20" style="min-height:190px"
@@ -2383,6 +2386,7 @@ route('/ticket', async (app, id)=>{
   const d = DEPT_BY[t.dept] || DEPT_BY.other;
   const users = staff ? await Store.list('users') : [];
   const agents = users.filter(u=>isStaffUser(u));
+  const ticketFeedback = Auth.user ? (await Store.list('feedback').catch(()=>[])).find(x=>x.kind==='ticket_rating'&&x.ticketId===t.id&&x.byId===Auth.user.id) : null;
 
   app.innerHTML = `
   <div class="crumb anim-in"><a href="${staff?'/admin':'/my'}">${staff?'פאנל צוות':'הפניות שלי'}</a> ← פנייה ${esc(t.code||'')}</div>
@@ -2472,6 +2476,10 @@ route('/ticket', async (app, id)=>{
           <div class="row between"><span class="small mute">עודכן</span><span class="small">${ago(t.updatedAt||t.createdAt)}</span></div>
         </div>
       </div>
+      ${t.assignedTo&&['closed','resolved'].includes(t.status)?`<div class="card team-rating-card">
+        <div class="card-h"><span class="ico-tile i-warn">${ic('star',19)}</span><div><h4 style="margin:0">דירוג הטיפול</h4><div class="tiny mute">המשוב מגיע לצוות ומשמש לשיפור השירות</div></div></div>
+        ${ticketFeedback?`<div class="rating-result"><div class="rating-stars" aria-label="דירוג ${ticketFeedback.rating} מתוך 5">${[1,2,3,4,5].map(n=>`<span class="${n<=ticketFeedback.rating?'on':''}">★</span>`).join('')}</div><p class="small mute">תודה, הדירוג שלך נשמר.</p></div>`:`<form id="ticketRatingForm"><div class="rating-picker" role="radiogroup" aria-label="דירוג הטיפול">${[1,2,3,4,5].map(n=>`<button type="button" data-rating="${n}" aria-label="${n} כוכבים">★</button>`).join('')}</div><div class="field"><label for="ratingText">מה היה טוב ומה אפשר לשפר?</label><textarea id="ratingText" minlength="5" maxlength="2000" required placeholder="כתבו כמה מילים על הטיפול שקיבלתם"></textarea></div><button class="btn btn-p btn-block" type="submit">שליחת הדירוג</button><p id="ratingStatus" class="small" role="status"></p></form>`}
+      </div>`:''}
       ${t.aiHandled?`<div class="card">
         <div class="row" style="gap:9px;font-weight:800;margin-bottom:7px">${ic('bot',17)} הסוכן החכם</div>
         <p class="small mute" style="margin:0 0 10px">${t.aiEscalated
@@ -2484,6 +2492,13 @@ route('/ticket', async (app, id)=>{
         ועדכנו כאן בצ׳אט כדי שנקפיץ את הפנייה.</p></div>`}
     </aside>
   </div>`;
+
+  const ratingForm=$('#ticketRatingForm');
+  if(ratingForm){
+    let rating=0;const buttons=$$('.rating-picker button');
+    buttons.forEach(b=>b.onclick=()=>{rating=Number(b.dataset.rating);buttons.forEach(x=>x.classList.toggle('on',Number(x.dataset.rating)<=rating));});
+    ratingForm.onsubmit=async e=>{e.preventDefault();const status=$('#ratingStatus'),submit=ratingForm.querySelector('[type=submit]');if(!rating)return status.textContent='בחרו דירוג בין כוכב אחד לחמישה.';submit.disabled=true;try{await Store.add('feedback',{kind:'ticket_rating',ticketId:t.id,staffId:t.assignedTo,rating,text:$('#ratingText').value.trim()});toast('תודה — הדירוג נשמר');render();}catch(err){status.textContent=err.message;submit.disabled=false;}};
+  }
 
   /* ---- צ'אט חי ---- */
   const chatEl = $('#chat');
@@ -4678,6 +4693,14 @@ route('/terms', (app)=>{
 
 route('/partners',app=>{app.innerHTML=`<div class="page-h partner-hero"><div class="eyebrow">SAFETY NETWORK / 04</div><h1>רשת אחת. הרבה דרכים לעזור.</h1><p>SMAI Sentinel היא יוזמה עצמאית. אנחנו משתמשים במשאבים ובערוצי דיווח ציבוריים של גופים שונים, ומסמנים שותפות רשמית רק אחרי אישור כתוב.</p></div><div class="partner-grid"><article class="partner-card"><div class="partner-logo"><img src="https://logo.clearbit.com/kidsafe.com?size=96" alt="KidSAFE" loading="lazy"><span>01</span></div><div><span class="partner-status">משאב בטיחות חיצוני</span><h2>KidSAFE</h2><p>מידע והכוונה בנושאי בטיחות ילדים ברשת. אין כאן טענה להסמכה או לשותפות רשמית.</p></div><a class="btn btn-g" href="https://kidsafe.com/" target="_blank" rel="noopener noreferrer nofollow">פתיחת המשאב ${ic('arrow',15)}</a></article><article class="partner-card"><div class="partner-logo">${platLogo('roblox')}<span>02</span></div><div><span class="partner-status">ערוץ דיווח ציבורי</span><h2>Roblox</h2><p>גישה ישירה לערוצי התמיכה והדיווח הציבוריים של Roblox, ללא מצג של חסות או שותפות.</p></div><a class="btn btn-g" href="https://www.roblox.com/support" target="_blank" rel="noopener noreferrer nofollow">Roblox Support ${ic('arrow',15)}</a></article><article class="partner-card"><div class="partner-logo"><img src="https://logo.clearbit.com/ic3.gov?size=96" alt="IC3" loading="lazy"><span>03</span></div><div><span class="partner-status muted">מידע בלבד · ארה״ב</span><h2>FBI / IC3</h2><p>מידע על ערוץ IC3 הרשמי למקרי פשיעת סייבר בעלי זיקה לארצות הברית. אין שותפות רשמית.</p></div><a class="btn btn-g" href="https://www.ic3.gov/" target="_blank" rel="noopener noreferrer nofollow">IC3 הרשמי ${ic('arrow',15)}</a></article><article class="partner-card partner-intelligence"><div class="partner-logo intelligence-mark">✦<span>04</span></div><div><span class="partner-status">SMAI INTELLIGENCE</span><h2>מיון חכם, מקומי ופרטי</h2><p>המנוע המקומי בודק דיווחים במכשיר, מסמן דחיפות ומנתב לצוות הנכון — בלי לשלוח את הטקסט לשירות חיצוני.</p></div><button class="btn btn-p" onclick="document.getElementById('ai-fab')?.click()">פתיחת העוזר החכם ${ic('arrow',15)}</button></article></div><div class="transparency-note"><span>${ic('shield-check',20)}</span><div><b>שקיפות לפני לוגואים.</b><p>שמות וסימנים מסחריים שייכים לבעליהם. „שותף מאומת” יוצג רק לאחר אישור כתוב שניתן לבדיקה.</p></div></div>`;});
 
+route('/team-praise',async app=>{
+ if(!Auth.user)return app.innerHTML=requireLogin('צריך להתחבר כדי לשלוח מילה טובה לצוות');
+ const staff=(await Store.list('users')).filter(isStaffUser).sort((a,b)=>(a.name||'').localeCompare(b.name||'','he'));
+ const mine=(await Store.list('feedback')).filter(x=>x.byId===Auth.user.id&&x.kind==='staff_praise').sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+ app.innerHTML=`<div class="page-h anim-up"><div class="eyebrow">SMAI TEAM</div><h1>מילה טובה לצוות</h1><p>חבר צוות עזר לכם במיוחד? ספרו לנו. המשוב יגיע אליו ויישמר כהוקרה על העבודה שלו.</p></div><div class="improve-grid"><form id="praiseForm" class="card stack"><div class="card-h"><span class="ico-tile i-ok">${ic('heart',20)}</span><div><h3 style="margin:0">שליחת מילה טובה</h3><div class="tiny mute">בחרו את האדם וכתבו מה עזר לכם</div></div></div><div class="field"><label for="praiseStaff">חבר/ת הצוות</label><select id="praiseStaff" required><option value="">בחירה מהרשימה</option>${staff.map(u=>`<option value="${esc(u.id)}">${esc(u.name||u.email)} · ${esc(RANKS[u.rank]?.l||'צוות')}</option>`).join('')}</select></div><div class="field"><label for="praiseText">המילה הטובה שלכם</label><textarea id="praiseText" required minlength="5" maxlength="2000" placeholder="ספרו מה חבר הצוות עשה טוב ואיך זה עזר לכם"></textarea></div><button class="btn btn-p" type="submit">${ic('heart',16)} שליחת המילה הטובה</button><p id="praiseStatus" class="small" role="status"></p></form><section><h2>מה שכבר שלחתם</h2><div class="stack">${mine.length?mine.map(x=>`<article class="card pad-sm"><div class="row between"><b>${esc(x.staffName||'צוות SMAI')}</b><span class="b b-ok">נשלח</span></div><p class="small">${esc(x.text)}</p><span class="tiny mute">${fmtDate(x.createdAt)}</span></article>`).join(''):'<div class="card center mute">עדיין לא שלחתם מילה טובה.</div>'}</div></section></div>`;
+ $('#praiseForm').onsubmit=async e=>{e.preventDefault();const submit=e.currentTarget.querySelector('[type=submit]'),status=$('#praiseStatus');submit.disabled=true;try{await Store.add('feedback',{kind:'staff_praise',staffId:$('#praiseStaff').value,text:$('#praiseText').value.trim()});toast('המילה הטובה נשלחה לצוות');render();}catch(err){status.textContent=err.message;submit.disabled=false;}};
+});
+
 route('/improve',async app=>{
  if(!Auth.user)return app.innerHTML=requireLogin('צריך להתחבר כדי לדווח על באג או לשלוח הצעה');
  const mine=(await Store.list('reports')).filter(x=>x.byId===Auth.user.id&&['bug','suggestion'].includes(x.kind));
@@ -4850,7 +4873,7 @@ const PAGE_TITLES = {
   '/report':'דיווח חדש', '/my':'הפניות שלי', '/track':'מעקב פנייה', '/ticket':'פנייה',
   '/articles':'מדריכים', '/article':'מדריך', '/community':'קהילה', '/server':'שרת קהילה',
   '/join':'הצטרפות לצוות', '/login':'כניסה', '/account':'החשבון שלי', '/admin':'פאנל צוות',
-  '/setup':'התקנה', '/privacy':'פרטיות', '/terms':'תנאי שימוש', '/partners':'שיתופי פעולה', '/dm':'הודעות פרטיות', '/friends':'חברים', '/improve':'באגים והצעות', '/404':'לא נמצא', '/updates':'עדכונים'
+  '/setup':'התקנה', '/privacy':'פרטיות', '/terms':'תנאי שימוש', '/partners':'שיתופי פעולה', '/dm':'הודעות פרטיות', '/friends':'חברים', '/team-praise':'מילה טובה לצוות', '/improve':'באגים והצעות', '/404':'לא נמצא', '/updates':'עדכונים'
 };
 
 /* ===================== ערכת נושא, תפריט, אתחול ===================== */

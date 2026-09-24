@@ -7,7 +7,7 @@ export const publicUser=(u,viewer)=>({...pick(u,['id','name','avatar','bio','ran
 export const banned=u=>!!(u?.isBanned&&(!u.banUntil||Date.parse(u.banUntil)>Date.now()));
 export const muted=u=>Date.parse(u?.muteUntil)>Date.now();
 export const ranks={citizen:0,trainee:10,agent:20,senior:30,lead:40,head:50,admin:60,founder:70};
-export const collections=new Set('users tickets messages notifications reports applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends followers dms dmsgs config updates articles campaigns emergencyRequests'.split(' '));
+export const collections=new Set('users tickets messages notifications reports feedback applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends followers dms dmsgs config updates articles campaigns emergencyRequests'.split(' '));
 export const officialIds=new Set(['s-welcome','s-help','s-parents','s-teens','s-gaming','s-security']);
 export async function canRead(col,r,u,get){
   if(!r)return false;
@@ -19,6 +19,7 @@ export async function canRead(col,r,u,get){
   if(col==='notifications')return !!id&&r.userId===id;
   if(['applications','verifyApps','trustedApps','partnerApps','appeals'].includes(col))return n>=40||!!id&&r.userId===id;
   if(col==='reports')return n>=20||!!id&&r.byId===id;
+  if(col==='feedback')return n>=20||!!id&&r.byId===id;
   if(col==='modlog')return n>=20;
   if(col==='logs'||col==='mail')return n>=60;
   if(col==='emergencyRequests')return n>=60;
@@ -205,6 +206,21 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
   if(col==='reports'){
     if(isNew)return {...pick(input,['targetId','msgId','server','type','kind','reason','text']),byId:id,status:'pending'};
     requireThat(n>=20);return pick(input,['status','note']);
+  }
+  if(col==='feedback'){
+    requireThat(isNew,403,'לא ניתן לשנות משוב לאחר השליחה');
+    const kind=input.kind;
+    requireThat(['ticket_rating','staff_praise'].includes(kind),400,'סוג המשוב אינו תקין');
+    const target=await get('users',input.staffId);requireThat(target&&rank(target)>=10,400,'יש לבחור חבר צוות תקין');
+    const text=String(input.text||'').trim();requireThat(text.length>=5&&text.length<=2000,400,'יש לכתוב משוב של 5 עד 2,000 תווים');
+    if(kind==='ticket_rating'){
+      const ticket=await get('tickets',input.ticketId);
+      requireThat(ticket&&ticket.reporterId===id,403,'אפשר לדרג רק פנייה השייכת לך');
+      requireThat(ticket.assignedTo===target.id&&['closed','resolved'].includes(ticket.status),400,'אפשר לדרג לאחר סיום הטיפול בפנייה');
+      const rating=Number(input.rating);requireThat(Number.isInteger(rating)&&rating>=1&&rating<=5,400,'הדירוג חייב להיות בין 1 ל־5');
+      return {kind,ticketId:ticket.id,ticketCode:ticket.code,staffId:target.id,staffName:target.name,rating,text,byId:id,status:'published'};
+    }
+    return {kind,staffId:target.id,staffName:target.name,text,byId:id,status:'published'};
   }
   throw new HttpError(403,'הפעולה זמינה לשרת בלבד');
 }
