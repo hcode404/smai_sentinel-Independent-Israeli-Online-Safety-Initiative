@@ -9,4 +9,4 @@ await rename('dist/assets','dist/client/assets');
 await cp('public','dist/client',{recursive:true});
 // GitHub Pages serves this file for clean SPA routes such as /login and /admin.
 await copyFile('dist/client/index.html','dist/client/404.html');
-await build({entryPoints:['server/worker.js'],outfile:'dist/server/index.js',bundle:true,format:'esm',platform:'browser',target:'es2022',loader:{'.html':'text'}});
+await build({entryPoints:['server/worker.js'],outfile:'dist/server/index.js',bundle:true,format:'esm',platform:'browser',target:'es2022',external:['node:tls'],loader:{'.html':'text'}});
