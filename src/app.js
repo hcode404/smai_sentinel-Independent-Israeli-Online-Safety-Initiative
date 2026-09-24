@@ -136,9 +136,10 @@ const REPORT_PLATFORMS = [
 const PLAT_BY = Object.fromEntries(REPORT_PLATFORMS.map(p=>[p.id,p]));
 
 function platLogo(id){
-  const d={roblox:'roblox.com',discord:'discord.com',whatsapp:'whatsapp.com',instagram:'instagram.com',tiktok:'tiktok.com',snapchat:'snapchat.com',telegram:'telegram.org',fortnite:'fortnite.com',youtube:'youtube.com',minecraft:'minecraft.net',steam:'steampowered.com',robloxstudio:'roblox.com'};
+  const d={roblox:'roblox',discord:'discord',whatsapp:'whatsapp',instagram:'instagram',tiktok:'tiktok',snapchat:'snapchat',telegram:'telegram',fortnite:'epicgames',youtube:'youtube',minecraft:'minecraft',steam:'steam',robloxstudio:'roblox'};
   if(!d[id])return '';
-  return '<img class="plat-logo" src="https://logo.clearbit.com/'+d[id]+'?size=40" alt="" loading="lazy" onerror="this.style.display=\'none\'">' ;
+  const label=REPORT_PLATFORMS.find(p=>p.id===id)?.l||id;
+  return '<img class="plat-logo" src="https://cdn.simpleicons.org/'+d[id]+'" alt="לוגו '+label+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' ;
 }
 /* ===================== סוגי דיווח (תפריט לפני ההסבר) ===================== */
 const REPORT_CATS = [
@@ -1178,8 +1179,8 @@ const NAV = [
   { p:'/dm',        l:'הודעות פרטיות', ico:'send' },
   { p:'/friends',   l:'חברים',       ico:'users' },
   { p:'/community', l:'קהילה',       ico:'message' },
+  { p:'/partners', l:'שיתופי פעולה', ico:'link' },
   { p:'/join',      l:'הצטרפות לצוות', ico:'users' }
-  ,{ p:'/partners', l:'שיתופי פעולה', ico:'link' }
 ];
 const NAV_EN={'/':'Home','/report':'New report','/my':'My cases','/track':'Track case','/articles':'Guides & articles','/press':'Facts','/dm':'Direct messages','/friends':'Friends','/community':'Community','/join':'Join the team','/partners':'Partners & resources'};
 const currentLang=()=>localStorage.getItem('smai_lang')==='en'?'en':'he';
