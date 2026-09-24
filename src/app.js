@@ -1245,6 +1245,7 @@ function renderFooter(){
         <li><a href="/articles">מדריכים ומאמרים</a></li><li><a href="/community">קהילה</a></li>
         <li><a href="/join">הצטרפות לצוות</a></li></ul></div>
       <div><h4>מידע</h4><ul>
+        <li><a href="/about-smai.html">מה זה SMAI Sentinel?</a></li>
         <li><a href="/terms">תנאי שימוש</a></li><li><a href="/privacy">מדיניות פרטיות</a></li>
         <li><a href="/report">יצירת קשר</a></li>
         </ul></div>
@@ -1257,9 +1258,11 @@ function renderFooter(){
 let IO = null;
 function initReveal(){
   IO?.disconnect();
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){$$('.reveal').forEach(el=>el.classList.add('seen'));return;}
+  $$('main .btn, main .card, main .srv-card').forEach(el=>{if(el.getBoundingClientRect().top>innerHeight)el.classList.add('scroll-reveal');});
   IO = new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('seen'); IO.unobserve(e.target); } }),
     { threshold:.08, rootMargin:'0px 0px -40px' });
-  $$('.reveal').forEach(el=>IO.observe(el));
+  $$('.reveal,.scroll-reveal').forEach(el=>IO.observe(el));
 }
 /* קיצורי UI */
 function statusBadge(s){ const x = STATUS[s]||STATUS.new; return `<span class="b ${x.b}">${x.l}</span>`; }
@@ -2732,7 +2735,7 @@ route('/community', async (app)=>{
       ${canCreateServer(Auth.user)?`<button class="btn btn-g btn-sm" id="newSrv">${ic('plus',15)} שרת חדש</button>`:''}
     </div>
   </div>
-  <div class="grid g3" id="srvGrid"></div>
+  <div class="community-workspace"><section class="community-conversations" aria-label="שיחות הקהילה"><div class="community-list-title">השיחות שלכם</div><div id="srvGrid"></div></section><section class="community-welcome"><div class="community-symbol">${ic('message',48)}</div><h2>מקום לשיחה טובה</h2><p>בחרו קהילה מהרשימה כדי לפתוח את השיחה, לקרוא ולהשתתף.</p><span class="small mute">שמרו על הפרטיות שלכם וכבדו את המשתתפים</span></section></div>
 
   <div class="sec">
     <div class="sec-h"><div><h2>כללי הקהילה</h2><p>ארבעה כללים. הפרה מובילה להסרת ההודעה, ובמקרים חמורים — להרחקה.</p></div></div>
@@ -4490,7 +4493,7 @@ route('/admin', async (app)=>{
     if(!['admin','founder'].includes(Auth.user?.rank))return '<div class="err">אין הרשאת חירום.</div>';
     const userOptions=users.map(u=>`<option value="${u.id}">${esc(u.name||u.email)} · ${esc(u.email||'')}</option>`).join('');
     const cards=emergencyRequests.map(r=>`<article class="card"><div class="row between"><div><span class="b ${r.status==='approved'?'b-ok':r.status==='rejected'?'b-dang':'b-warn'}">${r.status==='approved'?'מאושר':r.status==='rejected'?'נדחה':'ממתין לאישור נוסף'}</span><h3>${esc(r.caseRef)}</h3><p class="small mute">${esc(r.reason)}</p><div class="tiny mute">נפתח על ידי ${esc(r.requestedByName||'מנהל')} · משתמש ${esc(r.targetUserId)}</div></div><div class="row">${r.status==='pending'&&r.requestedBy!==Auth.user.id?`<button class="btn btn-p btn-sm" data-emergency-approve="${r.id}">אישור לשעה</button><button class="btn btn-g btn-sm" data-emergency-reject="${r.id}">דחייה</button>`:''}${r.status==='approved'&&Date.parse(r.expiresAt)>Date.now()&&[r.requestedBy,r.approvedBy].includes(Auth.user.id)?`<button class="btn btn-g btn-sm" data-emergency-export="${r.id}">ייצוא ראיות</button>`:''}</div></div></article>`).join('');
-    return `<div class="callout c-dang"><span class="ic">${ic('alert',18)}</span><div><b>גישה חריגה ומבוקרת</b><br><span class="small">דורשת שני מנהלים בכירים שונים, מוגבלת לשעה ולפנייה או שיחה אחת, ונרשמת ביומן קבוע. אין תמונות פנים, סיסמאות, קודים או הערות צוות פנימיות.</span></div></div><form id="emergencyForm" class="card stack" style="margin-top:14px"><h2>פתיחת אירוע</h2><div class="field"><label>משתמש</label><select id="emergencyTarget" required>${userOptions}</select></div><div class="grid g2"><div class="field"><label>סוג הראיה</label><select id="emergencyScopeType"><option value="ticket">פנייה</option><option value="dm">שיחת DM</option></select></div><div class="field"><label>מזהה מדויק</label><input id="emergencyScopeId" required minlength="8" placeholder="מזהה הפנייה או השיחה"></div></div><div class="field"><label>מספר אירוע / תיק</label><input id="emergencyCase" required maxlength="80"></div><div class="field"><label>סיבה מפורטת</label><textarea id="emergencyReason" required minlength="20" maxlength="1000"></textarea></div><button class="btn btn-d">שליחה לאישור מנהל נוסף</button></form><div class="stack" style="margin-top:16px">${cards||'<div class="card center mute">אין אירועי חירום</div>'}</div>`;
+    return `<div class="callout c-dang"><span class="ic">${ic('alert',18)}</span><div><b>גישה חריגה ומבוקרת</b><br><span class="small">דורשת מנהל בכיר מורשה, מוגבלת לשעה ולפנייה או שיחה אחת, ונרשמת ביומן קבוע. אין תמונות פנים, סיסמאות, קודים או הערות צוות פנימיות.</span></div></div><form id="emergencyForm" class="card stack" style="margin-top:14px"><h2>פתיחת אירוע</h2><div class="field"><label>משתמש</label><select id="emergencyTarget" required>${userOptions}</select></div><div class="grid g2"><div class="field"><label>סוג הראיה</label><select id="emergencyScopeType"><option value="ticket">פנייה</option><option value="dm">שיחת DM</option></select></div><div class="field"><label>מזהה מדויק</label><input id="emergencyScopeId" required minlength="8" placeholder="מזהה הפנייה או השיחה"></div></div><div class="field"><label>מספר אירוע / תיק</label><input id="emergencyCase" required maxlength="80"></div><div class="field"><label>סיבה מפורטת</label><textarea id="emergencyReason" required minlength="20" maxlength="1000"></textarea></div><button class="btn btn-d">פתיחת גישה מתועדת לשעה</button></form><div class="stack" style="margin-top:16px">${cards||'<div class="card center mute">אין אירועי חירום</div>'}</div>`;
   }
   function tCampaigns(){
     if(Auth.user?.rank!=='founder')return '<div class="err">ניהול קמפיינים זמין למייסד בלבד.</div>';
@@ -4532,7 +4535,7 @@ route('/admin', async (app)=>{
       : tab==='appeals' ? tAppeals() : tab==='apps' ? tApps() : tab==='verify' ? tVerify()
       : tab==='system' ? tSystem() : tab==='campaigns' ? tCampaigns() : tab==='emergency' ? tEmergency() : tab==='backup' ? tBackup() : tUsers();
     if(tab==='emergency'){
-      $('#emergencyForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('button');b.disabled=true;try{await Store.add('emergencyRequests',{targetUserId:$('#emergencyTarget').value,scopeType:$('#emergencyScopeType').value,scopeId:$('#emergencyScopeId').value.trim(),caseRef:$('#emergencyCase').value.trim(),reason:$('#emergencyReason').value.trim()});toast('האירוע נשלח לאישור מנהל נוסף');await loadAll();paint();}catch(err){toast(err.message||'הבקשה נכשלה','err');b.disabled=false;}};
+      $('#emergencyForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('button');b.disabled=true;try{await Store.add('emergencyRequests',{targetUserId:$('#emergencyTarget').value,scopeType:$('#emergencyScopeType').value,scopeId:$('#emergencyScopeId').value.trim(),caseRef:$('#emergencyCase').value.trim(),reason:$('#emergencyReason').value.trim()});toast('הגישה נפתחה לשעה ותועדה');await loadAll();paint();}catch(err){toast(err.message||'הבקשה נכשלה','err');b.disabled=false;}};
       $$('[data-emergency-approve]').forEach(b=>b.onclick=async()=>{await Store.update('emergencyRequests',b.dataset.emergencyApprove,{status:'approved',decisionNote:'אושר בפאנל החירום'});toast('הגישה אושרה לשעה ותועדה');await loadAll();paint();});
       $$('[data-emergency-reject]').forEach(b=>b.onclick=async()=>{await Store.update('emergencyRequests',b.dataset.emergencyReject,{status:'rejected',decisionNote:'נדחה בפאנל החירום'});toast('הבקשה נדחתה ותועדה');await loadAll();paint();});
       $$('[data-emergency-export]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{const data=await request('/api/emergency/'+encodeURIComponent(b.dataset.emergencyExport)+'/evidence');const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='smai-emergency-evidence-'+data.caseRef+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('חבילת הראיות נוצרה והגישה נרשמה');}catch(err){toast(err.message||'הייצוא נכשל','err');}finally{b.disabled=false;}});

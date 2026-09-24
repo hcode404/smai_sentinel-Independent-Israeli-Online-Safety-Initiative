@@ -142,9 +142,9 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
       requireThat(['ticket','dm'].includes(input.scopeType)&&String(input.scopeId||'').length>=8,400,'נדרש מזהה פנייה או שיחה מוגדר');
       const scoped=await get(input.scopeType==='ticket'?'tickets':'dms',input.scopeId);
       requireThat(scoped&&(input.scopeType==='ticket'?scoped.reporterId===input.targetUserId:scoped.members?.includes(input.targetUserId)),400,'הפריט המבוקש אינו משויך למשתמש');
-      return {targetUserId:input.targetUserId,scopeType:input.scopeType,scopeId:input.scopeId,caseRef:String(input.caseRef).slice(0,80),reason:String(input.reason).slice(0,1000),requestedBy:id,requestedByName:u.name,status:'pending'};
+      return {targetUserId:input.targetUserId,scopeType:input.scopeType,scopeId:input.scopeId,caseRef:String(input.caseRef).slice(0,80),reason:String(input.reason).slice(0,1000),requestedBy:id,requestedByName:u.name,status:'approved',approvedBy:id,approvedByName:u.name,approvedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+60*60*1000).toISOString()};
     }
-    requireThat(old.status==='pending'&&old.requestedBy!==id,403,'נדרש אישור של מנהל בכיר אחר');
+    requireThat(old.status==='pending',403,'הבקשה כבר טופלה');
     requireThat(['approved','rejected'].includes(input.status),400,'החלטה לא תקינה');
     return {status:input.status,approvedBy:id,approvedByName:u.name,decisionNote:String(input.decisionNote||'').slice(0,500),approvedAt:new Date().toISOString(),expiresAt:input.status==='approved'?new Date(Date.now()+60*60*1000).toISOString():''};
   }

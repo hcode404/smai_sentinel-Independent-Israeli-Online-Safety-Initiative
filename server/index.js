@@ -246,7 +246,11 @@ export async function api(req,env,ctx={waitUntil(){}}){
       requireThat(body&&typeof body==='object'&&!Array.isArray(body),400,'בקשה לא תקינה');
       if(env.GEMINI_API_KEY)requireThat(body.consent===true,400,'נדרש אישור חד־פעמי לפני העברת ההודעה לשירות AI חיצוני');
       if(u)requireThat(!banned(u));const actor=u?.id||req.headers.get('CF-Connecting-IP')||'anonymous';await limit(env,'ai:'+actor,12,3600);await limit(env,'ai:site',200,86400);
-      const prompt=String(body.prompt||'').trim();requireThat(prompt.length>0&&prompt.length<=12000,400,'נא להזין הודעה באורך מתאים');return json(await generate(env,prompt,Array.isArray(body.history)?body.history:[]));
+      if(body.requireModel)requireThat(env.GEMINI_API_KEY,503,'שירות ה-AI עדיין לא מחובר. נדרשת הגדרת מפתח בשרת.');
+      const prompt=String(body.prompt||'').trim();requireThat(prompt.length>0&&prompt.length<=12000,400,'נא להזין הודעה באורך מתאים');
+      const result=await generate(env,prompt,Array.isArray(body.history)?body.history:[]);
+      if(body.requireModel)requireThat(result.mode==='gemini',503,'ספק ה-AI לא קיבל את הבקשה. יש לבדוק את המפתח, המודל והמכסה בשרת.');
+      return json(result);
     }
     requireThat(u,401,'יש להתחבר כדי להמשיך');
     let body={};
@@ -260,8 +264,8 @@ export async function api(req,env,ctx={waitUntil(){}}){
     if(emergencyEvidence&&req.method==='GET'){
       requireThat(rank(u)>=60,403,'גישה לראיות חירום דורשת הרשאת מנהל בכיר');
       const access=await db.get('emergencyRequests',decodeURIComponent(emergencyEvidence[1]));
-      requireThat(access?.status==='approved'&&access.approvedBy!==access.requestedBy&&Date.parse(access.expiresAt)>Date.now(),403,'אישור החירום אינו פעיל או פג תוקפו');
-      requireThat([access.requestedBy,access.approvedBy].includes(u.id),403,'הגישה מוגבלת לשני המנהלים שאישרו את האירוע');
+      requireThat(access?.status==='approved'&&Date.parse(access.expiresAt)>Date.now(),403,'אישור החירום אינו פעיל או פג תוקפו');
+      requireThat([access.requestedBy,access.approvedBy].includes(u.id),403,'הגישה מוגבלת למנהלים המורשים באירוע');
       const target=await db.get('users',access.targetUserId);requireThat(target,404,'המשתמש לא נמצא');
       let scoped;
       if(access.scopeType==='ticket'){

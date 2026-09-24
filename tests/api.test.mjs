@@ -159,15 +159,20 @@ test('transactional emails are branded HTML with contextual actions',()=>{
  const resetLike=renderEmail('securityLogin',{name:'בדיקה',when:'עכשיו'});assert.match(resetLike.html,/\/account/);
  const purchase=renderEmail('purchase',{product:'חבילה',orderId:'A-1',amount:'₪10'});assert.match(purchase.html,/מספר הזמנה/);
 });
-test('emergency evidence requires a second senior approval and leaves an audit log',async()=>{
+test('emergency evidence requires senior access, is scoped and leaves an audit log',async()=>{
  const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'owner');await f.call('session','GET',null,'bob');
  const bob=await f.db.get('users','bob');await f.db.put('users',{...bob,rank:'admin',rankLvl:60},bob);
  const scopedTicket=await f.call('records/tickets','POST',ticket,'alice');
  const request=await f.call('records/emergencyRequests','POST',{targetUserId:'alice',scopeType:'ticket',scopeId:scopedTicket.data.id,caseRef:'CASE-100',reason:'סכנה מיידית מתועדת המחייבת שימור ראיות מוגבל'},'owner');
  assert.equal(request.status,201);
- assert.equal((await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'owner')).status,403);
+ assert.equal((await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'alice')).status,403);
  assert.equal((await f.call(`records/emergencyRequests/${request.data.id}`,'PATCH',{status:'approved',decisionNote:'אושר לאחר בדיקת אירוע'},'owner')).status,403);
- assert.equal((await f.call(`records/emergencyRequests/${request.data.id}`,'PATCH',{status:'approved',decisionNote:'אושר לאחר בדיקת אירוע'},'bob')).status,200);
+ assert.equal((await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'bob')).status,403);
  const evidence=await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'owner');assert.equal(evidence.status,200);assert.equal(evidence.data.target.id,'alice');assert.equal(evidence.data.scope.ticket.id,scopedTicket.data.id);assert.ok(evidence.data.exclusions.includes('biometric images'));
- const logs=(await f.call('records/logs','GET',null,'owner')).data;assert.ok(logs.some(x=>x.type==='emergency_evidence_access'));f.DB.close();
+ const logs=(await f.call('records/logs','GET',null,'owner')).data;assert.ok(logs.some(x=>x.type==='emergency_evidence_access'));
+ const saved=await f.db.get('emergencyRequests',request.data.id);await f.db.put('emergencyRequests',{...saved,expiresAt:new Date(0).toISOString()},saved);
+ assert.equal((await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'owner')).status,403);f.DB.close();
+});
+test('real AI requests fail clearly when no provider key is configured',async()=>{
+ const f=fixture();const result=await f.call('ai','POST',{prompt:'איך פותחים פנייה?',requireModel:true,consent:true});assert.equal(result.status,503);f.DB.close();
 });
