@@ -29,6 +29,10 @@ test('report form wires every field from a query-all collection',async()=>{
  assert.match(source,/for\(const el of \$\$\('#rf input,#rf textarea,#rf select'\)\)/);
  assert.doesNotMatch(source,/for\(const el of \$\('#rf input,#rf textarea,#rf select'\)\)/);
 });
+test('private chat always scrolls to the latest message after rendering',async()=>{
+ const source=await readFile(new URL('../src/app.js',import.meta.url),'utf8');
+ assert.match(source,/const scrollDmToLatest=/);assert.match(source,/requestAnimationFrame\(\(\)=>\{box\.scrollTop=box\.scrollHeight/);assert.match(source,/scrollDmToLatest\(\);/);
+});
 test('ticket persists; identity and tracking code are issued by the server',async()=>{
  const f=fixture();const a=await f.call('records/tickets','POST',{...ticket,reporterId:'bob',status:'closed',code:'fake'});
  assert.equal(a.status,201);assert.equal(a.data.reporterId,'alice');assert.equal(a.data.status,'new');assert.match(a.data.code,/^SM-[A-F0-9]{32}$/);

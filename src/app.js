@@ -3791,6 +3791,11 @@ route('/dm', async (app, id)=>{
   const rejectDm=$('#rejectDm');if(rejectDm)rejectDm.onclick=async()=>{rejectDm.disabled=true;try{await Friends.block(other);toast('הבקשה נחסמה');location.hash='#/dm';render();}catch(e){toast(e.message||'לא ניתן לחסום','err');rejectDm.disabled=false;}};
 
   const box = $('#dchat');
+  const scrollDmToLatest=()=>{
+    if(!box||$('#dchat')!==box)return;
+    box.scrollTop=box.scrollHeight;
+    requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;});});
+  };
   const paint = (list)=>{
     if(!box || $('#dchat') !== box) return;
     const msgs = list.filter(m=>m.convId===cur.id && !m.deleted)
@@ -3806,7 +3811,7 @@ route('/dm', async (app, id)=>{
           ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}<div class="txt">${esc(m.text)}</div>${m.callUrl?`<a class="btn btn-p btn-sm" href="${esc(m.callUrl)}" target="_blank" rel="noopener noreferrer" style="margin-top:8px">${ic(m.callType==='video'?'camera':'phone',15)} הצטרפות לשיחה</a>`:''}<div class="tm">${fmtTime(m.createdAt)} ${isMine?`<span class="read-receipt ${m.readAt?'read':m.deliveredAt?'delivered':'sent'}" title="${m.readAt?'נקרא':m.deliveredAt?'נמסר':'נשלח'}">${m.readAt?'✓✓':m.deliveredAt?'✓✓':'✓'}</span>`:''}</div></div>
         <div class="acts">${!isMine?`<button title="דיווח" data-act="report" data-id="${m.id}">${ic('flag',13)}</button>`:''}<button class="reply-btn" data-chat="d" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
     }).join('') : `<div class="empty"><div class="ico">${ic('message',26)}</div><p class="small">אין עדיין הודעות בשיחה הזו.</p></div>`;
-    box.scrollTop = box.scrollHeight;
+    scrollDmToLatest();
     /* צליל רק על הודעה חדשה של מישהו אחר, ולא בטעינה הראשונה */
     const last = msgs[msgs.length-1];
     if(last && lastSeen && last.id !== lastSeen && last.senderId !== me.id) Sfx.play('msgIn');
