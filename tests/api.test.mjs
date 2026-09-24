@@ -80,6 +80,13 @@ test('last seen privacy hides activity from regular users but not the founder',a
  const regular=(await f.call('records/users/alice','GET',null,'bob')).data;assert.equal(regular.lastSeenAt,undefined);
  const founder=(await f.call('records/users/alice','GET',null,'owner')).data;assert.ok(founder.lastSeenAt);f.DB.close();
 });
+test('founder can see hidden last seen for staff accounts too',async()=>{
+ const f=fixture();await f.call('session','GET',null,'staff');await f.call('session','GET',null,'owner');
+ assert.equal((await f.call('records/users/staff','PATCH',{rank:'admin'},'owner')).status,200);
+ assert.equal((await f.call('records/users/staff','PATCH',{privacy:{showLastSeen:false}},'staff')).status,200);
+ const hidden=(await f.call('records/users/staff','GET',null,'alice')).data;assert.equal(hidden.lastSeenAt,undefined);
+ const founder=(await f.call('records/users/staff','GET',null,'owner')).data;assert.ok(founder.lastSeenAt);f.DB.close();
+});
 test('social links accept known networks and reject lookalike domains',async()=>{
  const f=fixture();await f.call('session');
  assert.equal((await f.call('records/users/alice','PATCH',{socialLinks:{twitter:'https://x.com/smai',youtube:'https://www.youtube.com/@smai',discord:'https://discord.gg/smai'}})).status,200);

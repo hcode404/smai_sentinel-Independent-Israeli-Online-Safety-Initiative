@@ -2,7 +2,8 @@ export class HttpError extends Error {constructor(status,message){super(message)
 export const requireThat=(condition,status=403,message='אין הרשאה לפעולה זו')=>{if(!condition)throw new HttpError(status,message);};
 export const pick=(obj,keys)=>Object.fromEntries(keys.filter(k=>Object.hasOwn(obj,k)).map(k=>[k,obj[k]]));
 export const rank=u=>Number(u?.rankLvl)||0;
-export const publicUser=(u,viewer)=>({...pick(u,['id','name','avatar','bio','rank','rankLvl','verified','dept','socialLinks','createdAt']),...(rank(viewer)>=70||u.privacy?.showLastSeen!==false?{lastSeenAt:u.lastSeenAt||u.lastLoginAt||u.createdAt}:{}),privacy:{showVerified:u.privacy?.showVerified!==false,showLastSeen:u.privacy?.showLastSeen!==false}});
+export const isFounder=u=>!!u&&(u.isOwner===true||u.rank==='founder'||rank(u)>=70);
+export const publicUser=(u,viewer)=>({...pick(u,['id','name','avatar','bio','rank','rankLvl','verified','dept','socialLinks','createdAt']),...(isFounder(viewer)||u.privacy?.showLastSeen!==false?{lastSeenAt:u.lastSeenAt||u.lastLoginAt||u.createdAt}:{}),privacy:{showVerified:u.privacy?.showVerified!==false,showLastSeen:u.privacy?.showLastSeen!==false}});
 export const banned=u=>!!(u?.isBanned&&(!u.banUntil||Date.parse(u.banUntil)>Date.now()));
 export const muted=u=>Date.parse(u?.muteUntil)>Date.now();
 export const ranks={citizen:0,trainee:10,agent:20,senior:30,lead:40,head:50,admin:60,founder:70};
