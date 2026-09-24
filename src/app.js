@@ -2566,7 +2566,7 @@ route('/ticket', async (app, id)=>{
     finally{ inp.disabled = false; inp.focus(); }
   };
   const _mb=$('#msgBtn'); if(_mb) _mb.onclick=send;
-  const _mi=$('#msgIn'); if(_mi) _mi.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} });
+  const _mi=$('#msgIn'); if(_mi) _mi.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey&&!$('#mentionList')?.classList.contains('open')){e.preventDefault();send();} });
   // ===== Reply handler =====
   window._replyTo = null;
   (() => {
@@ -2609,7 +2609,7 @@ route('/ticket', async (app, id)=>{
     }
     mInp.addEventListener('input',()=>{
       const v=mInp.value, pos=mInp.selectionStart;
-      const m=v.substring(0,pos).match(/@(\w*)$/);
+      const m=v.substring(0,pos).match(/@([\u0590-\u05FFa-zA-Z0-9_.-]*)$/);
       if(m){ mActive=true; mStart=v.substring(0,pos).lastIndexOf('@'); mQuery=m[1]; mIdx=0; mItems=_items(mQuery); _render(); }
       else{ mActive=false; mList.classList.remove('open'); }
     });
@@ -3045,7 +3045,6 @@ function renderTextChannel(s, ch, users, o){
         text:txt, flagged: mod.violation, modCat: mod.cat||null, ...(window._replyTo2?{replyTo:window._replyTo2}:{}),createdAt:nowISO() });
       if(window._replyTo2){window._replyTo2=null;const _br2=document.getElementById('_rBar2');if(_br2)_br2.style.display='none';}
       Sfx.play('msgOut');
-      notifyMentions(txt, s.name+' / '+ch.name, users).catch(()=>{});
       if(mod.violation) toast('ההודעה פורסמה וסומנה לבדיקת מודרטור','warn');
     }catch(e){
       const c = String(e?.code||e?.message||'');
@@ -3057,7 +3056,7 @@ function renderTextChannel(s, ch, users, o){
     finally{ inp.disabled=false; inp.focus(); }
   };
   const cb = $('#cbtn'); if(cb) cb.onclick = sendC;
-  if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendC(); } });
+  if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey&&$('#cMentionList')?.style.display==='none'){ e.preventDefault(); sendC(); } });
   // ===== @mention autocomplete (server chat) =====
   (()=>{
     const mInp2 = document.getElementById('cin'), mList2 = document.getElementById('cMentionList');
@@ -3252,7 +3251,6 @@ async function renderForum(s, ch, users, threadId, o){
       Sfx.play('msgOut');
       if(cur.authorId && cur.authorId !== me.id)
         mailUser(cur.authorId, 'mention', MAIL_TPL.threadReply(me.name||me.email, cur.title, txt.slice(0,180))).catch(()=>{});
-      notifyMentions(txt, s.name+' / '+cur.title, users).catch(()=>{});
     }catch(e){
       const c = String(e?.code||e?.message||'');
       if(c.includes('permission-denied')||c.includes('PERMISSION_DENIED'))
@@ -3844,7 +3842,8 @@ route('/dm', async (app, id)=>{
         senderRank:me.rank, text:txt, flagged:mod.violation, createdAt:nowISO() });
       // Last-message metadata is updated by the server.
       Sfx.play('msgOut');
-      const targets = (cur.members||[]).filter(m=>m!==me.id);
+      const mentionText=txt.toLocaleLowerCase('he');
+      const targets = (cur.members||[]).filter(m=>m!==me.id&&!mentionText.includes('@'+String(users.find(u=>u.id===m)?.name||'').toLocaleLowerCase('he')));
       for(const t of targets) mailUser(t, 'dm', MAIL_TPL.dm(me.name||me.email, txt.slice(0,180))).catch(()=>{});
     }catch(e){
       const c = String(e?.code||e?.message||'');

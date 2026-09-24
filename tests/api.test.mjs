@@ -32,6 +32,7 @@ test('report form wires every field from a query-all collection',async()=>{
 test('private chat always scrolls to the latest message after rendering',async()=>{
  const source=await readFile(new URL('../src/app.js',import.meta.url),'utf8');
  assert.match(source,/const scrollDmToLatest=/);assert.match(source,/requestAnimationFrame\(\(\)=>\{box\.scrollTop=box\.scrollHeight/);assert.match(source,/scrollDmToLatest\(\);/);
+ assert.match(source,/@\(\[\\u0590-\\u05FFa-zA-Z0-9_\.\-\]\*\)\$\//);assert.match(source,/cMentionList.*style\.display==='none'/s);
 });
 test('ticket persists; identity and tracking code are issued by the server',async()=>{
  const f=fixture();const a=await f.call('records/tickets','POST',{...ticket,reporterId:'bob',status:'closed',code:'fake'});
@@ -211,6 +212,7 @@ test('transactional emails are branded HTML with contextual actions',()=>{
  assert.match(reply.html,/<!doctype html>/i);assert.match(reply.html,/SMAI Sytem/);assert.match(reply.html,/\/ticket\/ticket-1/);assert.match(reply.html,/פתיחת הצ׳אט בפנייה/);
  const staff=renderEmail('staffTicketAssigned',{ticketId:'ticket-2',code:'SM-456',title:'בדיקת צוות',department:'account',priority:'high',name:'נציג'});
  assert.match(staff.html,/לחץ כאן למעבר לדיווח/);assert.match(staff.html,/\/ticket\/ticket-2/);assert.match(staff.html,/מוגבלות להרשאות/);
+ const mention=renderEmail('mention',{sender:'נועה',where:'שיחה פרטית',text:'@בדיקה יש עדכון',href:'/dm/chat-1'});assert.match(mention.html,/תויגת בהודעה חדשה/);assert.match(mention.html,/\/dm\/chat-1/);assert.match(mention.html,/מעבר ישיר לתוכן/);
  const resetLike=renderEmail('securityLogin',{name:'בדיקה',when:'עכשיו'});assert.match(resetLike.html,/\/account/);
  const purchase=renderEmail('purchase',{product:'חבילה',orderId:'A-1',amount:'₪10'});assert.match(purchase.html,/מספר הזמנה/);
 });
