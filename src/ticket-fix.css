@@ -16,6 +16,20 @@
 
 #notifBtn { position: relative; }
 .side-actions { display: flex; align-items: center; gap: 8px; }
+.top-utility { display: flex; align-items: center; gap: 8px; }
+.top-utility a {
+  min-height: 38px;
+  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 700;
+}
+.top-utility a:hover { color: var(--brand); border-color: var(--brand); text-decoration: none; }
 .notification-unread { background: var(--info-bg) !important; border-color: var(--brand) !important; }
 .notification-unread .nm { display: grid; gap: 2px; }
 .notification-unread small { color: var(--ink3); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -30,7 +44,15 @@
 
   .topin {
     padding-right: 282px !important;
+    padding-left: 210px !important;
     transition: padding-right .28s ease;
+  }
+
+  .top-utility {
+    position: absolute;
+    z-index: 60;
+    left: 24px;
+    top: 20px;
   }
 
   .mainnav {
@@ -128,4 +150,8 @@
     gap: 0 !important;
   }
   body.sidebar-collapsed #burger { right: 13px; left: auto; }
+}
+
+@media (max-width: 1099px) {
+  .top-utility { display: none; }
 }

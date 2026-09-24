@@ -1177,11 +1177,10 @@ const NAV = [
   { p:'/track',     l:'מעקב פנייה',  ico:'search' },
   { p:'/articles',  l:'מדריכים ומאמרים', ico:'book' },
   { p:'/press',     l:'עובדות',      ico:'info' },
-  { p:'/community', l:'קהילה',       ico:'message' },
   { p:'/dm',        l:'הודעות פרטיות', ico:'send' },
   { p:'/friends',   l:'חברים',       ico:'users' },
-  { p:'/join',      l:'הצטרפות לצוות', ico:'users' },
-  { p:'/updates',   l:'עדכונים',           ico:'download' }
+  { p:'/community', l:'קהילה',       ico:'message' },
+  { p:'/join',      l:'הצטרפות לצוות', ico:'users' }
 ];
 function renderNav(){
   const cur = location.pathname.split('/')[1] || '';
