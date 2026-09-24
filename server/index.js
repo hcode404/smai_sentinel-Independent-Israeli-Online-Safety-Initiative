@@ -3,6 +3,12 @@ import {createRemoteJWKSet,jwtVerify} from 'jose';
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const nonce=()=>crypto.randomUUID().replaceAll('-','');
+const redactEvidenceText=value=>String(value??'')
+  .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi,'[אסימון התחברות הוסר]')
+  .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{10,})?\b/g,'[אסימון התחברות הוסר]')
+  .replace(/((?:סיסמ(?:ה|א)|password|passcode|קוד\s*(?:אימות|כניסה)|otp|token|api[ _-]?key)\s*[:=]?\s*)[^\s,;]{4,}/gi,'$1[מידע סודי הוסר]')
+  .replace(/([?&](?:token|key|code|secret|signature|sig)=)[^&#\s]+/gi,'$1[REDACTED]');
+const safeEvidenceMessage=m=>({...pick(m,['id','createdAt','senderId','senderName','senderRank','staffSide','ai','system','callType','readAt','deliveredAt']),text:redactEvidenceText(m.text)});
 const MAIL_BRAND='SMAI Sytem';
 const MAIL_SITE='https://smai-support.jo3.org';
 const mailEsc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -277,8 +283,8 @@ export async function api(req,env,ctx={waitUntil(){}}){
       requireThat([access.requestedBy,access.approvedBy].includes(u.id),403,'הגישה מוגבלת למנהלים המורשים באירוע');
       const target=await db.get('users',access.targetUserId);requireThat(target,404,'המשתמש לא נמצא');
       const [allTickets,allTicketMessages,allDms,allDmMessages]=await Promise.all([db.list('tickets'),db.list('messages'),db.list('dms'),db.list('dmsgs')]);
-      const tickets=allTickets.filter(t=>t.reporterId===target.id).map(ticket=>({ticket,messages:allTicketMessages.filter(m=>m.ticketId===ticket.id&&!m.internal)}));
-      const directMessages=allDms.filter(c=>c.members?.includes(target.id)).map(conversation=>({conversation:{id:conversation.id,kind:conversation.kind,name:conversation.name,members:conversation.members,createdAt:conversation.createdAt},messages:allDmMessages.filter(m=>m.convId===conversation.id&&!m.deleted)}));
+      const tickets=allTickets.filter(t=>t.reporterId===target.id).map(ticket=>({ticket:{...pick(ticket,['id','code','title','status','priority','dept','assignedTo','assignedName','createdAt','updatedAt']),description:redactEvidenceText(ticket.description)},messages:allTicketMessages.filter(m=>m.ticketId===ticket.id&&!m.internal).map(safeEvidenceMessage)}));
+      const directMessages=allDms.filter(c=>c.members?.includes(target.id)).map(conversation=>({conversation:{id:conversation.id,kind:conversation.kind,name:conversation.name,members:conversation.members,createdAt:conversation.createdAt},messages:allDmMessages.filter(m=>m.convId===conversation.id&&!m.deleted).map(safeEvidenceMessage)}));
       const evidence={caseRef:access.caseRef,generatedAt:now(),expiresAt:access.expiresAt,target:{id:target.id,name:target.name,email:target.email,ageBand:target.ageBand||'unknown',createdAt:target.createdAt,verified:!!target.verified},scope:{type:'all_chats',tickets,directMessages},exclusions:['passwords','authentication tokens','verification codes','biometric images','internal staff notes','deleted messages']};
       await db.put('logs',{id:nonce(),createdAt:now(),actorId:u.id,actorName:u.name,type:'emergency_evidence_access',targetId:target.id,caseRef:access.caseRef,requestId:access.id,text:'גישה מאושרת לחבילת כל השיחות, מוגבלת לשעה וללא הודעה למשתמש'});
       return json(evidence);

@@ -214,6 +214,7 @@ test('emergency evidence exports all chats for one hour without notifying the ta
  const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'owner');await f.call('session','GET',null,'bob');
  const bob=await f.db.get('users','bob');await f.db.put('users',{...bob,rank:'admin',rankLvl:60},bob);
  const scopedTicket=await f.call('records/tickets','POST',ticket,'alice');
+ await f.call('records/messages','POST',{ticketId:scopedTicket.data.id,text:'הסיסמה: SuperSecret123 והקוד אימות: 654321'},'alice');
  const request=await f.call('records/emergencyRequests','POST',{targetUserId:'alice',caseRef:'CASE-100',reason:'סכנה מיידית מתועדת המחייבת שימור ראיות מוגבל'},'owner');
  assert.equal(request.status,201);
  const noticesBefore=(await f.call('records/notifications','GET',null,'alice')).data.length;
@@ -221,6 +222,7 @@ test('emergency evidence exports all chats for one hour without notifying the ta
  assert.equal((await f.call(`records/emergencyRequests/${request.data.id}`,'PATCH',{status:'approved',decisionNote:'אושר לאחר בדיקת אירוע'},'owner')).status,403);
  assert.equal((await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'bob')).status,403);
  const evidence=await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'owner');assert.equal(evidence.status,200);assert.equal(evidence.data.target.id,'alice');assert.equal(evidence.data.scope.type,'all_chats');assert.ok(evidence.data.scope.tickets.some(x=>x.ticket.id===scopedTicket.data.id));assert.ok(evidence.data.exclusions.includes('biometric images'));
+ const exported=JSON.stringify(evidence.data);assert.doesNotMatch(exported,/SuperSecret123|654321/);assert.match(exported,/מידע סודי הוסר/);
  const noticesAfter=(await f.call('records/notifications','GET',null,'alice')).data.length;assert.equal(noticesAfter,noticesBefore);
  const logs=(await f.call('records/logs','GET',null,'owner')).data;assert.ok(logs.some(x=>x.type==='emergency_evidence_access'));
  const saved=await f.db.get('emergencyRequests',request.data.id);await f.db.put('emergencyRequests',{...saved,expiresAt:new Date(0).toISOString()},saved);
