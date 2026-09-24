@@ -141,10 +141,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     if(isNew){
       requireThat(input.targetUserId&&await get('users',input.targetUserId),400,'משתמש היעד לא נמצא');
       requireThat(String(input.caseRef||'').trim().length>=3&&String(input.reason||'').trim().length>=20,400,'נדרש מספר אירוע והסבר מפורט');
-      requireThat(['ticket','dm'].includes(input.scopeType)&&String(input.scopeId||'').length>=8,400,'נדרש מזהה פנייה או שיחה מוגדר');
-      const scoped=await get(input.scopeType==='ticket'?'tickets':'dms',input.scopeId);
-      requireThat(scoped&&(input.scopeType==='ticket'?scoped.reporterId===input.targetUserId:scoped.members?.includes(input.targetUserId)),400,'הפריט המבוקש אינו משויך למשתמש');
-      return {targetUserId:input.targetUserId,scopeType:input.scopeType,scopeId:input.scopeId,caseRef:String(input.caseRef).slice(0,80),reason:String(input.reason).slice(0,1000),requestedBy:id,requestedByName:u.name,status:'approved',approvedBy:id,approvedByName:u.name,approvedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+60*60*1000).toISOString()};
+      return {targetUserId:input.targetUserId,scopeType:'all_chats',caseRef:String(input.caseRef).slice(0,80),reason:String(input.reason).slice(0,1000),requestedBy:id,requestedByName:u.name,status:'approved',approvedBy:id,approvedByName:u.name,approvedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+60*60*1000).toISOString()};
     }
     requireThat(old.status==='pending',403,'הבקשה כבר טופלה');
     requireThat(['approved','rejected'].includes(input.status),400,'החלטה לא תקינה');
@@ -212,6 +209,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     const kind=input.kind;
     requireThat(['ticket_rating','staff_praise','praise'].includes(kind),400,'סוג המשוב אינו תקין');
     const target=await get('users',input.targetId||input.staffId);requireThat(target,400,'יש לבחור משתמש תקין');
+    requireThat(target.id!==id,400,'אי אפשר לשלוח מילה טובה לעצמך');
     const text=String(input.text||'').trim();requireThat(text.length>=5&&text.length<=2000,400,'יש לכתוב משוב של 5 עד 2,000 תווים');
     if(kind==='ticket_rating'){
       const ticket=await get('tickets',input.ticketId);

@@ -39,6 +39,7 @@
 .notification-unread small { color: var(--ink3); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .rating-picker,.rating-stars{display:flex;gap:7px;direction:ltr;margin:6px 0 16px}.rating-picker button{border:0;background:transparent;color:var(--line2);font-size:32px;line-height:1;padding:2px;cursor:pointer;transition:transform .18s ease,color .18s ease}.rating-picker button:hover,.rating-picker button.on,.rating-stars .on{color:#f6b91a}.rating-picker button:hover{transform:translateY(-2px) scale(1.1)}.rating-stars{font-size:25px;color:var(--line2);margin-bottom:8px}.team-rating-card textarea{min-height:90px}
+.presence-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-inline-end:5px;background:currentColor;box-shadow:0 0 8px currentColor}.profile-stats-three{grid-template-columns:repeat(3,1fr)}@media(max-width:520px){.profile-stats-three{grid-template-columns:repeat(2,1fr)}.profile-stats-three .profile-stat:last-child{grid-column:1/-1}}
 
 @media (min-width: 761px) {
   .topbar { backdrop-filter: none !important; }

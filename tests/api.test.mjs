@@ -103,8 +103,17 @@ test('signed-in users can praise any real account and founder can review all pra
  assert.equal((await f.call('records/feedback','POST',{kind:'staff_praise',staffId:'staff',text:'תודה על העזרה והסבלנות'})).status,201);
  await f.call('session','GET',null,'bob');
  assert.equal((await f.call('records/feedback','POST',{kind:'praise',targetId:'bob',text:'תודה על העזרה בקהילה'})).status,201);
+ assert.equal((await f.call('records/feedback','POST',{kind:'praise',targetId:'bob',text:'ניסיון נוסף באותו יום'})).status,429);
+ assert.equal((await f.call('records/feedback','POST',{kind:'praise',targetId:'alice',text:'מחמאה לעצמי'})).status,400);
  assert.equal((await f.call('records/feedback','GET',null,'bob')).data.length,1);
  assert.equal((await f.call('records/feedback','GET',null,'owner')).data.length,2);f.DB.close();
+});
+test('profile stats count unique praise senders and expose current presence safely',async()=>{
+ const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'bob');
+ await f.call('records/feedback','POST',{kind:'praise',targetId:'bob',text:'כל הכבוד על העזרה'},'alice');
+ const first=await f.db.list('feedback');await f.db.put('feedback',{...first[0],id:'older-praise',createdAt:new Date(Date.now()-2*86400000).toISOString()},null);
+ const stats=await f.call('profile-stats/bob','GET',null,'alice');assert.equal(stats.status,200);assert.equal(stats.data.praiseCount,1);assert.equal(stats.data.online,null);
+ const own=await f.call('profile-stats/bob','GET',null,'bob');assert.equal(own.data.online,true);f.DB.close();
 });
 test('social links accept known networks and reject lookalike domains',async()=>{
  const f=fixture();await f.call('session');
@@ -201,16 +210,18 @@ test('transactional emails are branded HTML with contextual actions',()=>{
  const resetLike=renderEmail('securityLogin',{name:'בדיקה',when:'עכשיו'});assert.match(resetLike.html,/\/account/);
  const purchase=renderEmail('purchase',{product:'חבילה',orderId:'A-1',amount:'₪10'});assert.match(purchase.html,/מספר הזמנה/);
 });
-test('emergency evidence requires senior access, is scoped and leaves an audit log',async()=>{
+test('emergency evidence exports all chats for one hour without notifying the target',async()=>{
  const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'owner');await f.call('session','GET',null,'bob');
  const bob=await f.db.get('users','bob');await f.db.put('users',{...bob,rank:'admin',rankLvl:60},bob);
  const scopedTicket=await f.call('records/tickets','POST',ticket,'alice');
- const request=await f.call('records/emergencyRequests','POST',{targetUserId:'alice',scopeType:'ticket',scopeId:scopedTicket.data.id,caseRef:'CASE-100',reason:'סכנה מיידית מתועדת המחייבת שימור ראיות מוגבל'},'owner');
+ const request=await f.call('records/emergencyRequests','POST',{targetUserId:'alice',caseRef:'CASE-100',reason:'סכנה מיידית מתועדת המחייבת שימור ראיות מוגבל'},'owner');
  assert.equal(request.status,201);
+ const noticesBefore=(await f.call('records/notifications','GET',null,'alice')).data.length;
  assert.equal((await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'alice')).status,403);
  assert.equal((await f.call(`records/emergencyRequests/${request.data.id}`,'PATCH',{status:'approved',decisionNote:'אושר לאחר בדיקת אירוע'},'owner')).status,403);
  assert.equal((await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'bob')).status,403);
- const evidence=await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'owner');assert.equal(evidence.status,200);assert.equal(evidence.data.target.id,'alice');assert.equal(evidence.data.scope.ticket.id,scopedTicket.data.id);assert.ok(evidence.data.exclusions.includes('biometric images'));
+ const evidence=await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'owner');assert.equal(evidence.status,200);assert.equal(evidence.data.target.id,'alice');assert.equal(evidence.data.scope.type,'all_chats');assert.ok(evidence.data.scope.tickets.some(x=>x.ticket.id===scopedTicket.data.id));assert.ok(evidence.data.exclusions.includes('biometric images'));
+ const noticesAfter=(await f.call('records/notifications','GET',null,'alice')).data.length;assert.equal(noticesAfter,noticesBefore);
  const logs=(await f.call('records/logs','GET',null,'owner')).data;assert.ok(logs.some(x=>x.type==='emergency_evidence_access'));
  const saved=await f.db.get('emergencyRequests',request.data.id);await f.db.put('emergencyRequests',{...saved,expiresAt:new Date(0).toISOString()},saved);
  assert.equal((await f.call(`emergency/${request.data.id}/evidence`,'GET',null,'owner')).status,403);f.DB.close();

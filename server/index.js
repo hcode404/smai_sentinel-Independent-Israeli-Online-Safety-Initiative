@@ -1,4 +1,4 @@
-import {HttpError,requireThat,pick,rank,banned,collections,officialIds,canRead,safeRecord,authorizeWrite} from './policy.js';
+import {HttpError,requireThat,pick,rank,isFounder,banned,collections,officialIds,canRead,safeRecord,authorizeWrite} from './policy.js';
 import {createRemoteJWKSet,jwtVerify} from 'jose';
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -276,17 +276,22 @@ export async function api(req,env,ctx={waitUntil(){}}){
       requireThat(access?.status==='approved'&&Date.parse(access.expiresAt)>Date.now(),403,'אישור החירום אינו פעיל או פג תוקפו');
       requireThat([access.requestedBy,access.approvedBy].includes(u.id),403,'הגישה מוגבלת למנהלים המורשים באירוע');
       const target=await db.get('users',access.targetUserId);requireThat(target,404,'המשתמש לא נמצא');
-      let scoped;
-      if(access.scopeType==='ticket'){
-        const ticket=await db.get('tickets',access.scopeId);requireThat(ticket?.reporterId===target.id,403,'הפנייה אינה תואמת להיקף שאושר');
-        scoped={type:'ticket',ticket,messages:(await db.list('messages')).filter(m=>m.ticketId===ticket.id&&!m.internal)};
-      }else{
-        const conversation=await db.get('dms',access.scopeId);requireThat(conversation?.members?.includes(target.id),403,'השיחה אינה תואמת להיקף שאושר');
-        scoped={type:'dm',conversation:{id:conversation.id,kind:conversation.kind,name:conversation.name,members:conversation.members,createdAt:conversation.createdAt},messages:(await db.list('dmsgs')).filter(m=>m.convId===conversation.id&&!m.deleted)};
-      }
-      const evidence={caseRef:access.caseRef,generatedAt:now(),expiresAt:access.expiresAt,target:{id:target.id,name:target.name,email:target.email,ageBand:target.ageBand||'unknown',createdAt:target.createdAt,verified:!!target.verified},scope:scoped,exclusions:['passwords','authentication tokens','verification codes','biometric images','internal staff notes','unrelated conversations']};
-      await db.put('logs',{id:nonce(),createdAt:now(),actorId:u.id,actorName:u.name,type:'emergency_evidence_access',targetId:target.id,caseRef:access.caseRef,requestId:access.id,text:'גישה מאושרת לחבילת ראיות מוגבלת בזמן'});
+      const [allTickets,allTicketMessages,allDms,allDmMessages]=await Promise.all([db.list('tickets'),db.list('messages'),db.list('dms'),db.list('dmsgs')]);
+      const tickets=allTickets.filter(t=>t.reporterId===target.id).map(ticket=>({ticket,messages:allTicketMessages.filter(m=>m.ticketId===ticket.id&&!m.internal)}));
+      const directMessages=allDms.filter(c=>c.members?.includes(target.id)).map(conversation=>({conversation:{id:conversation.id,kind:conversation.kind,name:conversation.name,members:conversation.members,createdAt:conversation.createdAt},messages:allDmMessages.filter(m=>m.convId===conversation.id&&!m.deleted)}));
+      const evidence={caseRef:access.caseRef,generatedAt:now(),expiresAt:access.expiresAt,target:{id:target.id,name:target.name,email:target.email,ageBand:target.ageBand||'unknown',createdAt:target.createdAt,verified:!!target.verified},scope:{type:'all_chats',tickets,directMessages},exclusions:['passwords','authentication tokens','verification codes','biometric images','internal staff notes','deleted messages']};
+      await db.put('logs',{id:nonce(),createdAt:now(),actorId:u.id,actorName:u.name,type:'emergency_evidence_access',targetId:target.id,caseRef:access.caseRef,requestId:access.id,text:'גישה מאושרת לחבילת כל השיחות, מוגבלת לשעה וללא הודעה למשתמש'});
       return json(evidence);
+    }
+    const profileStats=path.match(/^\/api\/profile-stats\/([^/]+)$/);
+    if(profileStats&&req.method==='GET'){
+      const targetId=decodeURIComponent(profileStats[1]),target=await db.get('users',targetId);requireThat(target,404,'המשתמש לא נמצא');
+      const praise=(await db.list('feedback')).filter(x=>['praise','staff_praise'].includes(x.kind)&&(x.targetId||x.staffId)===targetId);
+      const praiseCount=new Set(praise.map(x=>x.byId).filter(Boolean)).size;
+      const visibility=target.privacy?.onlineStatus||'friends';let canSeeOnline=u.id===targetId||isFounder(u)||visibility==='all';
+      if(!canSeeOnline&&visibility==='friends')canSeeOnline=(await db.list('friends')).some(f=>f.status==='accepted'&&[f.a,f.b].includes(u.id)&&[f.a,f.b].includes(targetId));
+      const last=Date.parse(target.lastSeenAt||target.lastLoginAt||'');
+      return json({praiseCount,online:canSeeOnline?(Number.isFinite(last)&&Date.now()-last<5*60*1000):null});
     }
     if(path==='/api/ticket-ai'&&req.method==='POST'){
       const t=await db.get('tickets',body.ticketId);requireThat(await canRead('tickets',t,u,db.get));requireThat(!banned(u));
@@ -361,6 +366,11 @@ export async function api(req,env,ctx={waitUntil(){}}){
     if(col==='feedback'&&req.method==='POST'&&body.kind==='ticket_rating'){
       const previous=(await db.list('feedback')).find(x=>x.kind==='ticket_rating'&&x.ticketId===body.ticketId&&x.byId===u.id);
       requireThat(!previous,409,'כבר דירגת את הטיפול בפנייה הזאת');
+    }
+    if(col==='feedback'&&req.method==='POST'&&['praise','staff_praise'].includes(body.kind)){
+      const targetId=body.targetId||body.staffId,cutoff=Date.now()-24*60*60*1000;
+      const recent=(await db.list('feedback')).find(x=>['praise','staff_praise'].includes(x.kind)&&(x.targetId||x.staffId)===targetId&&x.byId===u.id&&Date.parse(x.createdAt)>cutoff);
+      requireThat(!recent,429,'כבר שלחת לאדם הזה מילה טובה. אפשר לשלוח שוב לאחר 24 שעות');
     }
     if(col==='dmsgs'&&req.method==='POST'){
       const conv=await db.get('dms',body.convId);
