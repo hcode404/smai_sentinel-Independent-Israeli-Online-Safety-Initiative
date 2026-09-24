@@ -1181,12 +1181,15 @@ const NAV = [
   { p:'/friends',   l:'חברים',       ico:'users' },
   { p:'/community', l:'קהילה',       ico:'message' },
   { p:'/join',      l:'הצטרפות לצוות', ico:'users' }
+  ,{ p:'/partners', l:'שיתופי פעולה', ico:'link' }
 ];
+const NAV_EN={'/':'Home','/report':'New report','/my':'My cases','/track':'Track case','/articles':'Guides & articles','/press':'Facts','/dm':'Direct messages','/friends':'Friends','/community':'Community','/join':'Join the team','/partners':'Partners & resources'};
+const currentLang=()=>localStorage.getItem('smai_lang')==='en'?'en':'he';
 function renderNav(){
   const cur = location.pathname.split('/')[1] || '';
   const items = NAV.map(n=>{
     const on = ('/'+cur) === n.p || (n.p==='/' && !cur);
-    return `<a href="${n.p}" class="${on?'on':''}" title="${n.l}" ${on?'aria-current="page"':''}>${ic(n.ico,18)}<span>${n.l}</span></a>`;
+    const label=currentLang()==='en'?(NAV_EN[n.p]||n.l):n.l;return `<a href="${n.p}" class="${on?'on':''}" title="${label}" ${on?'aria-current="page"':''}>${ic(n.ico,18)}<span>${label}</span></a>`;
   });
   if(Auth.isStaff()) items.push(`<a href="/admin" class="${cur==='admin'?'on':''}">${ic('shield',14)} פאנל צוות</a>`);
   $('#nav').innerHTML = `<form id="userQuickSearch" class="nav-user-search" role="search"><input id="userQuickName" aria-label="חיפוש משתמש לפי שם מדויק" placeholder="חיפוש שם משתמש מדויק"><button class="iconbtn" aria-label="חיפוש">${ic('search',15)}</button></form>`+items.join('');
@@ -1198,7 +1201,7 @@ function renderNav(){
        </button>`
     : `<a class="btn btn-p btn-sm" href="/login">${ic('login',15)} כניסה</a>`;
   const topAccount=$('#topAccount');
-  if(topAccount){topAccount.href=u?'/account':'/login';topAccount.textContent=u?'החשבון שלי':'כניסה';}
+  if(topAccount){topAccount.href=u?'/account':'/login';topAccount.textContent=currentLang()==='en'?(u?'My account':'Sign in'):(u?'החשבון שלי':'כניסה');}
   const mb = $('#meBtn'); if(mb) mb.onclick = userMenu;
   const notifications=$('#notifBtn');
   if(notifications)notifications.classList.toggle('hide',!u);
@@ -3380,6 +3383,7 @@ async function userActionsModal(userId, usersCache){
       ${Auth.can('ban') && !banned ? `<button class="btn btn-d btn-block" id="uaBan">${ic('ban',16)} הרחקה מהמערכת</button>`:''}
       ${banned && Auth.can('ban') ? `<button class="btn btn-ok btn-block" id="uaUnban">${ic('check',16)} ביטול הרחקה</button>`:''}
       ${Auth.can('manageUsers') ? `<button class="btn btn-g btn-block" id="uaRank">${ic('star',16)} שינוי דרגה ומחלקה</button>`:''}
+      ${['admin','founder'].includes(Auth.user?.rank) ? `<button class="btn btn-g btn-block" id="uaAge">${ic('shield',16)} בדיקת והגדרת גיל</button>`:''}
       <button class="btn btn-ghost btn-block" id="uaWarn">${ic('alert',16)} רישום אזהרה</button>
     </div>`}
   </div>
@@ -3395,11 +3399,18 @@ async function userActionsModal(userId, usersCache){
     closeModal(); toast('ההרחקה בוטלה'); render();
   });
   el('uaRank') && (el('uaRank').onclick = ()=>rankModal(u));
+  el('uaAge') && (el('uaAge').onclick = ()=>ageReviewModal(u));
   el('uaWarn') && (el('uaWarn').onclick = async ()=>{
     await Store.update('users',u.id,{ warnings:(u.warnings||0)+1 });
     await serverAudit({type:'warn',targetId:u.id,targetName:u.name,byName:Auth.user.name,createdAt:nowISO()});
     closeModal(); toast('נרשמה אזהרה למשתמש');
   });
+}
+
+function ageReviewModal(u){
+  openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('shield',20)}</span><h3>בדיקת גיל — ${esc(u.name||'משתמש')}</h3></div><div class="m-b"><p class="small mute">אין שימוש בצילום פנים. השינוי נשמר עם שם המנהל והסיבה.</p><div class="field"><label>פעולה</label><select id="ageReviewAction"><option value="staff_reviewed">קביעת קבוצת גיל</option><option value="reverify_required">דרישת אימות חוזר</option><option value="reset">איפוס הגדרת הגיל</option></select></div><div class="field"><label>קבוצת גיל</label><select id="ageReviewBand"><option value="under10">מתחת לגיל 10</option><option value="10to12">10–12</option><option value="13to17">13–17</option><option value="adult">18 ומעלה</option></select></div><div class="field"><label>סיבה</label><textarea id="ageReviewNote" minlength="10" maxlength="500" placeholder="מדוע נדרש השינוי?"></textarea></div><p id="ageReviewStatus" class="small"></p></div><div class="m-f"><button class="btn btn-g" onclick="closeModal()">ביטול</button><button class="btn btn-p" id="ageReviewSave">שמירה ותיעוד</button></div>`);
+  $('#ageReviewBand').value=u.ageBand||'13to17';$('#ageReviewAction').onchange=e=>$('#ageReviewBand').disabled=e.target.value!=='staff_reviewed';
+  $('#ageReviewSave').onclick=async()=>{const note=$('#ageReviewNote').value.trim(),status=$('#ageReviewAction').value;if(note.length<10)return $('#ageReviewStatus').textContent='נדרש הסבר של לפחות 10 תווים.';const b=$('#ageReviewSave');b.disabled=true;try{const patch={ageVerificationStatus:status,ageReviewNote:`${Auth.user.name}: ${note}`};if(status==='staff_reviewed')patch.ageBand=$('#ageReviewBand').value;else if(status==='reset')patch.ageBand=null;await Store.update('users',u.id,patch);await serverAudit({type:'age_review',targetId:u.id,targetName:u.name,reason:note,byName:Auth.user.name,createdAt:nowISO()});closeModal();toast(status==='reverify_required'?'נדרש אימות גיל חוזר':'הגדרת הגיל עודכנה');}catch(err){$('#ageReviewStatus').textContent=err.message;b.disabled=false;}};
 }
 
 function muteModal(u){
@@ -4128,8 +4139,9 @@ route('/account',async app=>{
   </div>
  </form>`;
  $$('[data-settings-tab]').forEach(b=>b.onclick=()=>{$$('[data-settings-tab]').forEach(x=>x.classList.toggle('on',x===b));$$('[data-settings-panel]').forEach(x=>x.classList.toggle('on',x.dataset.settingsPanel===b.dataset.settingsTab));});
- const generalPanel=$('[data-settings-panel="general"]');if(generalPanel)generalPanel.insertAdjacentHTML('beforeend',`<div class="card"><h3>מצב גיל מוגן</h3><p class="small mute">הגדרה עצמית בלבד; אימות מצלמה יתווסף רק דרך ספק חיצוני מאושר שלא מעביר אלינו צילום פנים.</p>${choice('ageBand','קבוצת גיל',[['under10','מתחת לגיל 10'],['10to12','10–12'],['13to17','13–17'],['adult','18 ומעלה']],u.ageBand||'13to17')}<p class="small mute">בחשבון מתחת לגיל 10 קישורים שמפרסמים משתמשים מוסתרים. קישורים רשמיים מהמייסד נשארים זמינים.</p></div>`);
+ const generalPanel=$('[data-settings-panel="general"]');if(generalPanel)generalPanel.insertAdjacentHTML('beforeend',`<div class="card"><h3>מצב גיל מוגן</h3><p class="small mute">הגדרה עצמית בלבד; אימות חיצוני עתידי לא יעביר אלינו צילום פנים.</p>${choice('ageBand','קבוצת גיל',[['under10','מתחת לגיל 10'],['10to12','10–12'],['13to17','13–17'],['adult','18 ומעלה']],u.ageBand||'13to17')}<p class="small mute">בחשבון מתחת לגיל 10 קישורים שמפרסמים משתמשים מוסתרים. קישורים רשמיים מהמייסד נשארים זמינים.</p><button class="btn btn-g btn-sm" id="reportAgeError" type="button">דיווח על טעות בגיל</button></div>`);
  $('#ageBand').onchange=async e=>{try{await Store.update('users',u.id,{ageBand:e.target.value});await Auth.refresh();$('#profileStatus').textContent='מצב הגיל המוגן נשמר';}catch(err){$('#profileStatus').textContent=err.message;}};
+ $('#reportAgeError').onclick=()=>{openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('flag',20)}</span><h3>דיווח על טעות בגיל</h3></div><div class="m-b"><p>הצוות יוכל לתקן את קבוצת הגיל, לאפס אותה או לדרוש אימות חוזר.</p><div class="field"><label>מה לא נכון?</label><textarea id="ageErrorText" minlength="10" maxlength="600"></textarea></div><p id="ageErrorStatus" class="small"></p></div><div class="m-f"><button class="btn btn-g" onclick="closeModal()">ביטול</button><button class="btn btn-p" id="sendAgeError">שליחה לצוות</button></div>`);$('#sendAgeError').onclick=async()=>{const text=$('#ageErrorText').value.trim();if(text.length<10)return $('#ageErrorStatus').textContent='נדרש הסבר קצר של לפחות 10 תווים.';const b=$('#sendAgeError');b.disabled=true;try{await Store.add('reports',{kind:'age_dispute',type:'account',targetId:u.id,reason:'בקשה לתיקון גיל',text});closeModal();toast('הדיווח נשלח לצוות');}catch(err){$('#ageErrorStatus').textContent=err.message;b.disabled=false;}};};
  const totpButton=$('[title*="TOTP"]');if(totpButton){totpButton.disabled=false;totpButton.removeAttribute('title');totpButton.textContent='הפעלת אימות דו־שלבי TOTP';totpButton.onclick=async()=>{totpButton.disabled=true;$('#profileStatus').textContent='מכין חיבור מאובטח לאפליקציית אימות…';try{const setup=await beginTotpEnrollment();openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('shield',20)}</span><h3>אימות דו־שלבי</h3></div><div class="m-b"><p>העתיקו את המפתח לאפליקציית אימות כמו Google Authenticator או Microsoft Authenticator.</p><div class="card mono" style="user-select:all;direction:ltr;text-align:center">${esc(setup.secretKey)}</div><div class="field"><label for="totpCode">הקוד בן 6 הספרות</label><input id="totpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div><p id="totpStatus" class="small"></p></div><div class="m-f"><button class="btn btn-g" onclick="closeModal()">ביטול</button><button class="btn btn-p" id="confirmTotp">הפעלה</button></div>`);$('#confirmTotp').onclick=async()=>{const b=$('#confirmTotp');b.disabled=true;try{await finishTotpEnrollment(setup.secret,$('#totpCode').value);closeModal();toast('האימות הדו־שלבי הופעל');}catch(e){$('#totpStatus').textContent=e?.code==='auth/operation-not-allowed'?'צריך להפעיל TOTP במסוף Firebase לפני שניתן להשלים את החיבור.':(e.message||'הקוד לא תקין');b.disabled=false;}};}catch(e){$('#profileStatus').textContent=e?.code==='auth/operation-not-allowed'?'ספק TOTP עדיין לא מופעל בפרויקט Firebase.':(e.message||'לא ניתן להתחיל את החיבור');}finally{totpButton.disabled=false;}};}
  $('#profileForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('[type=submit]');b.disabled=true;const mailPrefs={};$$('[data-mail-pref]').forEach(x=>mailPrefs[x.dataset.mailPref]=x.checked);const avatarUrl=$('#profileAvatar').value.trim();const nextPrivacy={dmFrom:$('#dmFrom').value,friendRequests:$('#friendRequests').value,profileVis:$('#profileVis').value,onlineStatus:$('#onlineStatus').value,showFollowers:$('#showFollowers').checked};const socialLinks={instagram:$('#socialInstagram').value.trim(),tiktok:$('#socialTiktok').value.trim(),roblox:$('#socialRoblox').value.trim()};try{if(avatarUrl&&!/^https:\/\//.test(avatarUrl))throw new Error('תמונת הפרופיל חייבת להשתמש בכתובת HTTPS');await Store.update('users',u.id,{name:$('#profileName').value.trim(),bio:$('#profileBio').value.trim(),avatar:avatarUrl,mailPrefs,privacy:nextPrivacy,socialLinks,theme:$('#accountTheme').value,sound:$('#accountSound').checked});await Auth.refresh();$('#profileStatus').textContent='כל ההגדרות נשמרו בהצלחה';renderNav();}catch(e){$('#profileStatus').textContent=e.message;}finally{b.disabled=false;}};
  $('#accountLogout').onclick=async()=>{await Auth.signOut();location.hash='#/';await render();};
@@ -4156,6 +4168,7 @@ route('/admin', async (app)=>{
     { k:'verify', l:'תגי אימות', ic:'check', cap:'reviewApps' },
     { k:'users', l:'משתמשים ודרגות', ic:'shield', cap:'manageUsers' },
     { k:'system', l:'מערכת ומיילים', ic:'settings', cap:'siteConfig' },
+    ...(['admin','founder'].includes(Auth.user?.rank)?[{ k:'emergency', l:'גישה בחירום', ic:'alert', cap:'siteConfig' }]:[]),
     ...(Auth.user?.rank==='founder'?[{ k:'campaigns', l:'קמפיינים', ic:'sparkle', cap:'siteConfig' }]:[]),
     { k:'backup', l:'גיבוי ונתונים', ic:'file', cap:'siteConfig' },
   ].filter(t=>Auth.can(t.cap));
@@ -4181,14 +4194,15 @@ route('/admin', async (app)=>{
     ].map(s=>`<div class="stat"><div class="row between" style="margin-bottom:7px"><span class="ico-tile i-${s[3]}">${ic(s[0],18)}</span></div><div class="n">${s[2]}</div><div class="l">${s[1]}</div></div>`).join('');
   };
 
-  let tickets=[], reports=[], apps=[], users=[], appeals=[], modlog=[], vapps=[], maillog=[], campaigns=[];
+  let tickets=[], reports=[], apps=[], users=[], appeals=[], modlog=[], vapps=[], maillog=[], campaigns=[], emergencyRequests=[];
   async function loadAll(){
     if(!Auth.user || !Auth.can('viewPanel')) return;
-    [tickets, reports, apps, users, appeals, modlog, vapps, maillog, campaigns] = await Promise.all([
+    [tickets, reports, apps, users, appeals, modlog, vapps, maillog, campaigns, emergencyRequests] = await Promise.all([
       Store.list('tickets'), Store.list('reports'), Store.list('applications'),
       Store.list('users'), Store.list('appeals'), Store.list('modlog'),
       Store.list('verifyApps').catch(()=>[]), Store.list('mail').catch(()=>[]),
-      Auth.user?.rank==='founder'?Store.list('campaigns').catch(()=>[]):Promise.resolve([])
+      Auth.user?.rank==='founder'?Store.list('campaigns').catch(()=>[]):Promise.resolve([]),
+      ['admin','founder'].includes(Auth.user?.rank)?Store.list('emergencyRequests').catch(()=>[]):Promise.resolve([])
     ]);
     paintStats(tickets, reports, apps);
   }
@@ -4461,6 +4475,12 @@ route('/admin', async (app)=>{
 
   function tBackup(){return '<div class="card"><h2>ייצוא נתוני המערכת</h2><p>קובץ הגיבוי מכיל מידע רגיש. שמרו אותו במקום מאובטח ואל תשתפו אותו בציבור.</p><button id="bkDl" class="btn btn-p">הורדת גיבוי</button><p class="small mute">ייבוא מהמערכת הקודמת יבוצע רק לאחר התאמת חשבונות והרשאות. אין כרגע ייבוא אוטומטי.</p></div>';}
   function tSystem(){return '<div class="card"><div class="eyebrow">חיבורי מערכת</div><h2>מצב השירותים</h2><p>מצב החיבור נבדק מול השרת. מפתחות אינם נשמרים בדפדפן.</p><a href="/setup" class="btn btn-p">פתיחת מרכז המערכת</a></div>';}
+  function tEmergency(){
+    if(!['admin','founder'].includes(Auth.user?.rank))return '<div class="err">אין הרשאת חירום.</div>';
+    const userOptions=users.map(u=>`<option value="${u.id}">${esc(u.name||u.email)} · ${esc(u.email||'')}</option>`).join('');
+    const cards=emergencyRequests.map(r=>`<article class="card"><div class="row between"><div><span class="b ${r.status==='approved'?'b-ok':r.status==='rejected'?'b-dang':'b-warn'}">${r.status==='approved'?'מאושר':r.status==='rejected'?'נדחה':'ממתין לאישור נוסף'}</span><h3>${esc(r.caseRef)}</h3><p class="small mute">${esc(r.reason)}</p><div class="tiny mute">נפתח על ידי ${esc(r.requestedByName||'מנהל')} · משתמש ${esc(r.targetUserId)}</div></div><div class="row">${r.status==='pending'&&r.requestedBy!==Auth.user.id?`<button class="btn btn-p btn-sm" data-emergency-approve="${r.id}">אישור לשעה</button><button class="btn btn-g btn-sm" data-emergency-reject="${r.id}">דחייה</button>`:''}${r.status==='approved'&&Date.parse(r.expiresAt)>Date.now()&&[r.requestedBy,r.approvedBy].includes(Auth.user.id)?`<button class="btn btn-g btn-sm" data-emergency-export="${r.id}">ייצוא ראיות</button>`:''}</div></div></article>`).join('');
+    return `<div class="callout c-dang"><span class="ic">${ic('alert',18)}</span><div><b>גישה חריגה ומבוקרת</b><br><span class="small">דורשת שני מנהלים בכירים שונים, מוגבלת לשעה ולפנייה או שיחה אחת, ונרשמת ביומן קבוע. אין תמונות פנים, סיסמאות, קודים או הערות צוות פנימיות.</span></div></div><form id="emergencyForm" class="card stack" style="margin-top:14px"><h2>פתיחת אירוע</h2><div class="field"><label>משתמש</label><select id="emergencyTarget" required>${userOptions}</select></div><div class="grid g2"><div class="field"><label>סוג הראיה</label><select id="emergencyScopeType"><option value="ticket">פנייה</option><option value="dm">שיחת DM</option></select></div><div class="field"><label>מזהה מדויק</label><input id="emergencyScopeId" required minlength="8" placeholder="מזהה הפנייה או השיחה"></div></div><div class="field"><label>מספר אירוע / תיק</label><input id="emergencyCase" required maxlength="80"></div><div class="field"><label>סיבה מפורטת</label><textarea id="emergencyReason" required minlength="20" maxlength="1000"></textarea></div><button class="btn btn-d">שליחה לאישור מנהל נוסף</button></form><div class="stack" style="margin-top:16px">${cards||'<div class="card center mute">אין אירועי חירום</div>'}</div>`;
+  }
   function tCampaigns(){
     if(Auth.user?.rank!=='founder')return '<div class="err">ניהול קמפיינים זמין למייסד בלבד.</div>';
     const audience={all:'כולם',members:'משתמשים מחוברים',staff:'צוות בלבד'};
@@ -4499,7 +4519,13 @@ route('/admin', async (app)=>{
     const body = $('#admBody');if(!body)return;
     body.innerHTML = tab==='queue' ? tQueue() : tab==='depts' ? tDepts() : tab==='mod' ? tMod()
       : tab==='appeals' ? tAppeals() : tab==='apps' ? tApps() : tab==='verify' ? tVerify()
-      : tab==='system' ? tSystem() : tab==='campaigns' ? tCampaigns() : tab==='backup' ? tBackup() : tUsers();
+      : tab==='system' ? tSystem() : tab==='campaigns' ? tCampaigns() : tab==='emergency' ? tEmergency() : tab==='backup' ? tBackup() : tUsers();
+    if(tab==='emergency'){
+      $('#emergencyForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('button');b.disabled=true;try{await Store.add('emergencyRequests',{targetUserId:$('#emergencyTarget').value,scopeType:$('#emergencyScopeType').value,scopeId:$('#emergencyScopeId').value.trim(),caseRef:$('#emergencyCase').value.trim(),reason:$('#emergencyReason').value.trim()});toast('האירוע נשלח לאישור מנהל נוסף');await loadAll();paint();}catch(err){toast(err.message||'הבקשה נכשלה','err');b.disabled=false;}};
+      $$('[data-emergency-approve]').forEach(b=>b.onclick=async()=>{await Store.update('emergencyRequests',b.dataset.emergencyApprove,{status:'approved',decisionNote:'אושר בפאנל החירום'});toast('הגישה אושרה לשעה ותועדה');await loadAll();paint();});
+      $$('[data-emergency-reject]').forEach(b=>b.onclick=async()=>{await Store.update('emergencyRequests',b.dataset.emergencyReject,{status:'rejected',decisionNote:'נדחה בפאנל החירום'});toast('הבקשה נדחתה ותועדה');await loadAll();paint();});
+      $$('[data-emergency-export]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{const data=await request('/api/emergency/'+encodeURIComponent(b.dataset.emergencyExport)+'/evidence');const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='smai-emergency-evidence-'+data.caseRef+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('חבילת הראיות נוצרה והגישה נרשמה');}catch(err){toast(err.message||'הייצוא נכשל','err');}finally{b.disabled=false;}});
+    }
     if(tab==='campaigns'){
       const type=$('#campaignType'),media=$('#campaignMedia'),body=$('#campaignBody');if(type&&!type.querySelector('[value="text"]'))type.insertAdjacentHTML('afterbegin','<option value="text">טקסט בלבד</option>');if(media)media.required=false;if(body){body.maxLength=1000;body.insertAdjacentHTML('afterend','<button class="btn btn-g btn-sm" type="button" id="campaignAddLink">הוספת קישור לטקסט המסומן</button>');$('#campaignAddLink').onclick=()=>{const label=body.value.slice(body.selectionStart,body.selectionEnd)||'כאן',url=prompt('כתובת HTTPS לקישור:','https://');if(!url||!/^https:\/\//.test(url))return;body.setRangeText(`[${label}](${url})`,body.selectionStart,body.selectionEnd,'end');body.focus();};}
       $('#campaignForm').onsubmit=async e=>{e.preventDefault();const val=id=>$('#'+id).value;await Store.add('campaigns',{title:val('campaignTitle').trim(),body:val('campaignBody').trim(),mediaType:val('campaignType'),mediaUrl:val('campaignMedia').trim(),linkUrl:val('campaignLink').trim(),audience:val('campaignAudience'),placement:'site',startAt:val('campaignStart')?new Date(val('campaignStart')).toISOString():'',endAt:val('campaignEnd')?new Date(val('campaignEnd')).toISOString():'',seconds:Number(val('campaignSeconds')),frequency:val('campaignFrequency'),active:$('#campaignActive').checked,notifyUsers:$('#campaignNotify').checked});toast('הקמפיין פורסם');await loadAll();paint();};
@@ -4633,6 +4659,8 @@ route('/terms', (app)=>{
     </aside>
   </div>`;
 });
+
+route('/partners',app=>{app.innerHTML=`<div class="page-h"><div class="eyebrow">קשרים ומשאבי בטיחות</div><h1>עובדים מול הגופים הנכונים — בשקיפות</h1><p>SMAI Sentinel היא יוזמה עצמאית. העמוד מבדיל בין שותפות רשמית, שימוש במשאב חיצוני וערוץ דיווח ציבורי.</p></div><div class="grid g3"><article class="card"><div class="ico-tile i-ok" style="font-weight:900">K</div><h2>KidSAFE</h2><span class="b b-info">משאב בטיחות חיצוני</span><p class="small mute">מידע והכוונה בנושאי בטיחות ילדים ברשת. אין בעמוד זה טענה לשותפות רשמית או להסמכה מטעם KidSAFE.</p><a class="btn btn-g btn-sm" href="https://kidsafe.com/" target="_blank" rel="noopener noreferrer nofollow">לאתר הרשמי</a></article><article class="card"><div class="ico-tile i-brand" style="font-weight:900">R</div><h2>Roblox</h2><span class="b b-info">ערוצי בטיחות ודיווח</span><p class="small mute">קישורים לערוצי התמיכה והדיווח הציבוריים של Roblox. SMAI אינה מציגה את Roblox כשותף רשמי ללא אישור כתוב.</p><a class="btn btn-g btn-sm" href="https://www.roblox.com/support" target="_blank" rel="noopener noreferrer nofollow">Roblox Support</a></article><article class="card"><div class="ico-tile i-gray" style="font-weight:900">F</div><h2>FBI / IC3</h2><span class="b b-gray">מידע בלבד · ארצות הברית</span><p class="small mute">במקרי פשיעת סייבר בעלי זיקה לארצות הברית ניתן לעיין בערוץ IC3 הרשמי. אין כרגע שותפות רשמית עם SMAI.</p><a class="btn btn-g btn-sm" href="https://www.ic3.gov/" target="_blank" rel="noopener noreferrer nofollow">IC3 הרשמי</a></article></div><div class="callout c-info" style="margin-top:18px"><span class="ic">${ic('info',18)}</span><div><b>סימון „שותף מאומת” יוצג רק לאחר אישור כתוב.</b><br><span class="small">שמות וסימנים מסחריים שייכים לבעליהם ואינם מעידים לבדם על חסות או שיתוף פעולה.</span></div></div>`;});
 
 route('/privacy',app=>{app.innerHTML='<div class="page-h"><div class="eyebrow">שקיפות</div><h1>פרטיות בגרסת הבדיקה</h1><p>עדכון: 10 בספטמבר 2026</p></div><div class="stack" style="max-width:850px"><section class="card"><h2>מה נשמר</h2><p>שם התצוגה, אימייל ומזהה החשבון מתקבלים משירות ההזדהות. תוכן הפניות, ההודעות והפעולות שלכם נשמר בשרת. שימוש בכינוי אינו אנונימיות מלאה: הפנייה משויכת לחשבון שלכם.</p></section><section class="card"><h2>מי יכול לגשת</h2><p>פניות נגישות לפונה ולצוות המורשה; הערות פנימיות זמינות לצוות בלבד. תוכן קהילתי גלוי למשתתפים המורשים באותו מרחב. שיחות פרטיות מוגבלות לחברי השיחה.</p></section><section class="card"><h2>סיוע של AI</h2><p>רק לאחר אישור מפורש, התוכן שנשלח לעוזר מועבר לספק AI חיצוני. בבקשת AI בתוך פנייה נשלחים גם התיאור וההודעות הגלויות האחרונות. אין לשלוח סיסמאות, קודי אימות, תמונות אינטימיות או פרטים מזהים שאינם נחוצים.</p></section><section class="card"><h2>אחסון ובקשות פרטיות</h2><p>המידע נשמר באמצעות תשתית Sites ו-Cloudflare. בגרסה זו עדיין אין מחיקה אוטומטית לפי זמן. אפשר לבקש תיקון, ייצוא או מחיקה באמצעות פנייה לצוות. ההעדפות וטיוטות מסוימות נשמרות גם בדפדפן.</p><a class="btn btn-g" href="/report">פנייה בנושא פרטיות</a></section><section class="card"><h2>לפני פתיחה לציבור</h2><p>זוהי גרסת בדיקה פרטית. יש לקבוע מדיניות שמירת מידע, נוהל מחיקה, תנאים ושימוש של קטינים לפני הפעלה ציבורית. אין להזין כאן מידע רגיש אמיתי לצורך הבדיקה.</p></section></div>';});
 /* ===================== 404 ===================== */
@@ -4799,7 +4827,7 @@ const PAGE_TITLES = {
   '/report':'דיווח חדש', '/my':'הפניות שלי', '/track':'מעקב פנייה', '/ticket':'פנייה',
   '/articles':'מדריכים', '/article':'מדריך', '/community':'קהילה', '/server':'שרת קהילה',
   '/join':'הצטרפות לצוות', '/login':'כניסה', '/account':'החשבון שלי', '/admin':'פאנל צוות',
-  '/setup':'התקנה', '/privacy':'פרטיות', '/terms':'תנאי שימוש', '/dm':'הודעות פרטיות', '/friends':'חברים', '/404':'לא נמצא', '/updates':'עדכונים'
+  '/setup':'התקנה', '/privacy':'פרטיות', '/terms':'תנאי שימוש', '/partners':'שיתופי פעולה', '/dm':'הודעות פרטיות', '/friends':'חברים', '/404':'לא נמצא', '/updates':'עדכונים'
 };
 
 /* ===================== ערכת נושא, תפריט, אתחול ===================== */
@@ -4813,6 +4841,10 @@ function initTheme(){
   };
   set(saved || 'dark');
   $('#themeBtn').onclick = ()=>set(document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark');
+}
+function initLanguage(){
+  const apply=lang=>{localStorage.setItem('smai_lang',lang);document.documentElement.lang=lang;document.documentElement.dir=lang==='en'?'ltr':'rtl';const b=$('#languageToggle');if(b){b.textContent=lang==='en'?'עב':'EN';b.setAttribute('aria-label',lang==='en'?'Switch to Hebrew':'מעבר לאנגלית');}const settings=document.querySelector('.top-utility a[href="/account"]');if(settings)settings.textContent=lang==='en'?'Settings':'הגדרות';const notices=$('#topNotifShortcut');if(notices&&!notices.querySelector('.top-notif-count'))notices.textContent=lang==='en'?'Notifications':'התראות';renderNav();};
+  apply(currentLang());const b=$('#languageToggle');if(b)b.onclick=()=>{apply(currentLang()==='en'?'he':'en');render();renderFooter();};
 }
 function initSfx(){
   Sfx.paintBtn();
@@ -4887,7 +4919,7 @@ function syncNotificationBadge(){
     button.setAttribute('aria-label',count?`${count} התראות שלא נקראו`:'התראות');
     button.classList.toggle('has-notifications',count>0);
     const topShortcut=$('#topNotifShortcut');
-    if(topShortcut){topShortcut.textContent=count?`התראות (${Math.min(count,99)})`:'התראות';topShortcut.classList.toggle('has-notifications',count>0);}
+    if(topShortcut){const label=currentLang()==='en'?'Notifications':'התראות';topShortcut.innerHTML=count?`${label}<span class="top-notif-count">${Math.min(count,99)}</span>`:label;topShortcut.classList.toggle('has-notifications',count>0);}
   });
 }
 function initDemoStrip(){
@@ -4901,7 +4933,7 @@ function initDemoStrip(){
 
 /* Boot never writes demo data or bypasses authentication. */
 (async function boot(){
- initTheme();initSfx();initBurger();initNotif();renderFooter();$('#demoStrip').style.display='none';
+ initTheme();initLanguage();initSfx();initBurger();initNotif();renderFooter();$('#demoStrip').style.display='none';
  try{await Auth.refresh();await CFG.load();}catch(e){toast(e.message,'warn');}
  const navigate=path=>{history.pushState(null,'',path);closeModal();window.scrollTo({top:0});return render();};
  window.navigate=navigate;

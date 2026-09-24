@@ -6,7 +6,7 @@ export const publicUser=u=>pick(u,['id','name','avatar','bio','rank','rankLvl','
 export const banned=u=>!!(u?.isBanned&&(!u.banUntil||Date.parse(u.banUntil)>Date.now()));
 export const muted=u=>Date.parse(u?.muteUntil)>Date.now();
 export const ranks={citizen:0,trainee:10,agent:20,senior:30,lead:40,head:50,admin:60,founder:70};
-export const collections=new Set('users tickets messages notifications reports applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends followers dms dmsgs config updates articles campaigns'.split(' '));
+export const collections=new Set('users tickets messages notifications reports applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends followers dms dmsgs config updates articles campaigns emergencyRequests'.split(' '));
 export const officialIds=new Set(['s-welcome','s-help','s-parents','s-teens','s-gaming','s-security']);
 export async function canRead(col,r,u,get){
   if(!r)return false;
@@ -20,6 +20,7 @@ export async function canRead(col,r,u,get){
   if(col==='reports')return n>=20||!!id&&r.byId===id;
   if(col==='modlog')return n>=20;
   if(col==='logs'||col==='mail')return n>=60;
+  if(col==='emergencyRequests')return n>=60;
   if(col==='servers')return !r.private||n>=40||!!id&&(r.ownerId===id||r.members?.includes(id)||r.admins?.includes(id));
   if(col==='channels')return (!r.staffOnly||n>=10)&&await canRead('servers',await get('servers',r.server),u,get);
   if(col==='threads'||col==='cmsgs')return await canRead('channels',await get('channels',r.channel||'gen:'+r.server),u,get);
@@ -52,6 +53,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
   const manageServer=async sid=>{const s=await get('servers',sid);return s&&(n>=40||s.ownerId===id||s.admins?.includes(id));};
   if(method==='DELETE'){
     requireThat(old,404,'הפריט לא נמצא');
+    if(['logs','emergencyRequests'].includes(col))throw new HttpError(403,'רישומי חירום וביקורת אינם ניתנים למחיקה');
     if(col==='friends'){requireThat(await canRead(col,old,u,get)&&(old.status!=='blocked'||old.by===id));return null;}
     if(col==='followers'){requireThat(old.from===id);return null;}
     if(col==='servers'){requireThat(n>=40||old.ownerId===id);return null;}
@@ -81,6 +83,9 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
       Object.assign(p,pick(input,['dept','verified']));
       if(input.rank){requireThat(Object.hasOwn(ranks,input.rank)&&ranks[input.rank]<n);p.rank=input.rank;p.rankLvl=ranks[input.rank];}
     }
+    if(n>=60&&n>rank(old))Object.assign(p,pick(input,['ageBand','ageVerificationStatus','ageReviewNote']));
+    if(p.ageBand)requireThat(['under10','10to12','13to17','adult'].includes(p.ageBand),400,'קבוצת הגיל אינה תקינה');
+    if(p.ageVerificationStatus)requireThat(['self_declared','staff_reviewed','reverify_required','reset'].includes(p.ageVerificationStatus),400,'מצב אימות הגיל אינו תקין');
     requireThat(Object.keys(p).length>0);return p;
   }
   if(col==='tickets'){
@@ -124,6 +129,20 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     requireThat(p.mediaType==='text'||/^https:\/\//.test(p.mediaUrl||''),400,'נדרשת כתובת HTTPS לתמונה או לסרטון');
     requireThat(['all','members','staff'].includes(p.audience),400,'קהל היעד אינו תקין');
     return p;
+  }
+  if(col==='emergencyRequests'){
+    requireThat(n>=60,403,'ניהול אירוע חירום דורש הרשאת מנהל בכיר');
+    if(isNew){
+      requireThat(input.targetUserId&&await get('users',input.targetUserId),400,'משתמש היעד לא נמצא');
+      requireThat(String(input.caseRef||'').trim().length>=3&&String(input.reason||'').trim().length>=20,400,'נדרש מספר אירוע והסבר מפורט');
+      requireThat(['ticket','dm'].includes(input.scopeType)&&String(input.scopeId||'').length>=8,400,'נדרש מזהה פנייה או שיחה מוגדר');
+      const scoped=await get(input.scopeType==='ticket'?'tickets':'dms',input.scopeId);
+      requireThat(scoped&&(input.scopeType==='ticket'?scoped.reporterId===input.targetUserId:scoped.members?.includes(input.targetUserId)),400,'הפריט המבוקש אינו משויך למשתמש');
+      return {targetUserId:input.targetUserId,scopeType:input.scopeType,scopeId:input.scopeId,caseRef:String(input.caseRef).slice(0,80),reason:String(input.reason).slice(0,1000),requestedBy:id,requestedByName:u.name,status:'pending'};
+    }
+    requireThat(old.status==='pending'&&old.requestedBy!==id,403,'נדרש אישור של מנהל בכיר אחר');
+    requireThat(['approved','rejected'].includes(input.status),400,'החלטה לא תקינה');
+    return {status:input.status,approvedBy:id,approvedByName:u.name,decisionNote:String(input.decisionNote||'').slice(0,500),approvedAt:new Date().toISOString(),expiresAt:input.status==='approved'?new Date(Date.now()+60*60*1000).toISOString():''};
   }
   if(col==='servers'){
     if(isNew){

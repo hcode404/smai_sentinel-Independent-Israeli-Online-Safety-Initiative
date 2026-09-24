@@ -226,6 +226,25 @@ export async function api(req,env,ctx={waitUntil(){}}){
       requireThat(body&&typeof body==='object'&&!Array.isArray(body),400,'בקשה לא תקינה');
       await limit(env,'write:'+u.id,100);
     }
+    const emergencyEvidence=path.match(/^\/api\/emergency\/([^/]+)\/evidence$/);
+    if(emergencyEvidence&&req.method==='GET'){
+      requireThat(rank(u)>=60,403,'גישה לראיות חירום דורשת הרשאת מנהל בכיר');
+      const access=await db.get('emergencyRequests',decodeURIComponent(emergencyEvidence[1]));
+      requireThat(access?.status==='approved'&&access.approvedBy!==access.requestedBy&&Date.parse(access.expiresAt)>Date.now(),403,'אישור החירום אינו פעיל או פג תוקפו');
+      requireThat([access.requestedBy,access.approvedBy].includes(u.id),403,'הגישה מוגבלת לשני המנהלים שאישרו את האירוע');
+      const target=await db.get('users',access.targetUserId);requireThat(target,404,'המשתמש לא נמצא');
+      let scoped;
+      if(access.scopeType==='ticket'){
+        const ticket=await db.get('tickets',access.scopeId);requireThat(ticket?.reporterId===target.id,403,'הפנייה אינה תואמת להיקף שאושר');
+        scoped={type:'ticket',ticket,messages:(await db.list('messages')).filter(m=>m.ticketId===ticket.id&&!m.internal)};
+      }else{
+        const conversation=await db.get('dms',access.scopeId);requireThat(conversation?.members?.includes(target.id),403,'השיחה אינה תואמת להיקף שאושר');
+        scoped={type:'dm',conversation:{id:conversation.id,kind:conversation.kind,name:conversation.name,members:conversation.members,createdAt:conversation.createdAt},messages:(await db.list('dmsgs')).filter(m=>m.convId===conversation.id&&!m.deleted)};
+      }
+      const evidence={caseRef:access.caseRef,generatedAt:now(),expiresAt:access.expiresAt,target:{id:target.id,name:target.name,email:target.email,ageBand:target.ageBand||'unknown',createdAt:target.createdAt,verified:!!target.verified},scope:scoped,exclusions:['passwords','authentication tokens','verification codes','biometric images','internal staff notes','unrelated conversations']};
+      await db.put('logs',{id:nonce(),createdAt:now(),actorId:u.id,actorName:u.name,type:'emergency_evidence_access',targetId:target.id,caseRef:access.caseRef,requestId:access.id,text:'גישה מאושרת לחבילת ראיות מוגבלת בזמן'});
+      return json(evidence);
+    }
     if(path==='/api/ticket-ai'&&req.method==='POST'){
       const t=await db.get('tickets',body.ticketId);requireThat(await canRead('tickets',t,u,db.get));requireThat(!banned(u));
       if(['closed','resolved','escalated'].includes(t.status))return json({skipped:true});
