@@ -200,7 +200,9 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     if(isNew){
       requireThat(!input.system);
       const replyTo=input.replyTo&&typeof input.replyTo==='object'?pick(input.replyTo,['id','text','sender']):undefined;
-      const p={convId:input.convId,text:input.text,senderId:id,senderName:u.name,senderRank:u.rank,deliveredAt:new Date().toISOString(),...(replyTo?{replyTo}:{})};
+      const attachment=input.attachment&&typeof input.attachment==='object'?pick(input.attachment,['url','name','type','size']):undefined;
+      if(attachment){requireThat(/^https:\/\/[^/]+\/api\/media\/[A-Za-z0-9_-]+\?token=[A-Za-z0-9]+$/.test(attachment.url||''),400,'קישור הקובץ אינו תקין');requireThat(Number(attachment.size)>0&&Number(attachment.size)<=4*1024*1024,400,'גודל הקובץ אינו תקין');}
+      const p={convId:input.convId,text:input.text||attachment?.name||'קובץ',senderId:id,senderName:u.name,senderRank:u.rank,deliveredAt:new Date().toISOString(),...(replyTo?{replyTo}:{}),...(attachment?{attachment}:{})};
       if(input.callUrl){requireThat(/^https:\/\/meet\.jit\.si\/SMAI-Sentinel-[A-Za-z0-9-]{12,160}(?:#.*)?$/.test(input.callUrl),400,'קישור השיחה אינו תקין');p.callUrl=input.callUrl;p.callType=input.callType==='video'?'video':'audio';}
       return p;
     }

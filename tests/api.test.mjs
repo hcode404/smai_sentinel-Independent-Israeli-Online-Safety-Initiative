@@ -204,6 +204,13 @@ test('direct messages and call invitations notify the other participant',async()
  const notices=(await f.call('records/notifications','GET',null,'bob')).data;
  assert.equal(notices.length,1);assert.equal(notices[0].type,'callInvite');assert.equal(notices[0].href,`/dm/${conv.data.id}`);f.DB.close();
 });
+test('private messages persist validated media attachments',async()=>{
+ const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'bob');
+ const conv=await f.call('records/dms','POST',{members:['alice','bob']});
+ const attachment={url:'https://smai-sentinel-api.example.test/api/media/file123?token=token123',name:'photo.png',type:'image/png',size:2048};
+ const sent=await f.call('records/dmsgs','POST',{convId:conv.data.id,text:'תמונה',attachment});assert.equal(sent.status,201);assert.deepEqual(sent.data.attachment,attachment);
+ const invalid=await f.call('records/dmsgs','POST',{convId:conv.data.id,text:'קובץ',attachment:{...attachment,url:'https://evil.example/file'}});assert.equal(invalid.status,400);f.DB.close();
+});
 test('a private chat mention creates a dedicated alert for the mentioned user',async()=>{
  const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'bob');
  const conv=await f.call('records/dms','POST',{members:['alice','bob']});assert.equal(conv.status,201);

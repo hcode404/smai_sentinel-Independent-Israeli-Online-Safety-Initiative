@@ -271,9 +271,15 @@ export async function api(req,env,ctx={waitUntil(){}}){
     if(!['GET','HEAD'].includes(req.method)){
       const allowedOrigin=new URL(env.PUBLIC_SITE_URL||MAIL_SITE).origin;
       requireThat(req.headers.get('Origin')===allowedOrigin||req.headers.get('Origin')===url.origin,403,'בקשה ממקור לא מורשה');
-      requireThat(req.headers.get('Content-Type')?.startsWith('application/json'),415,'נדרש JSON');
+      requireThat(path==='/api/uploads/dm'?req.headers.get('Content-Type')?.startsWith('multipart/form-data'):req.headers.get('Content-Type')?.startsWith('application/json'),415,'סוג תוכן אינו נתמך');
     }
-    const db=database(env),u=await identity(req,env,db,ctx);
+    const db=database(env),mediaMatch=path.match(/^\/api\/media\/([A-Za-z0-9_-]+)$/);
+    if(mediaMatch&&req.method==='GET'){
+      const object=await db.get('media',mediaMatch[1]);requireThat(object&&url.searchParams.get('token')===object.token,404,'הקובץ לא נמצא');
+      const binary=atob(object.data),bytes=Uint8Array.from(binary,char=>char.charCodeAt(0));
+      return new Response(bytes,{headers:{'Content-Type':object.type||'application/octet-stream','Content-Disposition':`inline; filename="${String(object.name||'file').replace(/["\r\n]/g,'')}"`,'Cache-Control':'private, max-age=86400','X-Content-Type-Options':'nosniff'}});
+    }
+    const u=await identity(req,env,db,ctx);
     if(path==='/api/session')return json({user:u?safeRecord('users',u,u):null});
     if(path==='/api/status')return json({database:true,ai:true,aiMode:env.AI?'workers-ai':env.GEMINI_API_KEY?'gemini':'basic',mail:!!(env.MAIL_GATEWAY_URL&&env.MAIL_GATEWAY_SECRET||env.RESEND_API_KEY&&env.MAIL_FROM||env.GMAIL_USER&&env.GMAIL_APP_PASSWORD),mailFrom:rank(u)>=60?(env.MAIL_FROM||env.GMAIL_USER||MAIL_BRAND):undefined,migration:'new-database',version:'2.1',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
     if(path==='/api/auth/password-reset'&&req.method==='POST'){
@@ -307,6 +313,16 @@ export async function api(req,env,ctx={waitUntil(){}}){
       return json(result);
     }
     requireThat(u,401,'יש להתחבר כדי להמשיך');
+    if(path==='/api/uploads/dm'&&req.method==='POST'){
+      await limit(env,'upload:'+u.id,20,3600);
+      const form=await req.formData(),convId=String(form.get('convId')||''),file=form.get('file');
+      const conv=await db.get('dms',convId);requireThat(conv?.members?.includes(u.id),403,'אין הרשאה להעלות לשיחה הזו');
+      requireThat(file instanceof File&&file.size>0&&file.size<=4*1024*1024,413,'אפשר להעלות קובץ עד 4MB');
+      const type=String(file.type||'application/octet-stream').toLowerCase();requireThat(/^(image\/(jpeg|png|gif|webp)|video\/(mp4|webm|quicktime)|application\/pdf|text\/plain)$/.test(type),415,'סוג הקובץ אינו נתמך');
+      const key=nonce(),token=nonce()+nonce(),bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+      await db.put('media',{id:key,token,name:String(file.name||'file').slice(0,160),type,size:file.size,ownerId:u.id,convId,data:btoa(binary),createdAt:now()});
+      return json({url:`${url.origin}/api/media/${key}?token=${token}`,name:String(file.name||'file').slice(0,160),type,size:file.size});
+    }
     let body={};
     if(!['GET','HEAD'].includes(req.method)){
       const raw=await req.text();requireThat(raw.length<=60000,413,'הבקשה גדולה מדי');

@@ -1,4 +1,4 @@
-import {remoteStore,request} from './api.js';
+import {remoteStore,request,upload} from './api.js';
 import {initAssistant} from './assistant.js';
 import {authReady,loginEmail,registerEmail,loginGoogle,resetPassword,requestEmailChange,logoutFirebase,firebaseUser,beginTotpEnrollment,finishTotpEnrollment} from './firebase-auth.js';
 import { renderHome } from './home.js';
@@ -1436,6 +1436,17 @@ function linkify(txt){
   }).replace(/@([֐-׿a-zA-Z0-9_.\-]{2,30})/g, '<span class="mention">@$1</span>');
 }
 window.linkify = linkify;
+function linkPreviewHTML(text){
+  const raw=String(text||'').match(/https?:\/\/[^\s<]{4,300}/)?.[0];if(!raw)return '';
+  let url;try{url=new URL(raw.replace(/[.,;:!?)]+$/,''));}catch{return '';}
+  return `<a class="msg-link-preview" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer nofollow"><img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64" alt=""><span><b>${esc(url.hostname)}</b><small>${esc(url.pathname==='/'?'פתיחת הקישור':url.pathname.slice(0,80))}</small></span>${ic('chevron',15)}</a>`;
+}
+function attachmentHTML(file){
+  if(!file?.url)return '';const url=esc(file.url),name=esc(file.name||'קובץ'),type=String(file.type||'');
+  if(type.startsWith('image/'))return `<a href="${url}" target="_blank" rel="noopener"><img class="chat-attachment image" src="${url}" alt="${name}" loading="lazy"></a>`;
+  if(type.startsWith('video/'))return `<video class="chat-attachment video" src="${url}" controls preload="metadata"></video>`;
+  return `<a class="chat-file" href="${url}" target="_blank" rel="noopener">${ic('file',18)}<span><b>${name}</b><small>${Math.max(1,Math.round(Number(file.size||0)/1024))} KB</small></span></a>`;
+}
 function campaignRichText(txt){return esc(String(txt||'')).replace(/\[([^\]]{1,80})\]\((https:\/\/[^\s)]+)\)/g,(_,label,url)=>`<a href="${url}" target="_blank" rel="noopener noreferrer nofollow">${label}</a>`).replace(/\n/g,'<br>');}
 
 /* ===================== ניהול ערוצים ===================== */
@@ -2509,7 +2520,7 @@ route('/ticket', async (app, id)=>{
     chatEl.innerHTML = msgs.length ? msgs.map(m=>{
       const mine = (Auth.user && m.senderId===Auth.user.id) || (!Auth.user && !m.senderId && !m.staffSide);
       if(m.system) return `<div class="msg sys"><div class="bub">${esc(m.text)}</div></div>`;
-      if(m.ai) return `<div class="msg">
+      if(m.ai) return `<div class="msg" data-mid="${m.id}" data-msg-col="messages" data-msg-mine="0" data-msg-text="${esc((m.text||'').slice(0,500))}" data-msg-name="SMAI AI">
         <span class="av s" style="background:linear-gradient(135deg,var(--brand2),var(--accent));color:#fff">${ic('bot',16)}</span>
         <div class="bub" style="border-color:color-mix(in srgb,var(--accent) 34%,transparent)">
           <div class="who">SMAI AI <span class="b b-violet">${ic('sparkle',11)} סוכן חכם</span>
@@ -2517,13 +2528,13 @@ route('/ticket', async (app, id)=>{
           ${aiStagesHTML(m.stages)}
           ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}<div class="txt">${esc(m.text)}</div>
           ${m.article?`<a class="btn btn-g btn-sm" style="margin-top:9px" href="/article/${m.article}">${ic('book',14)} למדריך המלא</a>`:''}
-          <div class="tm">${fmtTime(m.createdAt)} · ${fmtDate(m.createdAt)}</div><div class="acts"><button class="reply-btn" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'SMAI AI')}">↩</button>${Auth.user?.rank==='founder'||Auth.user?.isOwner?`<button data-ticket-act="del" data-id="${m.id}" title="מחיקה">${ic('trash',13)}</button>`:''}</div></div></div>`;
-      return `<div class="msg ${mine?'mine':''} ${m.internal?'int':''}">
+          <div class="tm">${fmtTime(m.createdAt)} · ${fmtDate(m.createdAt)}</div><div class="acts"><button class="reply-btn" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'SMAI AI')}">↩</button></div></div></div>`;
+      return `<div class="msg ${mine?'mine':''} ${m.internal?'int':''}" data-mid="${m.id}" data-msg-col="messages" data-msg-mine="${mine?'1':'0'}" data-msg-text="${esc((m.text||'').slice(0,500))}" data-msg-name="${esc(m.senderName||'משתמש')}">
         ${avatar({id:m.senderId,name:m.senderName},'s')}
         <div class="bub"><div class="who">${esc(m.senderName||'משתמש')} ${rankBadge(m.senderRank)}${m.verified ? '<span class="b b-ok" style="font-size:10px">✓ מאומת</span>' : ''}
           ${m.internal?'<span class="b b-warn">פנימי</span>':''}</div>
           ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}<div class="txt">${esc(m.text)}</div>
-          <div class="tm">${fmtTime(m.createdAt)} · ${fmtDate(m.createdAt)}</div></div><div class="acts">${!mine?`<button data-ticket-act="report" data-id="${m.id}" title="דיווח">${ic('flag',13)}</button>`:''}${mine||Auth.user?.rank==='founder'||Auth.user?.isOwner?`<button data-ticket-act="del" data-id="${m.id}" title="מחיקה">${ic('trash',13)}</button>`:''}<button class="reply-btn" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
+          <div class="tm">${fmtTime(m.createdAt)} · ${fmtDate(m.createdAt)}</div></div><div class="acts">${!mine?`<button data-ticket-act="report" data-id="${m.id}" title="דיווח">${ic('flag',13)}</button>`:''}<button class="reply-btn" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
     }).join('') : `<div class="empty" style="padding:26px"><p class="small">אין עדיין הודעות. כתבו משהו כדי להתחיל.</p></div>`;
     chatEl.scrollTop = chatEl.scrollHeight;
     chatEl.querySelectorAll('[data-ticket-act]').forEach(button=>button.onclick=async()=>{const message=msgs.find(item=>item.id===button.dataset.id);if(button.dataset.ticketAct==='report')reportMessageModal(message,'ticket:'+id);if(button.dataset.ticketAct==='del')await deleteMessage(button.dataset.id,'messages');});
@@ -2985,7 +2996,7 @@ function renderTextChannel(s, ch, users, o){
       const mine = me && m.senderId===me.id;
       const canMod = staff && Auth.can('moderateChat');
       const su = users.find(x=>x.id===m.senderId);
-      return `<div class="msg ${mine?'mine':''} anim-msg" data-mid="${m.id}">
+      return `<div class="msg ${mine?'mine':''} anim-msg" data-mid="${m.id}" data-msg-col="cmsgs" data-msg-mine="${mine?'1':'0'}" data-msg-text="${esc((m.text||'').slice(0,500))}" data-msg-name="${esc(m.senderName||'משתמש')}">
         <span style="cursor:pointer" onclick="openProfile('${jsq(m.senderId||'')}')">${avatar({id:m.senderId,name:m.senderName,avatar:su?.avatar},'s')}</span>
         <div class="bub"><div class="who"><span style="cursor:pointer" onclick="openProfile('${jsq(m.senderId||'')}')">${esc(m.senderName||'משתמש')}</span> ${rankBadge(m.senderRank)}
           ${su?.verified&&su.privacy?.showVerified!==false?`<span class="verified">${ic('check',9,3)}</span>`:''}
@@ -2996,7 +3007,6 @@ function renderTextChannel(s, ch, users, o){
           ${me && !mine ? `<button title="דיווח על ההודעה" data-act="report" data-id="${m.id}">${ic('flag',13)}</button>`:''}
           ${me && !mine && m.senderId ? `<button title="הודעה פרטית" data-act="dm" data-id="${m.senderId}">${ic('message',13)}</button>`:''}
           ${me && !mine && m.senderId ? `<button title="הוספה כחבר" data-act="fr" data-id="${m.senderId}">${ic('plus',13)}</button>`:''}
-          ${canMod || mine ? `<button title="מחיקת ההודעה" data-act="del" data-id="${m.id}">${ic('trash',13)}</button>`:''}
           ${canMod && !mine && m.senderId ? `<button title="פעולות משתמש" data-act="user" data-id="${m.senderId}">${ic('user',13)}</button>`:''}
         <button class="reply-btn" data-chat="c" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
     }).join('') : `<div class="empty"><div class="ico">${ic('message',26)}</div>
@@ -3119,6 +3129,20 @@ window._replyTo3=null;
   });
 })();
 
+async function forwardMessageModal(text,sender){
+  const me=Auth.user;if(!me)return toast('צריך להתחבר','warn');const conversations=(await Store.list('dms')).filter(c=>(c.members||[]).includes(me.id));
+  openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('send',18)}</span><h3>העברת הודעה</h3></div><div class="m-b"><div class="reply-quote">${esc(sender)}: ${esc(String(text||'').slice(0,220))}</div><div class="stack" style="margin-top:12px">${conversations.length?conversations.map(c=>`<button class="pick-row" data-forward="${c.id}">${ic('message',15)} ${esc(convTitle(c,me.id,[]))}</button>`).join(''):'<p class="small mute">אין שיחות שאפשר להעביר אליהן.</p>'}</div></div><div class="m-f"><button class="btn btn-g" onclick="closeModal()">ביטול</button></div>`);
+  $$('[data-forward]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await Store.add('dmsgs',{convId:button.dataset.forward,text:`הועבר מאת ${sender}:\n${text}`,senderId:me.id,senderName:me.name||me.email,senderRank:me.rank,createdAt:nowISO()});closeModal();toast('ההודעה הועברה');}catch(error){toast(error.message,'err');button.disabled=false;}});
+}
+document.addEventListener('contextmenu',event=>{
+  const message=event.target.closest('.msg[data-mid][data-msg-col]');if(!message)return;event.preventDefault();document.querySelector('.message-context-menu')?.remove();
+  const mine=message.dataset.msgMine==='1',founder=Auth.user?.rank==='founder'||Auth.user?.isOwner;
+  const menu=document.createElement('div');menu.className='message-context-menu';menu.style.left=`${Math.min(event.clientX,innerWidth-210)}px`;menu.style.top=`${Math.min(event.clientY,innerHeight-250)}px`;
+  menu.innerHTML=`<button data-cm="reply">↩ תגובה</button>${!mine?'<button data-cm="report">⚑ דיווח</button>':''}${mine||founder?'<button data-cm="delete">⌫ מחיקה</button>':''}<button data-cm="share">↗ שיתוף</button><button data-cm="forward">➜ העברה</button>`;document.body.appendChild(menu);
+  menu.onclick=async click=>{const action=click.target.closest('[data-cm]')?.dataset.cm;if(!action)return;menu.remove();if(action==='reply')message.querySelector('.reply-btn')?.click();if(action==='report')(message.querySelector('[data-act="report"],[data-ticket-act="report"]'))?.click();if(action==='delete')await deleteMessage(message.dataset.mid,message.dataset.msgCol);if(action==='share'){const text=message.dataset.msgText||'';try{if(navigator.share)await navigator.share({title:'הודעה מ-SMAI',text});else{await navigator.clipboard.writeText(text);toast('ההודעה הועתקה');}}catch{}}if(action==='forward')await forwardMessageModal(message.dataset.msgText||'',message.dataset.msgName||'משתמש');};
+  const close=click=>{if(!menu.contains(click.target))menu.remove();document.removeEventListener('click',close);};setTimeout(()=>document.addEventListener('click',close),0);
+});
+
 /* ===================== ערוץ פורום ===================== */
 async function renderForum(s, ch, users, threadId, o){
   const me = Auth.user;
@@ -3200,14 +3224,13 @@ async function renderForum(s, ch, users, threadId, o){
         ${reps.length ? reps.map(m=>{
           const mine = me && m.senderId===me.id;
           const su = users.find(x=>x.id===m.senderId) || {};
-          return `<div class="msg ${mine?'mine':''} anim-msg">
+          return `<div class="msg ${mine?'mine':''} anim-msg" data-mid="${m.id}" data-msg-col="tmsgs" data-msg-mine="${mine?'1':'0'}" data-msg-text="${esc((m.text||'').slice(0,500))}" data-msg-name="${esc(m.senderName||'משתמש')}">
             <span style="cursor:pointer" onclick="openProfile('${jsq(m.senderId||'')}')">${avatar({id:m.senderId,name:m.senderName,avatar:su.avatar},'s')}</span>
             <div class="bub"><div class="who">${esc(m.senderName||'משתמש')} ${rankBadge(m.senderRank)}
               ${su.verified&&su.privacy?.showVerified!==false?`<span class="verified">${ic('check',9,3)}</span>`:''}</div>
               ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}<div class="txt">${linkify(m.text)}</div><div class="tm">${fmtTime(m.createdAt)}</div></div>
             <div class="acts">
               ${me && !mine ? `<button title="דיווח" data-act="report" data-id="${m.id}">${ic('flag',13)}</button>`:''}
-              ${canModT || mine ? `<button title="מחיקה" data-act="del" data-id="${m.id}">${ic('trash',13)}</button>`:''}
             <button class="reply-btn" data-chat="c" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
         }).join('') : `<p class="tiny mute">אין עדיין תגובות. תהיו הראשונים.</p>`}
       </div>`;
@@ -3771,7 +3794,8 @@ route('/dm', async (app, id)=>{
         ${Auth.muted()
           ? `<div class="callout c-warn" style="padding:11px 13px;font-size:.86rem"><span class="ic">${ic('volume-x',17)}</span>
              <div>אתם מושתקים עד ${fmtTime(me.muteUntil)} ${fmtDate(me.muteUntil)}.</div></div>`
-          : `<div class="composer" style="position:relative;border:0;padding:0;margin:0">
+          : `<div id="dmAttachmentPreview"></div><div class="composer" style="position:relative;border:0;padding:0;margin:0">
+              <button class="iconbtn" id="dmAttach" type="button" title="העלאת תמונה, סרטון או קובץ">${ic('plus',18)}</button><input id="dmFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,text/plain" hidden>
               <textarea id="din" placeholder="הודעה פרטית... (Enter לשליחה)" style="min-height:46px"></textarea>
               <div id="dMentionList" class="mention-list" role="listbox" aria-label="השלמת תיוג משתמש" style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;right:0"></div>
               <button class="btn btn-p" id="dbtn" style="height:46px">${ic('send',17)}</button></div>
@@ -3791,6 +3815,7 @@ route('/dm', async (app, id)=>{
   const rejectDm=$('#rejectDm');if(rejectDm)rejectDm.onclick=async()=>{rejectDm.disabled=true;try{await Friends.block(other);toast('הבקשה נחסמה');location.hash='#/dm';render();}catch(e){toast(e.message||'לא ניתן לחסום','err');rejectDm.disabled=false;}};
 
   const box = $('#dchat');
+  let pendingMessages=[],lastServerMessages=[],draftAttachment=null;
   const scrollDmToLatest=()=>{
     if(!box||$('#dchat')!==box)return;
     box.scrollTop=box.scrollHeight;
@@ -3798,18 +3823,19 @@ route('/dm', async (app, id)=>{
   };
   const paint = (list)=>{
     if(!box || $('#dchat') !== box) return;
-    const msgs = list.filter(m=>m.convId===cur.id && !m.deleted)
+    lastServerMessages=list;
+    const msgs = [...list.filter(m=>m.convId===cur.id && !m.deleted),...pendingMessages]
                      .sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
     box.innerHTML = msgs.length ? msgs.map(m=>{
       const isMine = m.senderId === me.id;
       if(m.system) return `<div class="sys-msg">${esc(m.text)}</div>`;
       const su = users.find(u=>u.id===m.senderId);
-      return `<div class="msg ${isMine?'mine':''}" data-mid="${m.id}">
+      return `<div class="msg ${isMine?'mine':''}" data-mid="${m.id}" data-msg-col="dmsgs" data-msg-mine="${isMine?'1':'0'}" data-msg-text="${esc((m.text||'').slice(0,500))}" data-msg-name="${esc(m.senderName||'משתמש')}">
         ${avatar({ id:m.senderId, name:m.senderName, avatar:(su?.avatar || (isMine?me.avatar:otherU?.avatar)) },'s')}
         <div class="bub"><div class="who">${esc(m.senderName||'משתמש')} ${rankBadge(m.senderRank)}
           ${m.flagged?`<span class="b b-warn">${ic('flag',10)} נבדק</span>`:''}</div>
-          ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}<div class="txt">${esc(m.text)}</div>${m.callUrl?`<a class="btn btn-p btn-sm" href="${esc(m.callUrl)}" target="_blank" rel="noopener noreferrer" style="margin-top:8px">${ic(m.callType==='video'?'camera':'phone',15)} הצטרפות לשיחה</a>`:''}<div class="tm">${fmtTime(m.createdAt)} ${isMine?`<span class="read-receipt ${m.readAt?'read':m.deliveredAt?'delivered':'sent'}" title="${m.readAt?'נקרא':m.deliveredAt?'נמסר':'נשלח'}">${m.readAt?'✓✓':m.deliveredAt?'✓✓':'✓'}</span>`:''}</div></div>
-        <div class="acts">${!isMine?`<button title="דיווח" data-act="report" data-id="${m.id}">${ic('flag',13)}</button>`:''}${isMine||me.rank==='founder'||me.isOwner?`<button title="מחיקת ההודעה" data-act="del" data-id="${m.id}">${ic('trash',13)}</button>`:''}<button class="reply-btn" data-chat="d" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
+          ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}${attachmentHTML(m.attachment)}<div class="txt">${linkify(m.text)}</div>${linkPreviewHTML(m.text)}${m.callUrl?`<a class="btn btn-p btn-sm" href="${esc(m.callUrl)}" target="_blank" rel="noopener noreferrer" style="margin-top:8px">${ic(m.callType==='video'?'camera':'phone',15)} הצטרפות לשיחה</a>`:''}<div class="tm">${fmtTime(m.createdAt)} ${isMine?`<span class="read-receipt ${m._pending?'sent':m.readAt?'read':m.deliveredAt?'delivered':'sent'}" title="${m._pending?'ממתין לשליחה':m.readAt?'נקרא':m.deliveredAt?'נמסר':'נשלח'}">${m._pending?'✓':m.readAt?'✓✓':m.deliveredAt?'✓✓':'✓'}</span>`:''}</div></div>
+        <div class="acts">${!isMine?`<button title="דיווח" data-act="report" data-id="${m.id}">${ic('flag',13)}</button>`:''}<button class="reply-btn" data-chat="d" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
     }).join('') : `<div class="empty"><div class="ico">${ic('message',26)}</div><p class="small">אין עדיין הודעות בשיחה הזו.</p></div>`;
     scrollDmToLatest();
     /* צליל רק על הודעה חדשה של מישהו אחר, ולא בטעינה הראשונה */
@@ -3824,8 +3850,11 @@ route('/dm', async (app, id)=>{
   let lastSeen = null;
   onCleanup(Store.watch('dmsgs', paint));
 
+  const fileInput=$('#dmFile'),attachButton=$('#dmAttach'),attachmentPreview=$('#dmAttachmentPreview');
+  if(attachButton&&fileInput){attachButton.onclick=()=>fileInput.click();fileInput.onchange=async()=>{const file=fileInput.files?.[0];if(!file)return;if(file.size>4*1024*1024){toast('אפשר להעלות קובץ עד 4MB','warn');fileInput.value='';return;}attachButton.disabled=true;attachmentPreview.innerHTML='<div class="tiny mute">מעלה את הקובץ בצורה מאובטחת…</div>';try{const form=new FormData();form.append('convId',cur.id);form.append('file',file);draftAttachment=await upload('/api/uploads/dm',form);attachmentPreview.innerHTML=`<div class="attachment-draft">${ic('check',14)} ${esc(draftAttachment.name)} <button type="button" id="dmAttachmentRemove">×</button></div>`;$('#dmAttachmentRemove').onclick=()=>{draftAttachment=null;attachmentPreview.innerHTML='';fileInput.value='';};}catch(error){attachmentPreview.innerHTML='';toast(error.message,'err');}finally{attachButton.disabled=false;}};}
+
   const sendD = async ()=>{
-    const inp = $('#din'); const txt = inp.value.trim(); if(!txt) return;
+    const inp = $('#din'); const txt = inp.value.trim(); if(!txt&&!draftAttachment) return;
     const mod = moderate(txt);
     if(mod.violation && mod.severity >= 3){
       toast('ההודעה נחסמה — היא מפרה את כללי הקהילה','err');
@@ -3838,10 +3867,13 @@ route('/dm', async (app, id)=>{
       const rels = await Friends.mine(me.id);
       if(!dmAllowed(rels, me.id, other)){ toast('לא ניתן לשלוח הודעה למשתמש הזה','err'); return; }
     }
-    inp.value=''; inp.disabled = true;
+    const attachment=draftAttachment;draftAttachment=null;if(attachmentPreview)attachmentPreview.innerHTML='';
+    const optimistic={id:'pending-'+uid(),convId:cur.id,senderId:me.id,senderName:me.name||me.email,senderRank:me.rank,text:txt||attachment?.name||'קובץ',attachment,createdAt:nowISO(),_pending:true};
+    pendingMessages.push(optimistic);inp.value='';paint(lastServerMessages);inp.disabled = true;
     try{
       await Store.add('dmsgs', { convId:cur.id, senderId:me.id, senderName:me.name||me.email,
-        senderRank:me.rank, text:txt, flagged:mod.violation, ...(window._replyTo3?{replyTo:window._replyTo3}:{}),createdAt:nowISO() });
+        senderRank:me.rank, text:txt||attachment?.name||'קובץ', attachment,flagged:mod.violation, ...(window._replyTo3?{replyTo:window._replyTo3}:{}),createdAt:nowISO() });
+      pendingMessages=pendingMessages.filter(item=>item.id!==optimistic.id);
       if(window._replyTo3){window._replyTo3=null;const bar=document.getElementById('_rBar3');if(bar)bar.style.display='none';}
       // Last-message metadata is updated by the server.
       Sfx.play('msgOut');
@@ -3853,7 +3885,7 @@ route('/dm', async (app, id)=>{
       if(c.includes('permission-denied')||c.includes('PERMISSION_DENIED'))
         toast('שגיאת הרשאות Firestore — עברו ל-#/setup להגדרת הכללים','err');
       else toast('שליחה נכשלה: '+(e?.message||c||'שגיאה לא ידועה'),'err');
-      inp.value = txt;
+      pendingMessages=pendingMessages.filter(item=>item.id!==optimistic.id);paint(lastServerMessages);inp.value = txt;draftAttachment=attachment;if(attachmentPreview&&attachment)attachmentPreview.innerHTML=`<div class="attachment-draft">${ic('alert',14)} ${esc(attachment.name)} — נסו לשלוח שוב</div>`;
     }
     finally{ inp.disabled=false; inp.focus(); }
   };
