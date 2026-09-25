@@ -3741,10 +3741,9 @@ route('/dm', async (app, id)=>{
   if(!Auth.user) return app.innerHTML = requireLogin('צריך להתחבר כדי לראות הודעות פרטיות');
   if(Auth.banInfo()) return renderBanned(app);
   const me = Auth.user;
-  const all = await Store.list('dms');
+  const [all,users] = await Promise.all([Store.list('dms'),Store.list('users')]);
   const mine = all.filter(c=>(c.members||[]).includes(me.id))
                   .sort((a,b)=>String(b.lastAt).localeCompare(String(a.lastAt)));
-  const users = await Store.list('users');
   const cur = id ? mine.find(c=>c.id===id) : mine[0];
   const other = cur ? (cur.members||[]).find(x=>x!==me.id) : null;
   const otherU = users.find(u=>u.id===other);
@@ -3795,10 +3794,10 @@ route('/dm', async (app, id)=>{
           ? `<div class="callout c-warn" style="padding:11px 13px;font-size:.86rem"><span class="ic">${ic('volume-x',17)}</span>
              <div>אתם מושתקים עד ${fmtTime(me.muteUntil)} ${fmtDate(me.muteUntil)}.</div></div>`
           : `<div id="dmAttachmentPreview"></div><div class="composer" style="position:relative;border:0;padding:0;margin:0">
-              <button class="iconbtn" id="dmAttach" type="button" title="העלאת תמונה, סרטון או קובץ">${ic('plus',18)}</button><input id="dmFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,text/plain" hidden>
-              <textarea id="din" placeholder="הודעה פרטית... (Enter לשליחה)" style="min-height:46px"></textarea>
+              <button class="iconbtn" id="dmAttach" type="button" title="ממתין לטעינת השיחה" disabled>${ic('plus',18)}</button><input id="dmFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,text/plain" hidden>
+              <textarea id="din" placeholder="טוען את השיחה…" style="min-height:46px" disabled></textarea>
               <div id="dMentionList" class="mention-list" role="listbox" aria-label="השלמת תיוג משתמש" style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;right:0"></div>
-              <button class="btn btn-p" id="dbtn" style="height:46px">${ic('send',17)}</button></div>
+              <button class="btn btn-p" id="dbtn" style="height:46px" disabled>${ic('send',17)}</button></div>
              <div class="tiny mute" style="margin-top:7px">${ic('shield-check',11)} גם הודעות פרטיות נסרקות. אפשר לדווח על כל הודעה.</div>`}
       </div>` : `<div class="hm-b" style="display:grid;place-items:center">
         ${emptyState('message','אין שיחה פתוחה','פתחו שיחה פרטית מכל פרופיל בקהילה, או לחצו על + כדי לבחור משתמש.',
@@ -3815,7 +3814,7 @@ route('/dm', async (app, id)=>{
   const rejectDm=$('#rejectDm');if(rejectDm)rejectDm.onclick=async()=>{rejectDm.disabled=true;try{await Friends.block(other);toast('הבקשה נחסמה');location.hash='#/dm';render();}catch(e){toast(e.message||'לא ניתן לחסום','err');rejectDm.disabled=false;}};
 
   const box = $('#dchat');
-  let pendingMessages=[],lastServerMessages=[],draftAttachment=null;
+  let pendingMessages=[],lastServerMessages=[],draftAttachment=null,chatReady=false;
   const scrollDmToLatest=()=>{
     if(!box||$('#dchat')!==box)return;
     box.scrollTop=box.scrollHeight;
@@ -3824,6 +3823,7 @@ route('/dm', async (app, id)=>{
   const paint = (list)=>{
     if(!box || $('#dchat') !== box) return;
     lastServerMessages=list;
+    if(!chatReady){chatReady=true;const input=$('#din'),send=$('#dbtn'),attach=$('#dmAttach');if(input){input.disabled=false;input.placeholder='הודעה פרטית... (Enter לשליחה)';}if(send)send.disabled=false;if(attach){attach.disabled=false;attach.title='העלאת תמונה, סרטון או קובץ';}}
     const msgs = [...list.filter(m=>m.convId===cur.id && !m.deleted),...pendingMessages]
                      .sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
     box.innerHTML = msgs.length ? msgs.map(m=>{
@@ -3854,6 +3854,7 @@ route('/dm', async (app, id)=>{
   if(attachButton&&fileInput){attachButton.onclick=()=>fileInput.click();fileInput.onchange=async()=>{const file=fileInput.files?.[0];if(!file)return;if(file.size>4*1024*1024){toast('אפשר להעלות קובץ עד 4MB','warn');fileInput.value='';return;}attachButton.disabled=true;attachmentPreview.innerHTML='<div class="tiny mute">מעלה את הקובץ בצורה מאובטחת…</div>';try{const form=new FormData();form.append('convId',cur.id);form.append('file',file);draftAttachment=await upload('/api/uploads/dm',form);attachmentPreview.innerHTML=`<div class="attachment-draft">${ic('check',14)} ${esc(draftAttachment.name)} <button type="button" id="dmAttachmentRemove">×</button></div>`;$('#dmAttachmentRemove').onclick=()=>{draftAttachment=null;attachmentPreview.innerHTML='';fileInput.value='';};}catch(error){attachmentPreview.innerHTML='';toast(error.message,'err');}finally{attachButton.disabled=false;}};}
 
   const sendD = async ()=>{
+    if(!chatReady)return toast('השיחה עדיין נטענת — נסו שוב בעוד רגע','warn');
     const inp = $('#din'); const txt = inp.value.trim(); if(!txt&&!draftAttachment) return;
     const mod = moderate(txt);
     if(mod.violation && mod.severity >= 3){
