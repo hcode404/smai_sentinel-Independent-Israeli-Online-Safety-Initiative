@@ -133,6 +133,14 @@ test('social links accept known networks and reject lookalike domains',async()=>
  assert.equal((await f.call('records/users/alice','PATCH',{socialLinks:{twitter:'https://x.com/smai',youtube:'https://www.youtube.com/@smai',discord:'https://discord.gg/smai'}})).status,200);
  assert.equal((await f.call('records/users/alice','PATCH',{socialLinks:{twitter:'https://x.com.evil.test/smai'}})).status,400);f.DB.close();
 });
+test('profile presence and pasted image avatars are validated and persisted',async()=>{
+ const f=fixture();await f.call('session');
+ const image='data:image/png;base64,iVBORw0KGgo=';
+ const saved=await f.call('records/users/alice','PATCH',{presenceMode:'afk',avatar:image});
+ assert.equal(saved.status,200);assert.equal(saved.data.presenceMode,'afk');assert.equal(saved.data.avatar,image);
+ assert.equal((await f.call('records/users/alice','PATCH',{presenceMode:'invisible'})).status,400);
+ assert.equal((await f.call('records/users/alice','PATCH',{avatar:'javascript:alert(1)'})).status,400);f.DB.close();
+});
 test('bug reports persist for the reporter and are visible to maintenance staff',async()=>{
  const f=fixture();await f.call('session');const bug=await f.call('records/reports','POST',{kind:'bug',type:'maintenance',reason:'כפתור לא נפתח',text:'הכפתור בעמוד הבדיקה אינו מגיב ללחיצה',targetId:'/test'});
  assert.equal(bug.status,201);assert.equal(bug.data.byId,'alice');assert.equal((await f.call('records/reports','GET')).data.length,1);
