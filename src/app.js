@@ -2504,7 +2504,7 @@ route('/ticket', async (app, id)=>{
   const chatEl = $('#chat');
   const paint = (list)=>{
     if(!chatEl || $('#chat') !== chatEl) return;
-    const msgs = list.filter(m=>m.ticketId===id && (staff || !m.internal))
+    const msgs = list.filter(m=>m.ticketId===id && !m.deleted && (staff || !m.internal))
                      .sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
     chatEl.innerHTML = msgs.length ? msgs.map(m=>{
       const mine = (Auth.user && m.senderId===Auth.user.id) || (!Auth.user && !m.senderId && !m.staffSide);
@@ -2517,15 +2517,16 @@ route('/ticket', async (app, id)=>{
           ${aiStagesHTML(m.stages)}
           ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}<div class="txt">${esc(m.text)}</div>
           ${m.article?`<a class="btn btn-g btn-sm" style="margin-top:9px" href="/article/${m.article}">${ic('book',14)} למדריך המלא</a>`:''}
-          <div class="tm">${fmtTime(m.createdAt)} · ${fmtDate(m.createdAt)}</div><button class="reply-btn" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
+          <div class="tm">${fmtTime(m.createdAt)} · ${fmtDate(m.createdAt)}</div><div class="acts"><button class="reply-btn" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'SMAI AI')}">↩</button>${Auth.user?.rank==='founder'||Auth.user?.isOwner?`<button data-ticket-act="del" data-id="${m.id}" title="מחיקה">${ic('trash',13)}</button>`:''}</div></div></div>`;
       return `<div class="msg ${mine?'mine':''} ${m.internal?'int':''}">
         ${avatar({id:m.senderId,name:m.senderName},'s')}
         <div class="bub"><div class="who">${esc(m.senderName||'משתמש')} ${rankBadge(m.senderRank)}${m.verified ? '<span class="b b-ok" style="font-size:10px">✓ מאומת</span>' : ''}
           ${m.internal?'<span class="b b-warn">פנימי</span>':''}</div>
-          <div class="txt">${esc(m.text)}</div>
-          <div class="tm">${fmtTime(m.createdAt)} · ${fmtDate(m.createdAt)}</div></div></div>`;
+          ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}<div class="txt">${esc(m.text)}</div>
+          <div class="tm">${fmtTime(m.createdAt)} · ${fmtDate(m.createdAt)}</div></div><div class="acts">${!mine?`<button data-ticket-act="report" data-id="${m.id}" title="דיווח">${ic('flag',13)}</button>`:''}${mine||Auth.user?.rank==='founder'||Auth.user?.isOwner?`<button data-ticket-act="del" data-id="${m.id}" title="מחיקה">${ic('trash',13)}</button>`:''}<button class="reply-btn" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
     }).join('') : `<div class="empty" style="padding:26px"><p class="small">אין עדיין הודעות. כתבו משהו כדי להתחיל.</p></div>`;
     chatEl.scrollTop = chatEl.scrollHeight;
+    chatEl.querySelectorAll('[data-ticket-act]').forEach(button=>button.onclick=async()=>{const message=msgs.find(item=>item.id===button.dataset.id);if(button.dataset.ticketAct==='report')reportMessageModal(message,'ticket:'+id);if(button.dataset.ticketAct==='del')await deleteMessage(button.dataset.id,'messages');});
   };
   onCleanup(Store.watch('messages', paint));
 
@@ -3218,7 +3219,7 @@ async function renderForum(s, ch, users, threadId, o){
     box.querySelectorAll('.acts button').forEach(b=>{
       b.onclick = async ()=>{
         const act = b.dataset.act, mid = b.dataset.id;
-        if(act==='report') reportMessageModal(reps.find(x=>x.id===mid), s.id);
+        if(act==='report') reportMessageModal(reps.find(x=>x.id===mid), 'thread:'+s.id);
         if(act==='del'){
           if(!(await confirmBox('מחיקת תגובה','התגובה תוסתר ותישמר ביומן.','מחיקה',true))) return;
           await Store.update('tmsgs', mid, { deleted:true, deletedBy:me.name, deletedAt:nowISO() });
@@ -3278,16 +3279,17 @@ async function notifyMentions(text, where, users){
     await mailUser(u.id, 'mention', MAIL_TPL.mention(me?.name||'משתמש', where, text.slice(0,200)));
 }
 
-async function deleteMessage(mid){
+async function deleteMessage(mid,collection='cmsgs',label='הודעה'){
   if(!(await confirmBox('מחיקת הודעה','ההודעה תוסתר מכל המשתמשים ותישמר ביומן המודרציה.','מחיקה',true))) return;
-  await Store.update('cmsgs', mid, { deleted:true, deletedBy:Auth.user.name, deletedAt:nowISO() });
-  await serverAudit( { type:'delete_message', msgId:mid, byId:Auth.user.id, byName:Auth.user.name, createdAt:nowISO() });
-  toast('ההודעה הוסרה');
+  await Store.update(collection, mid, { deleted:true, deletedBy:Auth.user.name, deletedAt:nowISO() });
+  await serverAudit( { type:'delete_message', collection, msgId:mid, byId:Auth.user.id, byName:Auth.user.name, createdAt:nowISO() });
+  toast(`${label} הוסרה`);
 }
 
 /* ===================== דיווח על הודעה ===================== */
 function reportMessageModal(msg, serverId){
   if(!msg) return;
+  const reportCollection=String(serverId||'').startsWith('dm:')?'dmsgs':String(serverId||'').startsWith('thread:')?'tmsgs':String(serverId||'').startsWith('ticket:')?'messages':'cmsgs';
   openModal(`
   <div class="m-h"><span class="ico-tile i-dang">${ic('flag',20)}</span>
     <div style="flex:1"><h3 style="margin:0">דיווח על הודעה</h3>
@@ -3343,8 +3345,8 @@ function reportMessageModal(msg, serverId){
       aiViolation:violation, aiSeverity:sev, aiAction:action, aiHits:(auto.hits||[]).slice(0,6),
       status:'pending', createdAt:nowISO() });
 
-    if(action==='delete_mute' || action==='delete_warn' || action==='escalate'){
-      await Store.update('cmsgs', msg.id, { deleted:true, deletedBy:'SMAI AI', deletedAt:nowISO() });
+    if((action==='delete_mute' || action==='delete_warn' || action==='escalate')&&(Auth.user?.rank==='founder'||Auth.user?.isOwner)){
+      await Store.update(reportCollection, msg.id, { deleted:true, deletedBy:'SMAI AI', deletedAt:nowISO() });
     }
     if(action==='escalate'){
       await Store.add('tickets', { code:ticketCode(), title:`דיווח חמור בקהילה — ${meta.l}`,
@@ -3807,7 +3809,7 @@ route('/dm', async (app, id)=>{
         <div class="bub"><div class="who">${esc(m.senderName||'משתמש')} ${rankBadge(m.senderRank)}
           ${m.flagged?`<span class="b b-warn">${ic('flag',10)} נבדק</span>`:''}</div>
           ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}<div class="txt">${esc(m.text)}</div>${m.callUrl?`<a class="btn btn-p btn-sm" href="${esc(m.callUrl)}" target="_blank" rel="noopener noreferrer" style="margin-top:8px">${ic(m.callType==='video'?'camera':'phone',15)} הצטרפות לשיחה</a>`:''}<div class="tm">${fmtTime(m.createdAt)} ${isMine?`<span class="read-receipt ${m.readAt?'read':m.deliveredAt?'delivered':'sent'}" title="${m.readAt?'נקרא':m.deliveredAt?'נמסר':'נשלח'}">${m.readAt?'✓✓':m.deliveredAt?'✓✓':'✓'}</span>`:''}</div></div>
-        <div class="acts">${!isMine?`<button title="דיווח" data-act="report" data-id="${m.id}">${ic('flag',13)}</button>`:''}<button class="reply-btn" data-chat="d" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
+        <div class="acts">${!isMine?`<button title="דיווח" data-act="report" data-id="${m.id}">${ic('flag',13)}</button>`:''}${isMine||me.rank==='founder'||me.isOwner?`<button title="מחיקת ההודעה" data-act="del" data-id="${m.id}">${ic('trash',13)}</button>`:''}<button class="reply-btn" data-chat="d" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
     }).join('') : `<div class="empty"><div class="ico">${ic('message',26)}</div><p class="small">אין עדיין הודעות בשיחה הזו.</p></div>`;
     scrollDmToLatest();
     /* צליל רק על הודעה חדשה של מישהו אחר, ולא בטעינה הראשונה */
@@ -3815,8 +3817,8 @@ route('/dm', async (app, id)=>{
     if(last && lastSeen && last.id !== lastSeen && last.senderId !== me.id) Sfx.play('msgIn');
     if(last) lastSeen = last.id;
     if(me.privacy?.readReceipts!==false)msgs.filter(m=>m.senderId!==me.id&&!m.readAt).forEach(m=>Store.update('dmsgs',m.id,{readAt:nowISO()}).catch(()=>{}));
-    box.querySelectorAll('.acts button').forEach(b=>{
-      b.onclick = ()=>reportMessageModal(msgs.find(x=>x.id===b.dataset.id), 'dm:'+cur.id);
+    box.querySelectorAll('.acts button[data-act]').forEach(b=>{
+      b.onclick = async ()=>{const msg=msgs.find(x=>x.id===b.dataset.id);if(b.dataset.act==='report')reportMessageModal(msg,'dm:'+cur.id);if(b.dataset.act==='del')await deleteMessage(b.dataset.id,'dmsgs');};
     });
   };
   let lastSeen = null;
@@ -3839,7 +3841,8 @@ route('/dm', async (app, id)=>{
     inp.value=''; inp.disabled = true;
     try{
       await Store.add('dmsgs', { convId:cur.id, senderId:me.id, senderName:me.name||me.email,
-        senderRank:me.rank, text:txt, flagged:mod.violation, createdAt:nowISO() });
+        senderRank:me.rank, text:txt, flagged:mod.violation, ...(window._replyTo3?{replyTo:window._replyTo3}:{}),createdAt:nowISO() });
+      if(window._replyTo3){window._replyTo3=null;const bar=document.getElementById('_rBar3');if(bar)bar.style.display='none';}
       // Last-message metadata is updated by the server.
       Sfx.play('msgOut');
       const mentionText=txt.toLocaleLowerCase('he');

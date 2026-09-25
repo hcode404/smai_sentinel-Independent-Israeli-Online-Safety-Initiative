@@ -116,10 +116,12 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     requireThat(Object.keys(p).length>0);return p;
   }
   if(col==='messages'){
-    requireThat(isNew&&await canRead('tickets',await get('tickets',input.ticketId),u,get));
+    if(!isNew){requireThat(await canRead(col,old,u,get)&&(old.senderId===id||isFounder(u)));return pick(input,['deleted']);}
+    requireThat(await canRead('tickets',await get('tickets',input.ticketId),u,get));
     requireThat(!input.ai&&!input.system&&!muted(u));
     requireThat(!input.internal||n>=20);
-    return {ticketId:input.ticketId,text:input.text,internal:!!input.internal,senderId:id,senderName:u.name,senderRank:u.rank,staffSide:n>=10};
+    const replyTo=input.replyTo&&typeof input.replyTo==='object'?pick(input.replyTo,['id','text','sender']):undefined;
+    return {ticketId:input.ticketId,text:input.text,internal:!!input.internal,senderId:id,senderName:u.name,senderRank:u.rank,staffSide:n>=10,...(replyTo?{replyTo}:{})};
   }
   if(col==='notifications'){
     requireThat(old&&old.userId===id&&!isNew,403,'אין הרשאה לעדכן התראה זו');
@@ -173,7 +175,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     requireThat(ch&&ch.server===r.server);
     if(col==='tmsgs'){const th=await get('threads',r.thread);requireThat(th&&th.server===r.server&&th.channel===r.channel&&!th.locked);}
     requireThat(!['announce','ann'].includes(ch.kind)||await manageServer(r.server));
-    if(isNew)return {...pick(input,['server','channel','thread','title','body','text']),authorId:id,senderId:id,authorName:u.name,senderName:u.name,authorRank:u.rank,senderRank:u.rank};
+    if(isNew){const replyTo=input.replyTo&&typeof input.replyTo==='object'?pick(input.replyTo,['id','text','sender']):undefined;return {...pick(input,['server','channel','thread','title','body','text']),authorId:id,senderId:id,authorName:u.name,senderName:u.name,authorRank:u.rank,senderRank:u.rank,...(replyTo?{replyTo}:{})};}
     requireThat(owns||n>=20);
     return pick(input,[...(owns?['text','body','title']:[]),...(n>=20?['deleted','locked','pinned']:[])]);
   }
@@ -197,10 +199,12 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     requireThat(await canRead(col,old||input,u,get)&&!muted(u));
     if(isNew){
       requireThat(!input.system);
-      const p={convId:input.convId,text:input.text,senderId:id,senderName:u.name,senderRank:u.rank,deliveredAt:new Date().toISOString()};
+      const replyTo=input.replyTo&&typeof input.replyTo==='object'?pick(input.replyTo,['id','text','sender']):undefined;
+      const p={convId:input.convId,text:input.text,senderId:id,senderName:u.name,senderRank:u.rank,deliveredAt:new Date().toISOString(),...(replyTo?{replyTo}:{})};
       if(input.callUrl){requireThat(/^https:\/\/meet\.jit\.si\/SMAI-Sentinel-[A-Za-z0-9-]{12,160}(?:#.*)?$/.test(input.callUrl),400,'קישור השיחה אינו תקין');p.callUrl=input.callUrl;p.callType=input.callType==='video'?'video':'audio';}
       return p;
     }
+    if(input.deleted){requireThat(old.senderId===id||isFounder(u));return {deleted:true};}
     if(old.senderId!==id){requireThat(input.readAt&&!old.readAt);return {readAt:new Date().toISOString()};}
     return pick(input,['text']);
   }

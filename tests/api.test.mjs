@@ -165,6 +165,22 @@ test('private server messages do not leak to other accounts',async()=>{
  assert.equal(message.status,201);assert.deepEqual((await f.call('records/cmsgs','GET',null,'bob')).data,[]);
  assert.equal((await f.call('records/servers/'+server.data.id,'PATCH',{members:['alice','bob']},'bob')).status,403);f.DB.close();
 });
+test('message replies persist and the founder can remove community messages',async()=>{
+ const f=fixture();await f.call('session','GET',null,'owner');await f.call('records/config/site','PATCH',{serverCreate:'all'},'owner');
+ const server=await f.call('records/servers','POST',{name:'public room',private:false});
+ const channel=await f.call('records/channels','POST',{server:server.data.id,name:'chat',kind:'chat'});
+ const first=await f.call('records/cmsgs','POST',{server:server.data.id,channel:channel.data.id,text:'הודעה ראשונה'});
+ const reply=await f.call('records/cmsgs','POST',{server:server.data.id,channel:channel.data.id,text:'זו תגובה ממוקדת',replyTo:{id:first.data.id,text:first.data.text,sender:'alice'}});
+ assert.equal(reply.data.replyTo.id,first.data.id);assert.equal(reply.data.replyTo.sender,'alice');
+ const removed=await f.call('records/cmsgs/'+first.data.id,'PATCH',{deleted:true},'owner');assert.equal(removed.status,200);assert.equal(removed.data.deleted,true);f.DB.close();
+});
+test('ticket replies persist and users can remove their own messages',async()=>{
+ const f=fixture();const ticketCreated=await f.call('records/tickets','POST',ticket);
+ const first=await f.call('records/messages','POST',{ticketId:ticketCreated.data.id,text:'הודעת מקור'});
+ const reply=await f.call('records/messages','POST',{ticketId:ticketCreated.data.id,text:'תגובה להודעה',replyTo:{id:first.data.id,text:first.data.text,sender:'alice'}});
+ assert.equal(reply.data.replyTo.id,first.data.id);
+ const removed=await f.call('records/messages/'+reply.data.id,'PATCH',{deleted:true});assert.equal(removed.status,200);assert.equal(removed.data.deleted,true);f.DB.close();
+});
 test('forged sender IDs are replaced and empty text rejected',async()=>{
  const f=fixture();const t=await f.call('records/tickets','POST',ticket);
  const m=await f.call('records/messages','POST',{ticketId:t.data.id,text:'hello',senderId:'owner',senderRank:'founder'});
