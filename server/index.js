@@ -188,9 +188,20 @@ async function identity(req,env,db,ctx){
     const networkHash=[...new Uint8Array(digest)].slice(0,12).map(x=>x.toString(16).padStart(2,'0')).join('');
     if(u.lastNetworkHash!==networkHash){
       const first=!u.lastNetworkHash,trusted=(u.trustedNetworkHashes||[]).includes(networkHash);
+      // Keep a durable, per-account record of every network already seen. The
+      // INSERT is atomic, so parallel page requests can trigger at most one
+      // security alert for the same IP. Seed the previous hash for accounts
+      // created before this record was introduced.
+      if(u.lastNetworkHash){
+        await env.DB.prepare('INSERT OR IGNORE INTO records (collection,id,data,created_at) VALUES (?,?,?,?)')
+          .bind('login_networks',`${id}:${u.lastNetworkHash}`,JSON.stringify({userId:id,networkHash:u.lastNetworkHash,firstSeenAt:u.lastLoginAt||u.createdAt||now()}),u.lastLoginAt||u.createdAt||now()).run();
+      }
+      const seen=await env.DB.prepare('INSERT OR IGNORE INTO records (collection,id,data,created_at) VALUES (?,?,?,?)')
+        .bind('login_networks',`${id}:${networkHash}`,JSON.stringify({userId:id,networkHash,firstSeenAt:now()}),now()).run();
+      const newNetwork=Number(seen.meta?.changes||0)>0;
       const updated={...u,lastNetworkHash:networkHash,lastLoginAt:now(),securityEvents:first||trusted?(u.securityEvents||[]):[{type:'new_network',createdAt:now()},...(u.securityEvents||[])].slice(0,10)};
       await db.put('users',updated,u);u=await db.get('users',id);
-      if(!first&&!trusted){
+      if(!first&&!trusted&&newNetwork){
         await db.put('notifications',{id:nonce(),userId:u.id,type:'securityLogin',title:'כניסה חדשה לחשבון',text:'זוהתה כניסה מרשת או ממכשיר חדשים. אם זו לא הייתה הכניסה שלך, מומלץ לאפס סיסמה.',href:'/account',read:false,createdAt:now()});
         scheduleMail(ctx,sendUserMail(env,u,'securityLogin',{when:new Date().toLocaleString('he-IL'),device:req.headers.get('User-Agent')?.slice(0,80)||'דפדפן חדש'}));
       }

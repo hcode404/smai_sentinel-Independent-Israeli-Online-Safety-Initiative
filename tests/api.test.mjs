@@ -61,6 +61,14 @@ test('a trusted network does not create another login warning when it returns',a
  const afterTrusted=(await f.call('records/notifications')).data.filter(n=>n.type==='securityLogin').length;
  assert.equal(afterNew,1);assert.equal(afterTrusted,1);f.DB.close();
 });
+test('each IP creates a new-login warning only once even after switching networks',async()=>{
+ const f=fixture();await f.call('session');
+ await f.call('session','GET',null,'alice','https://sentinel.test','203.0.113.99');
+ await f.call('session','GET',null,'alice','https://sentinel.test','198.51.100.8');
+ await f.call('session','GET',null,'alice','https://sentinel.test','203.0.113.99');
+ const warnings=(await f.call('records/notifications')).data.filter(n=>n.type==='securityLogin');
+ assert.equal(warnings.length,2);f.DB.close();
+});
 test('ordinary accounts cannot read another ticket, or enumerate it',async()=>{
  const f=fixture();const a=await f.call('records/tickets','POST',ticket);
  assert.equal((await f.call('records/tickets/'+a.data.id,'GET',null,'bob')).status,403);
