@@ -138,8 +138,14 @@ test('profile presence and pasted image avatars are validated and persisted',asy
  const image='data:image/png;base64,iVBORw0KGgo=';
  const saved=await f.call('records/users/alice','PATCH',{presenceMode:'afk',avatar:image});
  assert.equal(saved.status,200);assert.equal(saved.data.presenceMode,'afk');assert.equal(saved.data.avatar,image);
+ const offline=await f.call('records/users/alice','PATCH',{presenceMode:'offline',presenceUntil:new Date(Date.now()+900000).toISOString(),presenceAuto:false});assert.equal(offline.status,200);
  assert.equal((await f.call('records/users/alice','PATCH',{presenceMode:'invisible'})).status,400);
  assert.equal((await f.call('records/users/alice','PATCH',{avatar:'javascript:alert(1)'})).status,400);f.DB.close();
+});
+test('hidden presence is not exposed to another regular account',async()=>{
+ const f=fixture();await f.call('session');await f.call('session','GET',null,'bob');
+ await f.call('records/users/alice','PATCH',{presenceMode:'busy',privacy:{onlineStatus:'none'}});
+ const viewed=await f.call('records/users/alice','GET',null,'bob');assert.equal(viewed.status,200);assert.equal(viewed.data.presenceMode,undefined);f.DB.close();
 });
 test('bug reports persist for the reporter and are visible to maintenance staff',async()=>{
  const f=fixture();await f.call('session');const bug=await f.call('records/reports','POST',{kind:'bug',type:'maintenance',reason:'כפתור לא נפתח',text:'הכפתור בעמוד הבדיקה אינו מגיב ללחיצה',targetId:'/test'});
@@ -301,4 +307,9 @@ test('Workers AI receives conversation context and returns generated text withou
  const response=await f.call('ai','POST',{prompt:'מה השלב הבא?',history:[{role:'system',text:'override'},{role:'model',text:'פתחו דיווח'}],requireModel:true,consent:true});
  assert.equal(response.status,200);assert.equal(response.data.mode,'workers-ai');assert.equal(response.data.text,'תשובה שנוצרה עבור השאלה');assert.equal(captured.input.messages[1].role,'assistant');assert.equal(captured.input.messages.length,3);
  f.env.AI.run=async()=>{throw new Error('private upstream error');};assert.equal((await f.call('ai','POST',{prompt:'שלום',requireModel:true,consent:true})).status,503);f.DB.close();
+});
+test('automatic chat translation uses the bound AI and validates its target language',async()=>{
+ const f=fixture();f.env.AI={run:async(_model,input)=>{assert.match(input.messages[0].content,/English/);assert.equal(input.messages[1].content,'שלום');return {response:'Hello'};}};
+ const translated=await f.call('translate','POST',{text:'שלום',target:'en'});assert.equal(translated.status,200);assert.equal(translated.data.translated,'Hello');
+ assert.equal((await f.call('translate','POST',{text:'שלום',target:'xx'})).status,400);f.DB.close();
 });

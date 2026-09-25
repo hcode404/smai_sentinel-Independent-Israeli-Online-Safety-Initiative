@@ -3,7 +3,7 @@ export const requireThat=(condition,status=403,message='אין הרשאה לפע
 export const pick=(obj,keys)=>Object.fromEntries(keys.filter(k=>Object.hasOwn(obj,k)).map(k=>[k,obj[k]]));
 export const rank=u=>Number(u?.rankLvl)||0;
 export const isFounder=u=>!!u&&(u.isOwner===true||u.rank==='founder'||rank(u)>=70);
-export const publicUser=(u,viewer)=>({...pick(u,['id','name','avatar','bio','rank','rankLvl','verified','dept','socialLinks','createdAt','presenceMode']),...(isFounder(viewer)||u.privacy?.showLastSeen!==false?{lastSeenAt:u.lastSeenAt||u.lastLoginAt||u.createdAt}:{}),privacy:{showVerified:u.privacy?.showVerified!==false,showLastSeen:u.privacy?.showLastSeen!==false}});
+export const publicUser=(u,viewer)=>({...pick(u,['id','name','avatar','bio','rank','rankLvl','verified','dept','socialLinks','createdAt']),...(isFounder(viewer)||u.privacy?.onlineStatus!=='none'?pick(u,['presenceMode','presenceUntil']):{}),...(isFounder(viewer)||u.privacy?.showCountry!==false?pick(u,['localeCountry']):{}),...(isFounder(viewer)||u.privacy?.showLastSeen!==false?{lastSeenAt:u.lastSeenAt||u.lastLoginAt||u.createdAt}:{}),privacy:{showVerified:u.privacy?.showVerified!==false,showLastSeen:u.privacy?.showLastSeen!==false,showCountry:u.privacy?.showCountry!==false}});
 export const banned=u=>!!(u?.isBanned&&(!u.banUntil||Date.parse(u.banUntil)>Date.now()));
 export const muted=u=>Date.parse(u?.muteUntil)>Date.now();
 export const ranks={citizen:0,trainee:10,agent:20,senior:30,lead:40,head:50,admin:60,founder:70};
@@ -69,19 +69,24 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
   if(col==='users'){
     requireThat(old,404,'המשתמש לא נמצא');
     const self=old.id===id;
-    let p=self?pick(input,['name','bio','avatar','presenceMode','ageBand','mailPrefs','privacy','socialLinks','installedUpdates','sound','theme']):{};
+    let p=self?pick(input,['name','bio','avatar','presenceMode','presenceUntil','presenceAuto','localeCountry','preferredLanguage','autoTranslate','ageBand','mailPrefs','privacy','socialLinks','installedUpdates','sound','theme']):{};
     if(Object.hasOwn(p,'avatar')){
       requireThat(typeof p.avatar==='string'&&p.avatar.length<=500000,400,'תמונת הפרופיל גדולה מדי');
       requireThat(!p.avatar||/^https:\/\//.test(p.avatar)||/^data:image\/(?:jpeg|png|webp);base64,/.test(p.avatar),400,'תמונת הפרופיל אינה תקינה');
     }
-    if(p.presenceMode)requireThat(['online','afk','busy'].includes(p.presenceMode),400,'מצב החשבון אינו תקין');
+    if(p.presenceMode)requireThat(['online','afk','busy','offline'].includes(p.presenceMode),400,'מצב החשבון אינו תקין');
+    if(Object.hasOwn(p,'presenceUntil'))requireThat(p.presenceUntil===null||typeof p.presenceUntil==='string'&&Number.isFinite(Date.parse(p.presenceUntil))&&Date.parse(p.presenceUntil)<=Date.now()+8*86400000,400,'משך הסטטוס אינו תקין');
+    if(Object.hasOwn(p,'presenceAuto'))p.presenceAuto=!!p.presenceAuto;
+    if(p.localeCountry)requireThat(/^[A-Z]{2}$/.test(p.localeCountry),400,'המדינה שנבחרה אינה תקינה');
+    if(p.preferredLanguage)requireThat(['he','en','ar','ru','es','fr','de','it','pt','tr','uk','hi','ja','ko','zh'].includes(p.preferredLanguage),400,'השפה שנבחרה אינה נתמכת');
+    if(Object.hasOwn(p,'autoTranslate'))p.autoTranslate=!!p.autoTranslate;
     if(p.mailPrefs){
       const allowed=new Set(['securityLogin','securityAccount','accountDeletion','purchase','friend','ticketReply','ticketClaim','ticketStatus','aiSteps','mention','dm','moderation','appStatus','news']);
       p.mailPrefs=Object.fromEntries(Object.entries(p.mailPrefs).filter(([key,value])=>allowed.has(key)&&typeof value==='boolean'));
     }
     if(p.ageBand)requireThat(['under10','10to12','13to17','adult'].includes(p.ageBand),400,'קבוצת הגיל אינה תקינה');
     if(p.privacy){
-      p.privacy=pick(p.privacy,['dmFrom','friendRequests','profileVis','onlineStatus','showFollowers','showVerified','showLastSeen','readReceipts']);
+      p.privacy=pick(p.privacy,['dmFrom','friendRequests','profileVis','onlineStatus','showFollowers','showVerified','showLastSeen','showCountry','readReceipts']);
       requireThat(!p.privacy.dmFrom||['all','friends','staff','none'].includes(p.privacy.dmFrom),400,'הגדרת הודעות פרטיות אינה תקינה');
       requireThat(!p.privacy.friendRequests||['all','none'].includes(p.privacy.friendRequests),400,'הגדרת בקשות חברות אינה תקינה');
       requireThat(!p.privacy.profileVis||['public','private'].includes(p.privacy.profileVis),400,'הגדרת פרטיות הפרופיל אינה תקינה');

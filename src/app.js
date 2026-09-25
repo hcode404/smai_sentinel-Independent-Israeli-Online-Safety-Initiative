@@ -402,8 +402,12 @@ function colorFor(seed){
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 const AVATAR_EMOJI = ['\u{1F642}','\u{1F60E}','\u{1F913}','\u{1F984}','\u{1F98A}','\u{1F431}','\u{1F436}','\u{1F43C}','\u{1F438}','\u{1F419}','\u{1F680}','\u{1F3AE}','\u{1F3B8}','\u{26BD}','\u{1F3C0}','\u{1F3A8}','\u{1F4DA}','\u{1F30D}','\u{2B50}','\u{1F31F}','\u{1F525}','\u{1F308}','\u{1F3AF}','\u{1F6E1}\u{FE0F}'];
-const PRESENCE={online:{label:'אונליין',en:'Online'},afk:{label:'AFK',en:'AFK'},busy:{label:'עסוק',en:'Busy'}};
-const presenceOf=user=>PRESENCE[user?.presenceMode]||PRESENCE.online;
+const PRESENCE={online:{label:'אונליין',en:'Online'},afk:{label:'AFK',en:'AFK'},busy:{label:'עסוק',en:'Busy'},offline:{label:'אופליין',en:'Offline'}};
+const COUNTRY_NAMES={IL:'ישראל',US:'ארצות הברית',GB:'בריטניה',CA:'קנדה',AU:'אוסטרליה',FR:'צרפת',DE:'גרמניה',ES:'ספרד',IT:'איטליה',BR:'ברזיל',RU:'רוסיה',UA:'אוקראינה',TR:'טורקיה',IN:'הודו',JP:'יפן',KR:'קוריאה הדרומית',CN:'סין',ZZ:'אחר'};
+const countryFlag=code=>/^[A-Z]{2}$/.test(code)&&code!=='ZZ'?[...code].map(c=>String.fromCodePoint(127397+c.charCodeAt(0))).join(''):'🌍';
+const effectivePresence=user=>user?.presenceUntil&&Date.parse(user.presenceUntil)<=Date.now()?'online':(user?.presenceMode||'online');
+const presenceOf=user=>PRESENCE[effectivePresence(user)]||PRESENCE.online;
+const presenceBadge=(user,compact=false)=>{const mode=effectivePresence(user),item=presenceOf(user);return `<span class="presence-label ${mode}${compact?' compact':''}"><i class="status-dot ${mode}"></i>${esc(currentLang()==='en'?item.en:item.label)}</span>`;};
 function avatar(user, size='m'){
   const n = user?.name || user?.email || '?';
   const mode=user?.presenceMode||user?.presence;
@@ -581,6 +585,16 @@ const Auth={user:null,_cbs:[],onChange(f){this._cbs.push(f);f(this.user);},_emit
   async changePassword(){if(!firebaseUser()?.email)throw new Error('לא נמצא אימייל בחשבון');await resetPassword(firebaseUser().email);},
   async changeEmail(){throw new Error('שינוי אימייל דורש אימות מחדש ויתווסף בהמשך')}
 };
+const Presence=(()=>{
+  let idleTimer=null,updating=false,lastActivity=0;
+  const syncLocal=record=>{if(record&&Auth.user){Auth.user={...Auth.user,...record};Auth._emit();renderNav();}};
+  const set=async(mode,{until=null,auto=false}={})=>{if(!Auth.user||updating)return;updating=true;try{const record=await Store.update('users',Auth.user.id,{presenceMode:mode,presenceUntil:until,presenceAuto:auto});syncLocal(record);arm();return record;}finally{updating=false;}};
+  const arm=()=>{clearTimeout(idleTimer);if(Auth.user&&effectivePresence(Auth.user)==='online'&&!document.hidden)idleTimer=setTimeout(()=>set('afk',{auto:true}).catch(()=>{}),10*60*1000);};
+  const activity=()=>{if(!Auth.user||document.hidden)return;const now=Date.now();if(now-lastActivity<1500)return;lastActivity=now;const expired=Auth.user.presenceUntil&&Date.parse(Auth.user.presenceUntil)<=now;if(Auth.user.presenceAuto||expired)set('online',{auto:false}).catch(()=>{});else arm();};
+  const visibility=()=>{if(!Auth.user)return;if(document.hidden){clearTimeout(idleTimer);if(effectivePresence(Auth.user)==='online')set('offline',{auto:true}).catch(()=>{});}else activity();};
+  const init=()=>{['pointermove','pointerdown','keydown','scroll','touchstart'].forEach(type=>addEventListener(type,activity,{passive:true}));document.addEventListener('visibilitychange',visibility);setInterval(()=>{if(Auth.user?.presenceUntil&&Date.parse(Auth.user.presenceUntil)<=Date.now())set('online',{auto:false}).catch(()=>{});},60000);arm();};
+  return {set,init,activity};
+})();
 window.smaiLogout=async()=>{await Auth.signOut();location.hash='#/login';await render();};
 
 /* =====================================================================
@@ -1205,11 +1219,20 @@ function renderNav(){
        </button>`
     : `<a class="btn btn-p btn-sm" href="/login">${ic('login',15)} כניסה</a>`;
   const topAccount=$('#topAccount');
-  if(topAccount){topAccount.href=u?'/account':'/login';topAccount.classList.toggle('account-status',!!u);topAccount.innerHTML=u?`${avatar({...u,presenceMode:u.presenceMode||'online'},'s')}<span><b>${esc((u.name||u.email).split(' ')[0])}</b><small><i class="status-dot ${u.presenceMode||'online'}"></i>${esc(currentLang()==='en'?presenceOf(u).en:presenceOf(u).label)}</small></span>`:(currentLang()==='en'?'Sign in':'כניסה');}
+  if(topAccount){topAccount.href=u?'#':'/login';topAccount.classList.toggle('account-status',!!u);topAccount.innerHTML=u?`${avatar({...u,presenceMode:u.presenceMode||'online'},'s')}<span><b>${esc((u.name||u.email).split(' ')[0])}</b><small><i class="status-dot ${u.presenceMode||'online'}"></i>${esc(currentLang()==='en'?presenceOf(u).en:presenceOf(u).label)}</small></span>${ic('chevron-down',13)}`:(currentLang()==='en'?'Sign in':'כניסה');topAccount.onclick=u?(event=>{event.preventDefault();event.stopPropagation();openStatusMenu(topAccount);}):null;}
   const mb = $('#meBtn'); if(mb) mb.onclick = userMenu;
   const notifications=$('#notifBtn');
   if(notifications)notifications.classList.toggle('hide',!u);
   syncNotificationBadge();
+}
+function openStatusMenu(anchor){
+  const u=Auth.user;if(!u)return;
+  document.querySelector('.status-mini')?.remove();
+  const menu=document.createElement('div');menu.className='status-mini';menu.dir='rtl';
+  menu.innerHTML=`<div class="status-mini-user">${avatar({...u,presenceMode:effectivePresence(u)},'m')}<div><b>${esc(u.name||u.email)}</b><small>בחירת מצב פעילות</small></div></div><div class="status-mini-options">${Object.entries(PRESENCE).map(([key,item])=>`<button type="button" data-mini-presence="${key}" class="${effectivePresence(u)===key?'on':''}"><i class="status-dot ${key}"></i><span><b>${item.label}</b><small>${key==='online'?'זמין/ה לשיחה':key==='afk'?'רחוק/ה כרגע':key==='busy'?'לא להפריע':'לא מחובר/ת'}</small></span>${effectivePresence(u)===key?ic('check',15,3):''}</button>`).join('')}</div><label class="status-duration"><span>לכמה זמן?</span><select id="miniPresenceDuration"><option value="900000">15 דקות</option><option value="3600000">שעה</option><option value="86400000">יום</option><option value="604800000">שבוע</option></select></label><a href="/account" class="status-mini-settings">${ic('settings',14)} הגדרות החשבון</a>`;
+  document.body.appendChild(menu);const rect=anchor.getBoundingClientRect(),width=Math.min(286,innerWidth-24);menu.style.width=width+'px';menu.style.top=Math.min(innerHeight-menu.offsetHeight-12,rect.bottom+8)+'px';menu.style.left=Math.max(12,Math.min(innerWidth-width-12,rect.right-width))+'px';
+  $$('[data-mini-presence]',menu).forEach(button=>button.onclick=async event=>{event.stopPropagation();const mode=button.dataset.miniPresence,duration=Number($('#miniPresenceDuration',menu)?.value||900000);$$('[data-mini-presence]',menu).forEach(x=>x.disabled=true);try{await Presence.set(mode,{until:mode==='online'?null:new Date(Date.now()+duration).toISOString(),auto:false});menu.remove();renderNav();toast(`הסטטוס שונה ל${PRESENCE[mode].label}`,'ok');}catch(error){$$('[data-mini-presence]',menu).forEach(x=>x.disabled=false);toast(error.message||'לא ניתן לשנות סטטוס','err');}});
+  setTimeout(()=>document.addEventListener('click',event=>{if(!menu.contains(event.target))menu.remove();},{once:true}),0);
 }
 function userMenu(){
   const u = Auth.user; if(!u) return;
@@ -3619,7 +3642,7 @@ async function openProfile(userId){
         ${u.isOwner?'<span class="b b-brand">בעל האתר</span>':''}
         ${u.isBanned?'<span class="b b-dang">מורחק</span>':''}
         <span class="b b-gray">${ic('clock',11)} מאז ${fmtDate(u.createdAt)}</span>
-        <span class="b ${profileStats.online===true?'b-ok':profileStats.online===false?'b-gray':'b-violet'}"><i class="presence-dot"></i>${profileStats.online===true?'אונליין':profileStats.online===false?'אופליין':'מצב מוסתר'}</span></div><div class="tiny mute" style="margin-top:6px">${u.lastSeenAt?'נראה לאחרונה '+fmtDate(u.lastSeenAt)+' בשעה '+fmtTime(u.lastSeenAt):'מצב פעילות מוסתר'}</div></div></div>
+        ${presenceBadge(u)}${u.localeCountry&&u.privacy?.showCountry!==false?`<span class="b b-gray">${countryFlag(u.localeCountry)} ${esc(COUNTRY_NAMES[u.localeCountry]||u.localeCountry)}</span>`:''}</div><div class="tiny mute" style="margin-top:6px">${u.lastSeenAt?'נראה לאחרונה '+fmtDate(u.lastSeenAt)+' בשעה '+fmtTime(u.lastSeenAt):'מצב פעילות מוסתר'}</div></div></div>
   <div class="m-b">
     ${u.bio?`<div class="card pad-sm" style="background:var(--surface2);margin-bottom:14px">
       <div class="tiny mute" style="margin-bottom:4px">קצת עליי</div>
@@ -3774,7 +3797,7 @@ route('/dm', async (app, id)=>{
               <div class="nm">${esc(convTitle(c, me.id, users))}
                 ${g?`<span class="b b-gray" style="font-size:.6rem">${(c.members||[]).length}</span>`
                    :(ou.verified&&ou.privacy?.showVerified!==false?`<span class="verified">${ic('check',9,3)}</span>`:'')}</div>
-              <div class="lst">${esc(c.lastText||'התחילו לשוחח')}</div>${g?'':`<div class="tiny mute">${lastSeenLabel(ou)}</div>`}</div></a>`;
+              <div class="lst">${esc(c.lastText||'התחילו לשוחח')}</div>${g?'':`<div class="dm-presence-row">${presenceBadge(ou,true)}<span>${lastSeenLabel(ou)}</span></div>`}</div></a>`;
         }).join('') : `<div class="tiny mute" style="padding:14px">אין עדיין שיחות פרטיות. אפשר לפתוח שיחה מכל פרופיל בקהילה, או ליצור קבוצה.</div>`}
       </div>
     </div>
@@ -3784,9 +3807,9 @@ route('/dm', async (app, id)=>{
         ${isGroup(cur) ? `<span class="grp-av lg">${ic('users',20)}</span>` : avatar(otherU || { id:other, name:cur.names?.[other] })}
         <div style="flex:1;min-width:0"><div class="row" style="gap:6px"><b>${esc(convTitle(cur, me.id, users))}</b>
           ${isGroup(cur) ? `<span class="b b-brand" style="font-size:.62rem">קבוצה</span>` : (otherU?rankBadge(otherU.rank):'')}</div>
-          <div class="tiny mute">${isGroup(cur)
+          <div class="tiny mute dm-chat-presence">${isGroup(cur)
             ? esc((cur.members||[]).map(m=>(users.find(u=>u.id===m)||{}).name || cur.names?.[m] || 'משתמש').join(' · ').slice(0,120))
-            : `שיחה פרטית · ${lastSeenLabel(otherU)}`}</div></div>
+            : `${presenceBadge(otherU,true)}<span>שיחה פרטית · ${lastSeenLabel(otherU)}</span>`}</div></div>
         ${isGroup(cur)
           ? `<button class="btn btn-ghost btn-sm" id="dmMem">${ic('users',14)} משתתפים</button>`
           : `<button class="btn btn-ghost btn-sm" id="dmProf">${ic('user',14)} פרופיל</button>`}
@@ -3821,7 +3844,7 @@ route('/dm', async (app, id)=>{
   const rejectDm=$('#rejectDm');if(rejectDm)rejectDm.onclick=async()=>{rejectDm.disabled=true;try{await Friends.block(other);toast('הבקשה נחסמה');location.hash='#/dm';render();}catch(e){toast(e.message||'לא ניתן לחסום','err');rejectDm.disabled=false;}};
 
   const box = $('#dchat');
-  let pendingMessages=[],lastServerMessages=[],draftAttachment=null,chatReady=false;
+  let pendingMessages=[],lastServerMessages=[],draftAttachment=null,chatReady=false;const translationCache=new Map();
   const scrollDmToLatest=()=>{
     if(!box||$('#dchat')!==box)return;
     box.scrollTop=box.scrollHeight;
@@ -3838,12 +3861,13 @@ route('/dm', async (app, id)=>{
       if(m.system) return `<div class="sys-msg">${esc(m.text)}</div>`;
       const su = users.find(u=>u.id===m.senderId);
       return `<div class="msg ${isMine?'mine':''}" data-mid="${m.id}" data-msg-col="dmsgs" data-msg-mine="${isMine?'1':'0'}" data-msg-text="${esc((m.text||'').slice(0,500))}" data-msg-name="${esc(m.senderName||'משתמש')}">
-        ${avatar({ id:m.senderId, name:m.senderName, avatar:(su?.avatar || (isMine?me.avatar:otherU?.avatar)) },'s')}
+        ${avatar({ id:m.senderId, name:m.senderName, avatar:(su?.avatar || (isMine?me.avatar:otherU?.avatar)),presenceMode:(su?.presenceMode||(isMine?me.presenceMode:otherU?.presenceMode)||'online') },'s')}
         <div class="bub"><div class="who">${esc(m.senderName||'משתמש')} ${rankBadge(m.senderRank)}
           ${m.flagged?`<span class="b b-warn">${ic('flag',10)} נבדק</span>`:''}</div>
-          ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}${attachmentHTML(m.attachment)}<div class="txt">${linkify(m.text)}</div>${linkPreviewHTML(m.text)}${m.callUrl?`<a class="btn btn-p btn-sm" href="${esc(m.callUrl)}" target="_blank" rel="noopener noreferrer" style="margin-top:8px">${ic(m.callType==='video'?'camera':'phone',15)} הצטרפות לשיחה</a>`:''}<div class="tm">${fmtTime(m.createdAt)} ${isMine?`<span class="read-receipt ${m._pending?'sent':m.readAt?'read':m.deliveredAt?'delivered':'sent'}" title="${m._pending?'ממתין לשליחה':m.readAt?'נקרא':m.deliveredAt?'נמסר':'נשלח'}">${m._pending?'✓':m.readAt?'✓✓':m.deliveredAt?'✓✓':'✓'}</span>`:''}</div></div>
+          ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}${attachmentHTML(m.attachment)}<div class="txt" data-translate-message="${esc(m.id)}">${linkify(m.text)}</div>${linkPreviewHTML(m.text)}${m.callUrl?`<a class="btn btn-p btn-sm" href="${esc(m.callUrl)}" target="_blank" rel="noopener noreferrer" style="margin-top:8px">${ic(m.callType==='video'?'camera':'phone',15)} הצטרפות לשיחה</a>`:''}<div class="tm">${fmtTime(m.createdAt)} ${isMine?`<span class="read-receipt ${m._pending?'sent':m.readAt?'read':m.deliveredAt?'delivered':'sent'}" title="${m._pending?'ממתין לשליחה':m.readAt?'נקרא':m.deliveredAt?'נמסר':'נשלח'}">${m._pending?'✓':m.readAt?'✓✓':m.deliveredAt?'✓✓':'✓'}</span>`:''}</div></div>
         <div class="acts">${!isMine?`<button title="דיווח" data-act="report" data-id="${m.id}">${ic('flag',13)}</button>`:''}<button class="reply-btn" data-chat="d" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
     }).join('') : `<div class="empty"><div class="ico">${ic('message',26)}</div><p class="small">אין עדיין הודעות בשיחה הזו.</p></div>`;
+    if(me.autoTranslate&&me.preferredLanguage)msgs.filter(m=>m.senderId!==me.id&&m.text&&!m.system&&!m._pending).forEach(async m=>{const node=box.querySelector(`[data-translate-message="${CSS.escape(m.id)}"]`);if(!node||node.nextElementSibling?.classList.contains('auto-translation'))return;let translated=translationCache.get(m.id);try{if(!translated){translated=(await request('/api/translate','POST',{text:m.text,target:me.preferredLanguage})).translated;translationCache.set(m.id,translated);}if(!node.isConnected||!translated||translated.trim()===String(m.text).trim())return;node.insertAdjacentHTML('afterend',`<div class="auto-translation"><span>${ic('sparkle',12)} תרגום אוטומטי</span>${esc(translated)}</div>`);}catch{}});
     scrollDmToLatest();
     /* צליל רק על הודעה חדשה של מישהו אחר, ולא בטעינה הראשונה */
     const last = msgs[msgs.length-1];
@@ -3858,7 +3882,11 @@ route('/dm', async (app, id)=>{
   onCleanup(Store.watch('dmsgs', paint));
 
   const fileInput=$('#dmFile'),attachButton=$('#dmAttach'),attachmentPreview=$('#dmAttachmentPreview');
-  if(attachButton&&fileInput){attachButton.onclick=()=>fileInput.click();fileInput.onchange=async()=>{const file=fileInput.files?.[0];if(!file)return;if(file.size>4*1024*1024){toast('אפשר להעלות קובץ עד 4MB','warn');fileInput.value='';return;}attachButton.disabled=true;attachmentPreview.innerHTML='<div class="tiny mute">מעלה את הקובץ בצורה מאובטחת…</div>';try{const form=new FormData();form.append('convId',cur.id);form.append('file',file);draftAttachment=await upload('/api/uploads/dm',form);attachmentPreview.innerHTML=`<div class="attachment-draft">${ic('check',14)} ${esc(draftAttachment.name)} <button type="button" id="dmAttachmentRemove">×</button></div>`;$('#dmAttachmentRemove').onclick=()=>{draftAttachment=null;attachmentPreview.innerHTML='';fileInput.value='';};}catch(error){attachmentPreview.innerHTML='';toast(error.message,'err');}finally{attachButton.disabled=false;}};}
+  let draftPreviewUrl='';
+  const clearDmAttachment=()=>{draftAttachment=null;attachmentPreview.innerHTML='';fileInput.value='';if(draftPreviewUrl){URL.revokeObjectURL(draftPreviewUrl);draftPreviewUrl='';}};
+  const uploadDmFile=async file=>{if(!file)return;if(file.size>4*1024*1024){toast('אפשר להעלות קובץ עד 4MB','warn');return;}if(draftPreviewUrl)URL.revokeObjectURL(draftPreviewUrl);draftPreviewUrl=file.type.startsWith('image/')?URL.createObjectURL(file):'';attachButton.disabled=true;attachmentPreview.innerHTML=`<div class="attachment-draft attachment-visual ${draftPreviewUrl?'has-thumb':''}">${draftPreviewUrl?`<img src="${draftPreviewUrl}" alt="תצוגה מקדימה">`:`<span class="attachment-file-icon">${ic('file',18)}</span>`}<span><b>${esc(file.name||'תמונה שהודבקה')}</b><small>מכין לשליחה…</small></span><i class="mini-spinner"></i></div>`;try{const form=new FormData();form.append('convId',cur.id);form.append('file',file,file.name||`pasted-${Date.now()}.png`);draftAttachment=await upload('/api/uploads/dm',form);attachmentPreview.innerHTML=`<div class="attachment-draft attachment-visual ${draftPreviewUrl?'has-thumb':''}">${draftPreviewUrl?`<img src="${draftPreviewUrl}" alt="תצוגה מקדימה">`:`<span class="attachment-file-icon">${ic('file',18)}</span>`}<span><b>${esc(draftAttachment.name)}</b><small>מוכן לשליחה</small></span><button type="button" id="dmAttachmentRemove" aria-label="הסרת הקובץ">×</button></div>`;$('#dmAttachmentRemove').onclick=clearDmAttachment;}catch(error){clearDmAttachment();toast(error.message,'err');}finally{attachButton.disabled=false;}};
+  if(attachButton&&fileInput){attachButton.onclick=()=>fileInput.click();fileInput.onchange=()=>uploadDmFile(fileInput.files?.[0]);}
+  $('#din')?.addEventListener('paste',event=>{const image=[...(event.clipboardData?.files||[])].find(file=>file.type.startsWith('image/'));if(!image)return;event.preventDefault();uploadDmFile(image);});
 
   const sendD = async ()=>{
     if(!chatReady)return toast('השיחה עדיין נטענת — נסו שוב בעוד רגע','warn');
@@ -3875,7 +3903,7 @@ route('/dm', async (app, id)=>{
       const rels = await Friends.mine(me.id);
       if(!dmAllowed(rels, me.id, other)){ toast('לא ניתן לשלוח הודעה למשתמש הזה','err'); return; }
     }
-    const attachment=draftAttachment;draftAttachment=null;if(attachmentPreview)attachmentPreview.innerHTML='';
+    const attachment=draftAttachment;draftAttachment=null;if(attachmentPreview)attachmentPreview.innerHTML='';if(draftPreviewUrl){URL.revokeObjectURL(draftPreviewUrl);draftPreviewUrl='';}
     const optimistic={id:'pending-'+uid(),convId:cur.id,senderId:me.id,senderName:me.name||me.email,senderRank:me.rank,text:txt||attachment?.name||'קובץ',attachment,createdAt:nowISO(),_pending:true};
     pendingMessages.push(optimistic);inp.value='';paint(lastServerMessages);inp.disabled = true;
     try{
@@ -4233,19 +4261,24 @@ route('/account',async app=>{
    catch(error){toggle.checked=previous;$('#profileStatus').textContent=error.message||'שמירת ההעדפה נכשלה';}
    finally{toggle.disabled=false;}
  });
+ const localeCard=`<div class="card"><h3>מדינה ושפה</h3><p class="small mute">הגדירו את המדינה והשפה שבה תרצו לקרוא הודעות. תוכן מקורי תמיד נשאר מוצג.</p><div class="g2"><div class="field"><label for="localeCountry">מדינה</label><select id="localeCountry">${Object.entries(COUNTRY_NAMES).map(([value,label])=>`<option value="${value}" ${u.localeCountry===value?'selected':''}>${countryFlag(value)} ${label}</option>`).join('')}</select></div><div class="field"><label for="preferredLanguage">שפת תרגום</label><select id="preferredLanguage">${[['he','עברית'],['en','English'],['ar','العربية'],['ru','Русский'],['es','Español'],['fr','Français'],['de','Deutsch'],['it','Italiano'],['pt','Português'],['tr','Türkçe'],['uk','Українська'],['hi','हिन्दी'],['ja','日本語'],['ko','한국어'],['zh','中文']].map(([value,label])=>`<option value="${value}" ${(u.preferredLanguage||'he')===value?'selected':''}>${label}</option>`).join('')}</select></div></div><label class="setting-row"><span><b>הצגת המדינה בפרופיל</b><small>כיבוי האפשרות מסתיר את המדינה ממשתמשים אחרים</small></span><input id="showCountry" type="checkbox" ${u.privacy?.showCountry!==false?'checked':''}></label><label class="setting-row"><span><b>תרגום אוטומטי בצ׳אטים</b><small>הודעות בשפה אחרת יוצגו גם בתרגום לשפה שבחרתם</small></span><input id="autoTranslate" type="checkbox" ${u.autoTranslate?'checked':''}></label><p id="localeStatus" class="tiny mute"></p></div>`;
  const generalPanel=$('[data-settings-panel="general"]');if(generalPanel)generalPanel.insertAdjacentHTML('beforeend',`<div class="card"><h3>מצב גיל מוגן</h3><p class="small mute">הגדרה עצמית בלבד; אימות חיצוני עתידי לא יעביר אלינו צילום פנים.</p>${choice('ageBand','קבוצת גיל',[['under10','מתחת לגיל 10'],['10to12','10–12'],['13to17','13–17'],['adult','18 ומעלה']],u.ageBand||'13to17')}<p class="small mute">בחשבון מתחת לגיל 10 קישורים שמפרסמים משתמשים מוסתרים. קישורים רשמיים מהמייסד נשארים זמינים.</p><button class="btn btn-g btn-sm" id="reportAgeError" type="button">דיווח על טעות בגיל</button></div>`);
+ if(generalPanel){generalPanel.insertAdjacentHTML('beforeend',localeCard);const saveLocale=async()=>{const status=$('#localeStatus');status.textContent='שומר…';try{const update={localeCountry:$('#localeCountry').value,preferredLanguage:$('#preferredLanguage').value,autoTranslate:$('#autoTranslate').checked,privacy:{...(u.privacy||{}),showCountry:$('#showCountry').checked}};const saved=await Store.update('users',u.id,update);Auth.user={...Auth.user,...saved};status.textContent='הגדרות השפה נשמרו';}catch(error){status.textContent=error.message||'השמירה נכשלה';}};['localeCountry','preferredLanguage','autoTranslate','showCountry'].forEach(id=>$('#'+id).onchange=saveLocale);}
  $('#ageBand').onchange=async e=>{try{await Store.update('users',u.id,{ageBand:e.target.value});await Auth.refresh();$('#profileStatus').textContent='מצב הגיל המוגן נשמר';}catch(err){$('#profileStatus').textContent=err.message;}};
  $('#reportAgeError').onclick=()=>{openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('flag',20)}</span><h3>דיווח על טעות בגיל</h3></div><div class="m-b"><p>הצוות יוכל לתקן את קבוצת הגיל, לאפס אותה או לדרוש אימות חוזר.</p><div class="field"><label>מה לא נכון?</label><textarea id="ageErrorText" minlength="10" maxlength="600"></textarea></div><p id="ageErrorStatus" class="small"></p></div><div class="m-f"><button class="btn btn-g" onclick="closeModal()">ביטול</button><button class="btn btn-p" id="sendAgeError">שליחה לצוות</button></div>`);$('#sendAgeError').onclick=async()=>{const text=$('#ageErrorText').value.trim();if(text.length<10)return $('#ageErrorStatus').textContent='נדרש הסבר קצר של לפחות 10 תווים.';const b=$('#sendAgeError');b.disabled=true;try{await Store.add('reports',{kind:'age_dispute',type:'account',targetId:u.id,reason:'בקשה לתיקון גיל',text});closeModal();toast('הדיווח נשלח לצוות');}catch(err){$('#ageErrorStatus').textContent=err.message;b.disabled=false;}};};
  const totpButton=$('[title*="TOTP"]');if(totpButton){totpButton.disabled=false;totpButton.removeAttribute('title');totpButton.textContent='הפעלת אימות דו־שלבי TOTP';totpButton.onclick=async()=>{totpButton.disabled=true;$('#profileStatus').textContent='מכין חיבור מאובטח לאפליקציית אימות…';try{const setup=await beginTotpEnrollment();openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('shield',20)}</span><h3>אימות דו־שלבי</h3></div><div class="m-b"><p>העתיקו את המפתח לאפליקציית אימות כמו Google Authenticator או Microsoft Authenticator.</p><div class="card mono" style="user-select:all;direction:ltr;text-align:center">${esc(setup.secretKey)}</div><div class="field"><label for="totpCode">הקוד בן 6 הספרות</label><input id="totpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div><p id="totpStatus" class="small"></p></div><div class="m-f"><button class="btn btn-g" onclick="closeModal()">ביטול</button><button class="btn btn-p" id="confirmTotp">הפעלה</button></div>`);$('#confirmTotp').onclick=async()=>{const b=$('#confirmTotp');b.disabled=true;try{await finishTotpEnrollment(setup.secret,$('#totpCode').value);closeModal();toast('האימות הדו־שלבי הופעל');}catch(e){$('#totpStatus').textContent=e?.code==='auth/operation-not-allowed'?'צריך להפעיל TOTP במסוף Firebase לפני שניתן להשלים את החיבור.':(e.message||'הקוד לא תקין');b.disabled=false;}};}catch(e){$('#profileStatus').textContent=e?.code==='auth/operation-not-allowed'?'ספק TOTP עדיין לא מופעל בפרויקט Firebase.':(e.message||'לא ניתן להתחיל את החיבור');}finally{totpButton.disabled=false;}};}
  let avatarDraft=u.avatar||'';
+ $('#accountPresence').insertAdjacentHTML('beforeend',`<option value="offline" ${u.presenceMode==='offline'?'selected':''}>⚪ אופליין</option>`);
+ $('#accountPresence').closest('.field').insertAdjacentHTML('afterend',`<div class="field" id="accountPresenceDurationWrap" ${(u.presenceMode||'online')==='online'?'hidden':''}><label for="accountPresenceDuration">משך הסטטוס</label><select id="accountPresenceDuration"><option value="900000">15 דקות</option><option value="3600000">שעה</option><option value="86400000">יום</option><option value="604800000">שבוע</option></select></div>`);
  const paintAvatar=()=>{$('#avatarPreview').innerHTML=avatar({...u,avatar:avatarDraft,presenceMode:$('#accountPresence').value},'l');};
- $('#accountPresence').onchange=paintAvatar;
+ $('#accountPresence').onchange=()=>{paintAvatar();$('#accountPresenceDurationWrap').hidden=$('#accountPresence').value==='online';};
  $('#profileAvatar').oninput=e=>{if(e.target.value.trim())avatarDraft=e.target.value.trim();paintAvatar();};
  $('#removeAvatar').onclick=()=>{avatarDraft='';$('#profileAvatar').value='';$('#profileAvatarFile').value='';paintAvatar();};
  const prepareAvatar=async file=>{if(!file)return;if(!file.type.startsWith('image/'))throw new Error('אפשר להדביק רק תמונה');if(file.size>8*1024*1024)throw new Error('התמונה גדולה מדי. ניתן לבחור תמונה עד 8MB.');const bitmap=await createImageBitmap(file),scale=Math.min(1,512/Math.max(bitmap.width,bitmap.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();avatarDraft=canvas.toDataURL('image/webp',.82);if(avatarDraft.length>500000)avatarDraft=canvas.toDataURL('image/jpeg',.68);if(avatarDraft.length>500000)throw new Error('לא הצלחנו להקטין את התמונה מספיק. נסו תמונה אחרת.');$('#profileAvatar').value='';paintAvatar();$('#profileStatus').textContent='התמונה מוכנה — לחצו על שמירת השינויים';};
  $('#profileAvatarFile').onchange=async e=>{try{await prepareAvatar(e.target.files?.[0]);}catch(error){$('#profileStatus').textContent=error.message||'לא ניתן לקרוא את התמונה';}};
  $('#avatarDropZone').onpaste=async e=>{const file=[...(e.clipboardData?.files||[])].find(item=>item.type.startsWith('image/'));if(!file)return;e.preventDefault();try{await prepareAvatar(file);}catch(error){$('#profileStatus').textContent=error.message||'לא ניתן להדביק את התמונה';}};
  $('#profileForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('[type=submit]');b.disabled=true;const mailPrefs={};$$('[data-mail-pref]').forEach(x=>mailPrefs[x.dataset.mailPref]=x.checked);const avatarUrl=$('#profileAvatar').value.trim();if(avatarUrl)avatarDraft=avatarUrl;const nextPrivacy={dmFrom:$('#dmFrom').value,friendRequests:$('#friendRequests').value,profileVis:$('#profileVis').value,onlineStatus:$('#onlineStatus').value,showFollowers:$('#showFollowers').checked,showVerified:$('#showVerified').checked,showLastSeen:$('#showLastSeen').checked,readReceipts:$('#readReceipts').checked};const socialLinks={};$$('[data-social]').forEach(x=>socialLinks[x.dataset.social]=x.value.trim());try{if(avatarUrl&&!/^https:\/\//.test(avatarUrl))throw new Error('תמונת הפרופיל חייבת להשתמש בכתובת HTTPS');await Store.update('users',u.id,{name:$('#profileName').value.trim(),bio:$('#profileBio').value.trim(),avatar:avatarDraft,presenceMode:$('#accountPresence').value,mailPrefs,privacy:nextPrivacy,socialLinks,theme:$('#accountTheme').value,sound:$('#accountSound').checked});await Auth.refresh();$('#profileStatus').textContent='כל ההגדרות נשמרו בהצלחה';renderNav();}catch(e){$('#profileStatus').textContent=e.message;}finally{b.disabled=false;}};
+ const saveProfile=$('#profileForm').onsubmit;$('#profileForm').onsubmit=async e=>{await saveProfile(e);const mode=$('#accountPresence')?.value;if(!mode)return;const duration=Number($('#accountPresenceDuration')?.value||900000);await Presence.set(mode,{until:mode==='online'?null:new Date(Date.now()+duration).toISOString(),auto:false});};
  $('#accountLogout').onclick=async()=>{await Auth.signOut();location.hash='#/';await render();};
  if($('#resendVerify'))$('#resendVerify').onclick=async()=>{const result=await request('/api/auth/email-verification','POST',{});$('#profileStatus').textContent=result.message;};
  $('#changePassword').onclick=async()=>{await Auth.changePassword();$('#profileStatus').textContent='קישור מאובטח לאיפוס הסיסמה נשלח למייל.';};
@@ -4955,6 +4988,7 @@ async function render(){
       <div class="row" style="justify-content:center"><button class="btn btn-g" onclick="location.reload()">רענון</button>
         <a class="btn btn-p" href="/">לדף הבית</a></div></div>`;
   }
+  $$('.chat .txt,.chat .reply-quote,.assistant-message>div,.dm-item .nm,.dm-item .lst,.auto-translation').forEach(el=>{el.classList.add('notranslate');el.setAttribute('translate','no');});
   document.title = (PAGE_TITLES[path] ? PAGE_TITLES[path] + ' · ' : '') + SITE.name + ' — ' + SITE.tagline;
   try{ initReveal(); }catch(_){}
   RENDERING = false;
@@ -4980,7 +5014,9 @@ function initTheme(){
   $('#themeBtn').onclick = ()=>set(document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark');
 }
 function initLanguage(){
-  const apply=lang=>{localStorage.setItem('smai_lang',lang);document.documentElement.lang=lang;document.documentElement.dir=lang==='en'?'ltr':'rtl';const b=$('#languageToggle');if(b){b.textContent=lang==='en'?'עב':'EN';b.setAttribute('aria-label',lang==='en'?'Switch to Hebrew':'מעבר לאנגלית');}const settings=document.querySelector('.top-utility a[href="/account"]');if(settings)settings.textContent=lang==='en'?'Settings':'הגדרות';const notices=$('#topNotifShortcut');if(notices&&!notices.querySelector('.top-notif-count'))notices.textContent=lang==='en'?'Notifications':'התראות';renderNav();};
+  const protectChats=()=>{$$('.chat .txt,.chat .reply-quote,.assistant-message>div,.dm-item .nm,.dm-item .lst,.auto-translation').forEach(el=>{el.classList.add('notranslate');el.setAttribute('translate','no');});};
+  const googleLanguage=lang=>{protectChats();const choose=()=>{const select=document.querySelector('.goog-te-combo');if(!select)return false;select.value=lang;select.dispatchEvent(new Event('change',{bubbles:true}));return true;};if(choose())return;if(!document.querySelector('#google_translate_element')){const host=document.createElement('div');host.id='google_translate_element';host.hidden=true;document.body.appendChild(host);}window.smaiGoogleTranslateReady=()=>{new google.translate.TranslateElement({pageLanguage:'he',includedLanguages:'he,en',autoDisplay:false},'google_translate_element');setTimeout(choose,250);};if(!document.querySelector('script[data-smai-translate]')){const script=document.createElement('script');script.dataset.smaiTranslate='1';script.src='https://translate.google.com/translate_a/element.js?cb=smaiGoogleTranslateReady';script.async=true;document.head.appendChild(script);}else setTimeout(choose,350);};
+  const apply=lang=>{localStorage.setItem('smai_lang',lang);document.documentElement.lang=lang;document.documentElement.dir=lang==='en'?'ltr':'rtl';const b=$('#languageToggle');if(b){b.textContent=lang==='en'?'עב':'EN';b.setAttribute('aria-label',lang==='en'?'Switch to Hebrew':'מעבר לאנגלית');}const settings=document.querySelector('.top-utility a[href="/account"]');if(settings)settings.textContent=lang==='en'?'Settings':'הגדרות';const notices=$('#topNotifShortcut');if(notices&&!notices.querySelector('.top-notif-count'))notices.textContent=lang==='en'?'Notifications':'התראות';renderNav();googleLanguage(lang);};
   apply(currentLang());const b=$('#languageToggle');if(b)b.onclick=()=>{apply(currentLang()==='en'?'he':'en');render();renderFooter();};
 }
 function initSfx(){
@@ -5071,6 +5107,7 @@ function initDemoStrip(){
 (async function boot(){
  initTheme();initLanguage();initSfx();initBurger();initNotif();renderFooter();$('#demoStrip').style.display='none';
  try{await Auth.refresh();await CFG.load();}catch(e){toast(e.message,'warn');}
+ Presence.init();
  const navigate=path=>{history.pushState(null,'',path);closeModal();window.scrollTo({top:0});return render();};
  window.navigate=navigate;
  document.addEventListener('click',e=>{const a=e.target.closest('a[href]');if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target||a.hasAttribute('download'))return;const url=new URL(a.href,location.href);if(url.origin!==location.origin||url.pathname.startsWith('/api/'))return;e.preventDefault();navigate(url.pathname+url.search);});
