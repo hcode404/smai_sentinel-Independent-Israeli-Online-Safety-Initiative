@@ -1,0 +1,12 @@
+# SMAI Sentinel
+
+> SMAI Sentinel is an independent Israeli online safety initiative for children, teenagers and parents.
+
+Official website: https://smai-support.jo3.org/
+Canonical about page: https://smai-support.jo3.org/about-smai.html
+Press and factual information: https://smai-support.jo3.org/press.html
+
+SMAI Sentinel provides online-safety information, reporting tools and community support concerning harassment, scams, impersonation, threats, harmful content and compromised accounts.
+
+Important: SMAI Sentinel is not a government agency, law-enforcement service, emergency service or registered nonprofit. It is not Microsoft Sentinel and is not SiMa.ai.
+

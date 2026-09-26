@@ -150,6 +150,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     requireThat(['text','image','video'].includes(p.mediaType),400,'סוג המדיה אינו תקין');
     requireThat(p.mediaType==='text'||/^https:\/\//.test(p.mediaUrl||''),400,'נדרשת כתובת HTTPS לתמונה או לסרטון');
     requireThat(['all','members','staff'].includes(p.audience),400,'קהל היעד אינו תקין');
+    requireThat(!p.placement||['site','popup'].includes(p.placement),400,'מיקום ההודעה אינו תקין');
     return p;
   }
   if(col==='emergencyRequests'){
@@ -202,7 +203,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     if(isNew){const members=[...new Set(input.members||[])];requireThat(members.includes(id)&&members.length>=2&&members.length<=50);for(const member of members)requireThat(await get('users',member),400,'משתמש לא תקין');return {members,kind:members.length===2?'direct':'group',ownerId:id,name:String(input.name||'').slice(0,100)};}
     requireThat(await canRead(col,old,u,get));
     if(input.members){const next=[...new Set(input.members)];requireThat(next.length<=50&&(old.ownerId===id||next.sort().join()===old.members.filter(x=>x!==id).sort().join()));return {members:next};}
-    if(input.dmAccepted===true){requireThat(old.kind==='direct'&&old.ownerId!==id&&old.members.includes(id));return {dmAccepted:true,acceptedAt:new Date().toISOString()};}
+    if(input.dmAccepted===true){const direct=old.kind==='direct'||!old.kind&&old.members?.length===2;requireThat(direct&&old.ownerId!==id&&old.members.includes(id),403,'רק מקבל הבקשה יכול לאשר את השיחה');return {kind:'direct',dmAccepted:true,acceptedAt:new Date().toISOString()};}
     requireThat(old.ownerId===id);return pick(input,['name']);
   }
   if(col==='dmsgs'){
