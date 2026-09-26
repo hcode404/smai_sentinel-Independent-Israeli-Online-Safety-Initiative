@@ -24,6 +24,35 @@ function fixture(){
  return {DB,env,call,db:database(env)};
 }
 const ticket={title:'דיווח בדיקה',description:'זהו דיווח בדיקה מקומי לצורך בדיקת התוכנה בלבד',dept:'other'};
+test('donation configuration is owner-only, public-readable and validates payment links',async()=>{
+ const {call,DB}=fixture();try{
+  assert.equal((await call('donations','GET',undefined,null)).data.url,'');
+  assert.equal((await call('donations','POST',{url:'https://paypal.me/example'})).status,403);
+  assert.equal((await call('donations','POST',{url:'javascript:alert(1)'},'owner')).status,400);
+  assert.equal((await call('donations','POST',{url:'https://paypal.me.attacker.test/x'},'owner')).status,400);
+  assert.equal((await call('donations','POST',{url:'https://paypal.me/example',label:'תמיכה'},'owner')).status,200);
+  assert.equal((await call('donations','GET',undefined,null)).data.url,'https://paypal.me/example');
+  assert.equal((await call('donations','POST',{url:''},'owner')).status,200);
+  assert.equal((await call('donations','GET',undefined,null)).data.url,'');
+ }finally{DB.close();}
+});
+test('profile catalogue has 21 new effects; football can be purchased and safely equipped',async()=>{
+ const {call,db,DB}=fixture();try{
+  const initial=await call('rewards');assert.equal(initial.data.catalog.length,25);
+  assert.equal(new Set(initial.data.catalog.map(x=>x.id)).size,25);
+  const user=(await db.list('users')).find(u=>u.name==='alice');
+  await db.put('dmsgs',{id:'football-reward',senderId:user.id,text:'hello'});
+  await call('rewards','POST',{action:'claim',id:'hello'});
+  assert.equal((await call('rewards','POST',{action:'buy',id:'football'})).data.balance,0);
+  assert.equal((await call('rewards','POST',{action:'equip',id:'football'})).data.equipped,'football');
+  assert.equal((await call('records/users/'+user.id,'GET',undefined,'bob')).data.profileStyle,'football');
+  assert.equal((await call('rewards','POST',{action:'equip',id:'<img onerror=alert(1)>'})).status,403);
+  assert.equal((await call('rewards','POST',{action:'equip',id:''})).data.equipped,'');
+  const owner=await call('session','GET',undefined,'owner');assert.equal(owner.data.user.profileStyle,'football');
+  await call('rewards','POST',{action:'equip',id:''},'owner');
+  assert.equal((await call('session','GET',undefined,'owner')).data.user.profileStyle,'');
+ }finally{DB.close();}
+});
 test('rewards enforce eligibility, single claims, balance and cosmetic ownership',async()=>{
  const {call,db,DB}=fixture();
  try{

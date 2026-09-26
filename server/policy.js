@@ -38,7 +38,7 @@ export async function canRead(col,r,u,get){
   return false;
 }
 export function safeRecord(col,r,u){
-  if(col==='users'&&u?.id!==r.id&&rank(u)<50)return {...publicUser(r,u),profileStyle:r.profileStyle||''};
+  if(col==='users'&&u?.id!==r.id&&rank(u)<50){const visible=publicUser(r,u);return {...visible,profileStyle:r.profileStyle||'',privacy:{...visible.privacy,showFollowers:r.privacy?.showFollowers!==false}};}
   const out={...r};delete out.pass;delete out.password;
   if(col==='users'){
     out.trustedNetworkCount=Array.isArray(r.trustedNetworkHashes)?r.trustedNetworkHashes.length:0;

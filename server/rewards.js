@@ -1,10 +1,6 @@
-import {requireThat} from './policy.js';
-export const catalog=[
-  {id:'aurora',name:'זוהר צפוני',price:40,description:'מסגרת טורקיז וסגול עם נשימה עדינה'},
-  {id:'sunset',name:'שקיעה',price:60,description:'מסגרת ורודה וכתומה עם אור נע'},
-  {id:'cosmos',name:'קוסמוס',price:90,description:'פרופיל כחול־סגול עם הילה מסתובבת'},
-  {id:'neon',name:'ניאון',price:120,description:'מסגרת מוארת בגווני ירוק וטורקיז'}
-];
+import {requireThat,isFounder} from './policy.js';
+import {catalog} from '../src/profile-catalog.js';
+export {catalog};
 export async function rewards(env,db,u,body,method){
   const exists=async(col,where,values)=>Boolean(await env.DB.prepare(`SELECT id FROM records WHERE collection=? AND ${where} LIMIT 1`).bind(col,...values).first());
   const [message,friend,ticket]=await Promise.all([
@@ -21,6 +17,7 @@ export async function rewards(env,db,u,body,method){
   ];
   const old=await db.get('rewardWallets',u.id);
   const wallet=old||{id:u.id,claimed:[],owned:[],spent:0,history:[]};
+  if(isFounder(u)&&!wallet.owned.includes('football'))wallet.owned=[...wallet.owned,'football'];
   const earned=missions.filter(m=>wallet.claimed.includes(m.id)).reduce((sum,m)=>sum+m.points,0);
   let balance=earned-wallet.spent;
   if(method==='POST'){

@@ -5,6 +5,8 @@ import { renderHome } from './home.js';
 import './ticket-fix.css';
 import './redesign.css';
 import './rewards.css';
+import {cosmetic,profileScene} from './profile-catalog.js';
+import './profile-studio.css';
 
 /* =====================================================================
    SMAI — Single-file app.  הדבק כאן את פרטי הפרויקט שלך מ-Firebase.
@@ -419,8 +421,8 @@ function avatar(user, size='m'){
   if(av.startsWith('e:')) inner = `<span style="font-size:1.25em;line-height:1">${esc(av.slice(2))}</span>`;
   else if(/^(https?:|data:image)/.test(av)) inner = `<img src="${esc(av)}" alt="">`;
   const founder=user?.rank==='founder'||user?.isOwner;
-  const decoration=['aurora','sunset','cosmos','neon'].includes(user?.profileStyle)?` cosmetic-${user.profileStyle}`:'';
-  return `<span class="av ${size}${founder?' founder-avatar':''}${decoration}" style="background:${bg}" title="${esc(n)}">${inner}${founder?`<i class="founder-crown" aria-label="יוצר SMAI">${ic('crown',9,2.8)}</i>`:''}${pres}</span>`;
+  const style=cosmetic(user?.profileStyle),decoration=style?` cosmetic-${style.id} av-decorated`:'';
+  return `<span class="av ${size}${founder?' founder-avatar':''}${decoration}" style="background:${bg};${style?`--cosmetic-a:${style.a};--cosmetic-b:${style.b}`:''}" title="${esc(n)}">${inner}${founder?`<i class="founder-crown" aria-label="יוצר SMAI">${ic('crown',9,2.8)}</i>`:''}${pres}</span>`;
 }
 function rankBadge(rank){
   const r = RANKS[rank] || RANKS.citizen;
@@ -1199,6 +1201,8 @@ const NAV = [
   { p:'/dm',        l:'הודעות פרטיות', ico:'send' },
   { p:'/friends',   l:'חברים',       ico:'users' },
   { p:'/shop', l:'משימות וחנות', ico:'star' },
+  { p:'/daily', l:'הכלים שלי', ico:'check' },
+  { p:'/support', l:'תמיכה ביוזמה', ico:'heart' },
   { p:'/community', l:'קהילה',       ico:'message' },
   { p:'/team-praise', l:'מילה טובה', ico:'heart' },
   { p:'/partners', l:'שיתופי פעולה', ico:'link' },
@@ -3631,17 +3635,19 @@ function renderBanned(app){
 /* =====================================================================
    פרופיל משתמש, דיווח על פרופיל, וצ׳אטים פרטיים
    ===================================================================== */
-async function openProfile(userId){
+async function openProfile(userId,previewStyle){
   if(!userId) return;
   const [u,follows,rels,profileStats] = await Promise.all([Store.get('users', userId),Store.list('followers').catch(()=>[]),Auth.user?Friends.mine(Auth.user.id):[],Auth.user?request('/api/profile-stats/'+encodeURIComponent(userId)).catch(()=>({praiseCount:0,online:null})):Promise.resolve({praiseCount:0,online:null})]);
   if(!u){ toast('המשתמש לא נמצא','warn'); return; }
+  const preview=typeof previewStyle==='string'&&userId===Auth.user?.id;
+  if(preview)u.profileStyle=previewStyle;
   const me = Auth.user;
   const r = RANKS[u.rank] || RANKS.citizen;
   const followers=follows.filter(f=>f.to===userId),following=follows.filter(f=>f.from===userId),myFollow=me&&followers.find(f=>f.from===me.id),friendState=me?Friends.status(rels,me.id,userId):'none';
   const socials=(me?.ageBand==='under10'&&u.rank!=='founder'?[]:[['instagram','Instagram'],['tiktok','TikTok'],['roblox','Roblox'],['twitter','X / Twitter'],['youtube','YouTube'],['discord','Discord'],['facebook','Facebook'],['linkedin','LinkedIn'],['twitch','Twitch']]).filter(([k])=>u.socialLinks?.[k]);
   openModal(`
-  ${u.rank==='founder'?`<div class="original-banner" aria-hidden="true"><span class="original-orbit orbit-one"></span><span class="original-orbit orbit-two"></span><span class="original-wordmark">SMAI<span>ORIGINAL</span></span><span class="original-signature">THE PERSON BEHIND SENTINEL</span></div>`:''}
-  <div class="m-h profile-cover ${u.rank==='founder'?'original-profile':''} cosmetic-${['aurora','sunset','cosmos','neon'].includes(u.profileStyle)?u.profileStyle:'default'}"><span>${avatar({ ...u, id:userId },'l')}</span>
+  <div class="profile-banner-wrap">${profileScene(u.profileStyle)}<div class="profile-banner-controls"><button type="button" id="pfMotion" aria-pressed="false">השהיית אפקטים</button><button type="button" onclick="closeModal()" aria-label="סגירת הפרופיל">✕</button></div>${preview?'<span class="profile-preview-label">תצוגה מקדימה — טרם נשמר</span>':''}</div>
+  <div class="m-h profile-cover studio-profile"><span>${avatar({ ...u, id:userId },'l')}</span>
     <div style="flex:1"><h3 style="margin:0">${esc(u.name||'משתמש')}
       ${u.verified&&u.privacy?.showVerified!==false?`<span class="verified" title="חשבון מאומת">${ic('check',11,3)}</span>`:''}</h3>
       <div class="row" style="gap:6px;margin-top:5px">${rankBadge(u.rank)}
@@ -3653,7 +3659,7 @@ async function openProfile(userId){
     ${u.bio?`<div class="card pad-sm" style="background:var(--surface2);margin-bottom:14px">
       <div class="tiny mute" style="margin-bottom:4px">קצת עליי</div>
       <div class="small" style="white-space:pre-wrap">${esc(u.bio)}</div></div>`:
-      '<p class="small mute">המשתמש לא הוסיף תיאור לפרופיל.</p>'}
+      '<p class="small mute">עוד אין כאן ביו.</p>'}
     <dl class="kv small"><dt>דרגה</dt><dd>${esc(r.l)}</dd>
       ${u.dept?`<dt>מחלקה</dt><dd>${esc((DEPT_BY[u.dept]||DEPT_BY.other).short)}</dd>`:''}
     </dl>
@@ -3661,14 +3667,17 @@ async function openProfile(userId){
     ${socials.length?`<div class="row" style="margin-top:13px">${socials.map(([k,l])=>`<a class="btn btn-g btn-sm" href="${esc(u.socialLinks[k])}" target="_blank" rel="noopener noreferrer nofollow">${esc(l)}</a>`).join('')}</div>`:''}
   </div>
   <div class="m-f">
-    <button class="btn btn-g" onclick="closeModal()">סגירה</button>
+    ${me?.id===userId?'<a class="btn btn-p" href="/shop" onclick="closeModal()">עיצוב הפרופיל</a><a class="btn btn-g" href="/account" onclick="closeModal()">עריכת ביו ופרטים</a>':''}
     ${me && me.id!==userId ? `<button class="btn btn-ghost" id="pfReport">${ic('flag',15)} דיווח על הפרופיל</button>
       <button class="btn btn-g" id="pfFollow">${myFollow?'הפסקת מעקב':'מעקב'}</button>
-      ${friendState==='none'?`<button class="btn btn-g" id="pfFriend">${ic('plus',15)} בקשת חברות</button>`:''}
+      ${['none','incoming'].includes(friendState)?`<button class="btn btn-g" id="pfFriend">${ic('plus',15)} ${friendState==='incoming'?'אישור חברות':'הוספה לחברים'}</button>`:`<span class="profile-friend-state">${friendState==='friends'?'✓ חברים':friendState==='sent'?'בקשת חברות נשלחה':'הקשר חסום'}</span>`}
+      <a class="btn btn-g" href="/team-praise?to=${encodeURIComponent(userId)}" onclick="closeModal()">${ic('heart',15)} מילה טובה</a>
       <button class="btn btn-p" id="pfDm">${ic('message',15)} הודעה פרטית</button>`:''}
   </div>`);
+  $('#modal').classList.add('profile-studio-modal');
+  const motion=$('#pfMotion');motion.onclick=()=>{const paused=$('#modal').classList.toggle('effects-paused');motion.setAttribute('aria-pressed',String(paused));motion.textContent=paused?'הפעלת אפקטים':'השהיית אפקטים';};
   const rp = $('#pfReport'); if(rp) rp.onclick = ()=>reportProfileModal({ ...u, id:userId });
-  const dm = $('#pfDm'); if(dm) dm.onclick = async ()=>{ closeModal(); const c = await openDM(userId, u.name||u.email); location.hash = '#/dm/'+c.id; };
+  const dm = $('#pfDm'); if(dm) dm.onclick = async ()=>{dm.disabled=true;try{const c = await openDM(userId,u.name||u.email);closeModal();location.hash='#/dm/'+c.id;}catch(error){toast(error.message,'err');dm.disabled=false;}};
   const follow=$('#pfFollow');if(follow)follow.onclick=async()=>{follow.disabled=true;try{if(myFollow)await Store.remove('followers',myFollow.id);else await Store.add('followers',{to:userId});closeModal();toast(myFollow?'המעקב הופסק':'התחלת לעקוב');openProfile(userId);}catch(e){toast(e.message||'הפעולה נכשלה','err');follow.disabled=false;}};
   const friend=$('#pfFriend');if(friend)friend.onclick=async()=>{friend.disabled=true;try{await Friends.request(userId,u.name);friend.textContent='הבקשה נשלחה';toast('בקשת החברות נשלחה');}catch(e){toast(e.message||'הפעולה נכשלה','err');friend.disabled=false;}};
 }
@@ -4268,22 +4277,13 @@ route('/login',app=>{
 });
 
 route('/shop',async app=>{
-  if(!Auth.user)return app.innerHTML=requireLogin('התחברו כדי לצבור נקודות ולעצב את הפרופיל');
-  app.innerHTML=loader();
-  let state;
-  const render=()=>{
-    app.innerHTML=`<section class="rewards-head"><div><h1>הפרופיל שלכם, בדרך שלכם</h1><p>משלימים משימות, אוספים נקודות ובוחרים עיצוב.</p><small>נקודות קהילה בלבד — ללא תשלום כספי. כל משימה מזכה פעם אחת.</small></div><div class="reward-balance"><b>${state.balance}</b><span>נקודות זכות</span></div></section>
-      <h2>המשימות שלי</h2><p class="small mute">פעולות שכבר ביצעתם נחשבות. פותחים פנייה רק כשצריך עזרה אמיתית.</p><div class="reward-grid">${state.missions.map(m=>`<article class="reward-card"><span class="b b-brand">+${m.points} נקודות</span><h3>${esc(m.name)}</h3>${m.claimed?'<span>✓ הפרס נאסף</span>':m.done?`<button class="btn btn-p" data-action="claim" data-id="${m.id}">איסוף נקודות</button>`:`<a class="btn btn-g" href="${m.href}">מעבר למשימה</a>`}</article>`).join('')}</div>
-      <h2>חנות העיצובים</h2><p class="small mute">תצוגה מקדימה חיה. העיצוב מופיע בפרופיל ובמסגרת התמונה שלכם.</p><div class="reward-grid">${state.catalog.map(item=>{const owned=state.owned.includes(item.id),equipped=state.equipped===item.id;return `<article class="reward-card"><div class="reward-preview">${avatar({...Auth.user,profileStyle:item.id},'l')}</div><h3>${esc(item.name)}</h3><p>${esc(item.description)}</p><b>${owned?'באוסף שלכם':item.price+' נקודות'}</b><button class="btn ${owned?'btn-g':'btn-p'}" data-action="${owned?'equip':'buy'}" data-id="${equipped?'':item.id}" ${!owned&&state.balance<item.price?'disabled':''}>${equipped?'הסרת העיצוב':owned?'החלת העיצוב':state.balance<item.price?'חסרות '+(item.price-state.balance)+' נקודות':'רכישה בנקודות'}</button></article>`;}).join('')}</div>
-      <h2>היסטוריית נקודות</h2><div class="reward-ledger">${state.history.length?state.history.map(row=>`<div><span>${esc(row.text)}</span><b dir="ltr">${row.points>0?'+':''}${row.points}</b></div>`).join(''):'<p class="mute">כאן יופיעו הפרסים והרכישות שלכם.</p>'}</div>`;
-    app.querySelectorAll('[data-action]').forEach(button=>button.onclick=async()=>{
-      app.querySelectorAll('[data-action]').forEach(b=>b.disabled=true);
-      try{state=await request('/api/rewards','POST',{action:button.dataset.action,id:button.dataset.id});Auth.user.profileStyle=state.equipped;render();toast('השינוי נשמר','ok');}
-      catch(error){toast(error.message,'err');render();}
-    });
-  };
-  try{state=await request('/api/rewards');render();}catch(error){app.innerHTML=`<div class="card pad"><h2>החנות אינה זמינה כרגע</h2><p>${esc(error.message)}</p><a class="btn btn-g" href="/shop">ניסיון נוסף</a></div>`;}
+  if(!Auth.user)return app.innerHTML=requireLogin();
+  const {renderStudioShop}=await import('./studio-shop.js');
+  return renderStudioShop(app,{user:Auth.user,esc,toast,preview:style=>openProfile(Auth.user.id,style)});
 });
+
+route('/daily',async app=>{if(!Auth.user)return app.innerHTML=requireLogin();const {renderDaily}=await import('./daily-tools.js');return renderDaily(app,{user:Auth.user,esc,onCleanup});});
+route('/support',async app=>{const {renderSupport}=await import('./daily-tools.js');return renderSupport(app,{user:Auth.user,esc,toast});});
 
 route('/account',async app=>{
  if(!Auth.user){app.innerHTML=requireLogin();return;}
@@ -4878,6 +4878,7 @@ route('/team-praise',async app=>{
  const people=(await Store.list('users')).filter(u=>u.id!==Auth.user.id).sort((a,b)=>(a.name||'').localeCompare(b.name||'','he'));
  const visible=await Store.list('feedback'),mine=visible.filter(x=>x.byId===Auth.user.id&&['praise','staff_praise'].includes(x.kind)).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),received=visible.filter(x=>(x.targetId||x.staffId)===Auth.user.id&&['praise','staff_praise'].includes(x.kind)).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
  app.innerHTML=`<div class="page-h anim-up"><div class="eyebrow">SMAI COMMUNITY</div><h1>מילה טובה</h1><p>מישהו בקהילה או בצוות עזר לכם, עודד אתכם או עשה משהו טוב? ספרו לו.</p></div><div class="improve-grid"><form id="praiseForm" class="card stack"><div class="card-h"><span class="ico-tile i-ok">${ic('heart',20)}</span><div><h3 style="margin:0">שליחת מילה טובה</h3><div class="tiny mute">בחרו אדם מהקהילה וכתבו מה הערכתם</div></div></div><div class="field"><label for="praiseTarget">למי שולחים?</label><select id="praiseTarget" required><option value="">בחירה מהרשימה</option>${people.map(u=>`<option value="${esc(u.id)}">${esc(u.name||u.email)}${isStaffUser(u)?' · '+esc(RANKS[u.rank]?.l||'צוות'):''}</option>`).join('')}</select></div><div class="field"><label for="praiseText">המילה הטובה שלכם</label><textarea id="praiseText" required minlength="5" maxlength="2000" placeholder="ספרו מה האדם עשה ואיך זה עזר או שימח אתכם"></textarea></div><button class="btn btn-p" type="submit">${ic('heart',16)} שליחת מילה טובה</button><p id="praiseStatus" class="small" role="status"></p></form><section><h2>מילים טובות שקיבלתם</h2><div class="stack">${received.length?received.map(x=>`<article class="card pad-sm"><div class="row between"><b>${esc(x.byName||'חבר/ת קהילה')}</b><span class="b b-ok">${ic('heart',11)} בשבילך</span></div><p class="small">${esc(x.text)}</p><span class="tiny mute">${fmtDate(x.createdAt)}</span></article>`).join(''):'<div class="card center mute">עוד לא קיבלתם מילה טובה.</div>'}</div><h2 style="margin-top:24px">מה שכבר שלחתם</h2><div class="stack">${mine.length?mine.map(x=>`<article class="card pad-sm"><div class="row between"><b>${esc(x.targetName||x.staffName||'משתמש')}</b><span class="b b-ok">נשלח</span></div><p class="small">${esc(x.text)}</p><span class="tiny mute">${fmtDate(x.createdAt)}</span></article>`).join(''):'<div class="card center mute">עדיין לא שלחתם מילה טובה.</div>'}</div></section></div>`;
+ const requestedPraiseTarget=new URLSearchParams(location.search).get('to');if(people.some(person=>person.id===requestedPraiseTarget))$('#praiseTarget').value=requestedPraiseTarget;
  $('#praiseForm').onsubmit=async e=>{e.preventDefault();const submit=e.currentTarget.querySelector('[type=submit]'),status=$('#praiseStatus');submit.disabled=true;try{await Store.add('feedback',{kind:'praise',targetId:$('#praiseTarget').value,text:$('#praiseText').value.trim()});toast('המילה הטובה נשלחה');render();}catch(err){status.textContent=err.message;submit.disabled=false;}};
 });
 
@@ -5053,6 +5054,7 @@ async function render(){
   if(_renderPending) render();
 }
 const PAGE_TITLES = {
+  '/shop':'חנות עיצובים ומשימות','/daily':'הכלים שלי','/support':'תמיכה ביוזמה',
   '/report':'דיווח חדש', '/my':'הפניות שלי', '/track':'מעקב פנייה', '/ticket':'פנייה',
   '/articles':'מדריכים', '/article':'מדריך', '/community':'קהילה', '/server':'שרת קהילה',
   '/join':'הצטרפות לצוות', '/login':'כניסה', '/account':'החשבון שלי', '/admin':'פאנל צוות',

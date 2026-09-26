@@ -179,6 +179,9 @@ async function identity(req,env,db,ctx){
     await env.DB.prepare('INSERT OR IGNORE INTO records (collection,id,data,created_at) VALUES (?,?,?,?)').bind('users',id,JSON.stringify(u),u.createdAt).run();
     u=await db.get('users',id);
   }
+  if(owner&&!u.profileExperienceVersion){
+    await db.put('users',{...u,profileStyle:'football',profileExperienceVersion:1},u);u=await db.get('users',id);
+  }
   if(owner!==!!u.isOwner||u.email!==email||u.emailVerified!==verified||(owner&&!u.verified)){
     const updated={...u,email,emailVerified:verified,...(owner?{verified:true}:{}),authProvider:claims.firebase?.sign_in_provider||u.authProvider,rank:owner?'founder':u.isOwner?'citizen':u.rank,rankLvl:owner?70:u.isOwner?0:u.rankLvl,isOwner:owner};
     await db.put('users',updated,u);u=await db.get('users',id);
@@ -292,6 +295,10 @@ export async function api(req,env,ctx={waitUntil(){}}){
       return new Response(bytes,{headers:{'Content-Type':object.type||'application/octet-stream','Content-Disposition':`inline; filename="${String(object.name||'file').replace(/["\r\n]/g,'')}"`,'Cache-Control':'private, max-age=86400','X-Content-Type-Options':'nosniff'}});
     }
     const u=await identity(req,env,db,ctx);
+    if(path==='/api/donations'&&req.method==='GET'){
+      const settings=await db.get('donationSettings','site');
+      return json({url:settings?.url||'',label:settings?.label||'תמיכה ב-SMAI Sentinel'});
+    }
     if(path==='/api/session')return json({user:u?safeRecord('users',u,u):null});
     if(path==='/api/status')return json({database:true,ai:true,aiMode:env.AI?'workers-ai':env.GEMINI_API_KEY?'gemini':'basic',mail:!!(env.MAIL_GATEWAY_URL&&env.MAIL_GATEWAY_SECRET||env.RESEND_API_KEY&&env.MAIL_FROM||env.GMAIL_USER&&env.GMAIL_APP_PASSWORD),mailFrom:rank(u)>=60?(env.MAIL_FROM||env.GMAIL_USER||MAIL_BRAND):undefined,migration:'new-database',version:'2.1',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
     if(path==='/api/auth/password-reset'&&req.method==='POST'){
@@ -368,6 +375,14 @@ export async function api(req,env,ctx={waitUntil(){}}){
       requireThat(['GET','POST'].includes(req.method),405,'שיטה לא נתמכת');
       requireThat(!banned(u),403,'החשבון חסום');
       return json(await rewards(env,db,u,body,req.method));
+    }
+    if(path==='/api/donations'&&req.method==='POST'){
+      requireThat(isFounder(u),403,'רק יוצר האתר יכול להגדיר קישור לתרומות');
+      const value=String(body.url||'').trim();let parsed;
+      if(value){try{parsed=new URL(value);}catch{requireThat(false,400,'הקישור אינו תקין');}
+        requireThat(parsed.protocol==='https:'&&!parsed.username&&!parsed.password&&['paypal.me','paypal.com','www.paypal.com','ko-fi.com','buymeacoffee.com','www.buymeacoffee.com','donate.stripe.com','buy.stripe.com'].includes(parsed.hostname),400,'יש להזין קישור תשלום ציבורי של PayPal, Stripe, Ko-fi או Buy Me a Coffee');}
+      const old=await db.get('donationSettings','site'),rec={id:'site',url:value?parsed.href:'',label:String(body.label||'תמיכה ב-SMAI Sentinel').slice(0,80)};
+      await db.put('donationSettings',rec,old);return json({url:rec.url,label:rec.label});
     }
     const emergencyEvidence=path.match(/^\/api\/emergency\/([^/]+)\/evidence$/);
     if(emergencyEvidence&&req.method==='GET'){
