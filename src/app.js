@@ -53,7 +53,7 @@ const RANKS = {
   lead:    { l:'ראש צוות',      cls:'rk-lead',    lvl:40, staff:true,  ico:'users' },
   head:    { l:'ראש מחלקה',     cls:'rk-head',    lvl:50, staff:true,  ico:'building' },
   admin:   { l:'מנהל מערכת',    cls:'rk-admin',   lvl:60, staff:true,  ico:'shield' },
-  founder: { l:'מייסד',         cls:'rk-founder', lvl:70, staff:true,  ico:'crown' }
+  founder: { l:'SMAI ORIGINAL', cls:'rk-founder', lvl:70, staff:true, ico:'crown' }
 };
 const RANK_ORDER = ['citizen','trainee','agent','senior','lead','head','admin','founder'];
 /* יכולות לפי רמה */
@@ -425,7 +425,7 @@ function avatar(user, size='m'){
 function rankBadge(rank){
   const r = RANKS[rank] || RANKS.citizen;
   if(rank==='citizen' || !rank) return '';
-  return `<span class="rank ${r.cls}">${ic(r.ico,11,2.4)}${esc(rank==='founder'?'יוצר ומייסד SMAI':r.l)}</span>`;
+  return `<span class="rank ${r.cls}" ${rank==='founder'?'title="היוצר של SMAI Sentinel" dir="ltr"':''}>${ic(r.ico,11,2.4)}${esc(r.l)}</span>`;
 }
 const lvl = u => (RANKS[u?.rank] || RANKS.citizen).lvl;
 const can = (u,capKey) => lvl(u) >= (CAP[capKey] ?? 999);
@@ -3640,11 +3640,12 @@ async function openProfile(userId){
   const followers=follows.filter(f=>f.to===userId),following=follows.filter(f=>f.from===userId),myFollow=me&&followers.find(f=>f.from===me.id),friendState=me?Friends.status(rels,me.id,userId):'none';
   const socials=(me?.ageBand==='under10'&&u.rank!=='founder'?[]:[['instagram','Instagram'],['tiktok','TikTok'],['roblox','Roblox'],['twitter','X / Twitter'],['youtube','YouTube'],['discord','Discord'],['facebook','Facebook'],['linkedin','LinkedIn'],['twitch','Twitch']]).filter(([k])=>u.socialLinks?.[k]);
   openModal(`
-  <div class="m-h profile-cover cosmetic-${['aurora','sunset','cosmos','neon'].includes(u.profileStyle)?u.profileStyle:'default'}"><span>${avatar({ ...u, id:userId },'l')}</span>
+  ${u.rank==='founder'?`<div class="original-banner" aria-hidden="true"><span class="original-orbit orbit-one"></span><span class="original-orbit orbit-two"></span><span class="original-wordmark">SMAI<span>ORIGINAL</span></span><span class="original-signature">THE PERSON BEHIND SENTINEL</span></div>`:''}
+  <div class="m-h profile-cover ${u.rank==='founder'?'original-profile':''} cosmetic-${['aurora','sunset','cosmos','neon'].includes(u.profileStyle)?u.profileStyle:'default'}"><span>${avatar({ ...u, id:userId },'l')}</span>
     <div style="flex:1"><h3 style="margin:0">${esc(u.name||'משתמש')}
       ${u.verified&&u.privacy?.showVerified!==false?`<span class="verified" title="חשבון מאומת">${ic('check',11,3)}</span>`:''}</h3>
       <div class="row" style="gap:6px;margin-top:5px">${rankBadge(u.rank)}
-        ${u.isOwner?'<span class="b b-brand">בעל האתר</span>':''}
+        ${u.rank==='founder'?'<span class="original-label">היוצר של SMAI Sentinel</span>':''}
         ${u.isBanned?'<span class="b b-dang">מורחק</span>':''}
         <span class="b b-gray">${ic('clock',11)} מאז ${fmtDate(u.createdAt)}</span>
         ${presenceBadge(u)}${u.localeCountry&&u.privacy?.showCountry!==false?`<span class="b b-gray">${countryFlag(u.localeCountry)} ${esc(COUNTRY_NAMES[u.localeCountry]||u.localeCountry)}</span>`:''}</div><div class="tiny mute" style="margin-top:6px">${u.lastSeenAt?'נראה לאחרונה '+fmtDate(u.lastSeenAt)+' בשעה '+fmtTime(u.lastSeenAt):'מצב פעילות מוסתר'}</div></div></div>

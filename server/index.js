@@ -179,8 +179,8 @@ async function identity(req,env,db,ctx){
     await env.DB.prepare('INSERT OR IGNORE INTO records (collection,id,data,created_at) VALUES (?,?,?,?)').bind('users',id,JSON.stringify(u),u.createdAt).run();
     u=await db.get('users',id);
   }
-  if(owner!==!!u.isOwner||u.email!==email||u.emailVerified!==verified){
-    const updated={...u,email,emailVerified:verified,authProvider:claims.firebase?.sign_in_provider||u.authProvider,rank:owner?'founder':u.isOwner?'citizen':u.rank,rankLvl:owner?70:u.isOwner?0:u.rankLvl,isOwner:owner};
+  if(owner!==!!u.isOwner||u.email!==email||u.emailVerified!==verified||(owner&&!u.verified)){
+    const updated={...u,email,emailVerified:verified,...(owner?{verified:true}:{}),authProvider:claims.firebase?.sign_in_provider||u.authProvider,rank:owner?'founder':u.isOwner?'citizen':u.rank,rankLvl:owner?70:u.isOwner?0:u.rankLvl,isOwner:owner};
     await db.put('users',updated,u);u=await db.get('users',id);
   }
   const network=req.headers.get('CF-Connecting-IP');
