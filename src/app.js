@@ -2643,7 +2643,7 @@ route('/ticket', async (app, id)=>{
         return '<div class="mention-item'+(i===mIdx?' sel':'')+'" data-n="'+label+'"><div class="mav">'+av+'</div><div><div class="mnm">@'+label+'</div><div class="mrk">'+sub+'</div></div></div>';
       }).join('');
       mList.classList.add('open');
-      mList.querySelectorAll('.mention-item').forEach(el=>{ el.addEventListener('mousedown', ev=>{ ev.preventDefault(); _pick(el.dataset.n); }); });
+      mList.querySelectorAll('.mention-item').forEach(el=>{ el.addEventListener('mousedown', ev=>ev.preventDefault()); el.addEventListener('click', ()=>_pick(el.dataset.n)); });
     }
     function _pick(name){
       const v=mInp.value;
@@ -3108,7 +3108,7 @@ function renderTextChannel(s, ch, users, o){
     let _cu=[];
     Store.list('users').then(u=>{ _cu=u||[]; }).catch(()=>{});
     const _ci=(q)=>_cu.filter(u=> !q||(u.name||''). toLowerCase().startsWith(q.toLowerCase())||(u.email||'').toLowerCase().startsWith(q.toLowerCase())).slice(0,8);
-    const _cr=()=>{ mList2.innerHTML=''; mIt2.forEach((u,i)=>{ const d=document.createElement('div'); d.className='mention-item'+(i===mI2?' active':'')+' cmenitem'; d.textContent=(u.name||u.email||u.id); d.onmousedown=e=>{e.preventDefault();_cp2(i);}; mList2.appendChild(d); }); mList2.style.display=mIt2.length?'block':'none'; };
+    const _cr=()=>{ mList2.innerHTML=''; mIt2.forEach((u,i)=>{ const d=document.createElement('div'); d.className='mention-item'+(i===mI2?' active':'')+' cmenitem'; d.textContent=(u.name||u.email||u.id); d.onmousedown=e=>e.preventDefault(); d.onclick=()=>{_cp2(i);mInp2.focus();}; mList2.appendChild(d); }); mList2.style.display=mIt2.length?'block':'none'; };
     const _cs=()=>{ const txt=mInp2.value; const at=txt.lastIndexOf('@',mInp2.selectionStart-1); if(at===-1){mList2.style.display='none';mA2=false;return;} const q=txt.substring(at+1,mInp2.selectionStart); if(/\s/.test(q)){mList2.style.display='none';mA2=false;return;} mS2=at; mIt2=_ci(q); mI2=0; mA2=true; _cr(); };
     const _cp2=(i)=>{ const u=mIt2[i]; if(!u) return; const txt=mInp2.value; const b=txt.substring(0,mS2); const a=txt.substring(mInp2.selectionStart); const m='@'+(u.name||u.email||u.id)+' '; mInp2.value=b+m+a; mInp2.selectionStart=mInp2.selectionEnd=b.length+m.length; mList2.style.display='none'; mA2=false; mInp2.dispatchEvent(new Event('input')); };
     mInp2.addEventListener('input', _cs);
@@ -3954,7 +3954,7 @@ route('/dm', async (app, id)=>{
     const allowed=users.filter(user=>(cur.members||[]).includes(user.id)&&user.id!==me.id);
     const closeMentions=()=>{if(list){list.style.display='none';list.classList.remove('open');list.innerHTML='';}items=[];};
     const choose=index=>{const user=items[index];if(!user)return;const before=di.value.slice(0,start),after=di.value.slice(di.selectionStart),mention='@'+(user.name||user.email||user.id)+' ';di.value=before+mention+after;di.selectionStart=di.selectionEnd=before.length+mention.length;closeMentions();di.focus();};
-    const draw=()=>{if(!list)return;list.innerHTML=items.map((user,index)=>{const label=user.name||user.email||user.id;return `<div class="mention-item ${index===selected?'sel':''}" data-index="${index}" role="option" aria-selected="${index===selected}">${avatar(user,'s')}<div><div class="mnm">@${esc(label)}</div><div class="mrk">משתתף בשיחה</div></div></div>`;}).join('');list.style.display=items.length?'block':'none';list.classList.toggle('open',Boolean(items.length));list.querySelectorAll('[data-index]').forEach(row=>row.onmousedown=event=>{event.preventDefault();choose(Number(row.dataset.index));});};
+    const draw=()=>{if(!list)return;list.innerHTML=items.map((user,index)=>{const label=user.name||user.email||user.id;return `<div class="mention-item ${index===selected?'sel':''}" data-index="${index}" role="option" aria-selected="${index===selected}">${avatar(user,'s')}<div><div class="mnm">@${esc(label)}</div><div class="mrk">משתתף בשיחה</div></div></div>`;}).join('');list.style.display=items.length?'block':'none';list.classList.toggle('open',Boolean(items.length));list.querySelectorAll('[data-index]').forEach(row=>{row.onmousedown=event=>event.preventDefault();row.onclick=()=>choose(Number(row.dataset.index));});};
     di.addEventListener('input',()=>{
       const cursor=di.selectionStart;
       const beforeCursor=di.value.slice(0,cursor);
