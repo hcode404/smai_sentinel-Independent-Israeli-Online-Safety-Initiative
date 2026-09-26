@@ -3766,6 +3766,11 @@ function convTitle(c, meId, users){
   return (users.find(u=>u.id===o)||{}).name || c.names?.[o] || 'משתמש';
 }
 const lastSeenLabel=u=>u?.lastSeenAt?`נראה לאחרונה ${fmtDate(u.lastSeenAt)} · ${fmtTime(u.lastSeenAt)}`:'מצב פעילות מוסתר';
+const DMCache={
+  key:(userId,convId)=>`smai_dm_v1_${userId}_${convId}`,
+  read(userId,convId){try{const row=JSON.parse(localStorage.getItem(this.key(userId,convId))||'null');if(!row||row.userId!==userId||row.convId!==convId||Date.now()-row.savedAt>30*86400000)return [];return Array.isArray(row.messages)?row.messages:[];}catch{return [];}}
+  ,write(userId,convId,messages){try{const safe=messages.filter(m=>!m._pending&&!m.deleted).slice(-80).map(m=>Object.fromEntries(['id','convId','senderId','senderName','senderRank','text','createdAt','deliveredAt','readAt','system','flagged','replyTo','attachment','callUrl','callType'].filter(k=>Object.hasOwn(m,k)).map(k=>[k,m[k]])));localStorage.setItem(this.key(userId,convId),JSON.stringify({userId,convId,savedAt:Date.now(),messages:safe}));}catch{}}
+};
 
 route('/dm', async (app, id)=>{
   if(!Auth.user) return app.innerHTML = requireLogin('צריך להתחבר כדי לראות הודעות פרטיות');
@@ -3810,7 +3815,7 @@ route('/dm', async (app, id)=>{
           ${isGroup(cur) ? `<span class="b b-brand" style="font-size:.62rem">קבוצה</span>` : (otherU?rankBadge(otherU.rank):'')}</div>
           <div class="tiny mute dm-chat-presence">${isGroup(cur)
             ? esc((cur.members||[]).map(m=>(users.find(u=>u.id===m)||{}).name || cur.names?.[m] || 'משתמש').join(' · ').slice(0,120))
-            : `${presenceBadge(otherU,true)}<span>שיחה פרטית · ${lastSeenLabel(otherU)}</span>`}</div></div>
+            : `${presenceBadge(otherU,true)}<span>שיחה פרטית · ${lastSeenLabel(otherU)}</span>`}</div><div id="dmSyncState" class="dm-sync-state">מתחבר…</div></div>
         ${isGroup(cur)
           ? `<button class="btn btn-ghost btn-sm" id="dmMem">${ic('users',14)} משתתפים</button>`
           : `<button class="btn btn-ghost btn-sm" id="dmProf">${ic('user',14)} פרופיל</button>`}
@@ -3845,19 +3850,21 @@ route('/dm', async (app, id)=>{
   const rejectDm=$('#rejectDm');if(rejectDm)rejectDm.onclick=async()=>{rejectDm.disabled=true;try{await Friends.block(other);toast('הבקשה נחסמה');location.hash='#/dm';render();}catch(e){toast(e.message||'לא ניתן לחסום','err');rejectDm.disabled=false;}};
 
   const box = $('#dchat');
-  let pendingMessages=[],lastServerMessages=[],draftAttachment=null,chatReady=false;const translationCache=new Map();
+  let pendingMessages=[],lastServerMessages=[],historyMessages=[],draftAttachment=null,chatReady=false,hasOlder=false,syncTimer=null;const translationCache=new Map();
+  const setSyncState=(label,state='')=>{const node=$('#dmSyncState');if(node){node.textContent=label;node.className='dm-sync-state '+state;}};
+  const enableChat=()=>{if(chatReady)return;chatReady=true;const input=$('#din'),send=$('#dbtn'),attach=$('#dmAttach');if(input){input.disabled=false;input.placeholder='הודעה פרטית... (Enter לשליחה)';}if(send)send.disabled=false;if(attach){attach.disabled=false;attach.title='העלאת תמונה, סרטון או קובץ';}};
   const scrollDmToLatest=()=>{
     if(!box||$('#dchat')!==box)return;
     box.scrollTop=box.scrollHeight;
     requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;});});
   };
-  const paint = (list)=>{
+  const paint = (list,{fromCache=false,keepScroll=false}={})=>{
     if(!box || $('#dchat') !== box) return;
     lastServerMessages=list;
-    if(!chatReady){chatReady=true;const input=$('#din'),send=$('#dbtn'),attach=$('#dmAttach');if(input){input.disabled=false;input.placeholder='הודעה פרטית... (Enter לשליחה)';}if(send)send.disabled=false;if(attach){attach.disabled=false;attach.title='העלאת תמונה, סרטון או קובץ';}}
+    enableChat();
     const msgs = [...list.filter(m=>m.convId===cur.id && !m.deleted),...pendingMessages]
                      .sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
-    box.innerHTML = msgs.length ? msgs.map(m=>{
+    box.innerHTML = `${hasOlder?`<button class="btn btn-g btn-sm dm-load-older" id="dmLoadOlder" type="button">${ic('clock',14)} טעינת הודעות ישנות יותר</button>`:''}`+(msgs.length ? msgs.map(m=>{
       const isMine = m.senderId === me.id;
       if(m.system) return `<div class="sys-msg">${esc(m.text)}</div>`;
       const su = users.find(u=>u.id===m.senderId);
@@ -3867,20 +3874,25 @@ route('/dm', async (app, id)=>{
           ${m.flagged?`<span class="b b-warn">${ic('flag',10)} נבדק</span>`:''}</div>
           ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}${attachmentHTML(m.attachment)}<div class="txt" data-translate-message="${esc(m.id)}">${linkify(m.text)}</div>${linkPreviewHTML(m.text)}${m.callUrl?`<a class="btn btn-p btn-sm" href="${esc(m.callUrl)}" target="_blank" rel="noopener noreferrer" style="margin-top:8px">${ic(m.callType==='video'?'camera':'phone',15)} הצטרפות לשיחה</a>`:''}<div class="tm">${fmtTime(m.createdAt)} ${isMine?`<span class="read-receipt ${m._pending?'sent':m.readAt?'read':m.deliveredAt?'delivered':'sent'}" title="${m._pending?'ממתין לשליחה':m.readAt?'נקרא':m.deliveredAt?'נמסר':'נשלח'}">${m._pending?'✓':m.readAt?'✓✓':m.deliveredAt?'✓✓':'✓'}</span>`:''}</div></div>
         <div class="acts">${!isMine?`<button title="דיווח" data-act="report" data-id="${m.id}">${ic('flag',13)}</button>`:''}<button class="reply-btn" data-chat="d" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
-    }).join('') : `<div class="empty"><div class="ico">${ic('message',26)}</div><p class="small">אין עדיין הודעות בשיחה הזו.</p></div>`;
+    }).join('') : `<div class="empty"><div class="ico">${ic('message',26)}</div><p class="small">אין עדיין הודעות בשיחה הזו.</p></div>`);
+    if(!fromCache)DMCache.write(me.id,cur.id,msgs);
     if(me.autoTranslate&&me.preferredLanguage)msgs.filter(m=>m.senderId!==me.id&&m.text&&!m.system&&!m._pending).forEach(async m=>{const node=box.querySelector(`[data-translate-message="${CSS.escape(m.id)}"]`);if(!node||node.nextElementSibling?.classList.contains('auto-translation'))return;let translated=translationCache.get(m.id);try{if(!translated){translated=(await request('/api/translate','POST',{text:m.text,target:me.preferredLanguage})).translated;translationCache.set(m.id,translated);}if(!node.isConnected||!translated||translated.trim()===String(m.text).trim())return;node.insertAdjacentHTML('afterend',`<div class="auto-translation"><span>${ic('sparkle',12)} תרגום אוטומטי</span>${esc(translated)}</div>`);}catch{}});
-    scrollDmToLatest();
+    if(!keepScroll)scrollDmToLatest();
     /* צליל רק על הודעה חדשה של מישהו אחר, ולא בטעינה הראשונה */
     const last = msgs[msgs.length-1];
     if(last && lastSeen && last.id !== lastSeen && last.senderId !== me.id) Sfx.play('msgIn');
     if(last) lastSeen = last.id;
-    if(me.privacy?.readReceipts!==false)msgs.filter(m=>m.senderId!==me.id&&!m.readAt).forEach(m=>Store.update('dmsgs',m.id,{readAt:nowISO()}).catch(()=>{}));
+    if(!fromCache&&me.privacy?.readReceipts!==false)msgs.filter(m=>m.senderId!==me.id&&!m.readAt).forEach(m=>Store.update('dmsgs',m.id,{readAt:nowISO()}).catch(()=>{}));
     box.querySelectorAll('.acts button[data-act]').forEach(b=>{
       b.onclick = async ()=>{const msg=msgs.find(x=>x.id===b.dataset.id);if(b.dataset.act==='report')reportMessageModal(msg,'dm:'+cur.id);if(b.dataset.act==='del')await deleteMessage(b.dataset.id,'dmsgs');};
     });
   };
   let lastSeen = null;
-  onCleanup(Store.watch('dmsgs', paint));
+  const mergeMessages=rows=>{const byId=new Map(historyMessages.map(m=>[m.id,m]));rows.forEach(m=>byId.set(m.id,m));historyMessages=[...byId.values()].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));return historyMessages;};
+  const cached=DMCache.read(me.id,cur.id);if(cached.length){historyMessages=cached;paint(historyMessages,{fromCache:true});setSyncState('מוצג מהמכשיר · מסנכרן','syncing');}else{enableChat();setSyncState('מסנכרן הודעות','syncing');}
+  const syncLatest=async()=>{try{const data=await request(`/api/dms/${encodeURIComponent(cur.id)}/messages?limit=80`);hasOlder=Boolean(data.hasMore);paint(mergeMessages(data.messages||[]));setSyncState('מסונכרן','synced');}catch{setSyncState(cached.length?'מצב לא מקוון · מוצג מהמכשיר':'בעיית חיבור · אפשר עדיין לנסות לשלוח','offline');}finally{syncTimer=setTimeout(syncLatest,3000);}};
+  syncLatest();onCleanup(()=>clearTimeout(syncTimer));
+  box.addEventListener('click',async event=>{const button=event.target.closest('#dmLoadOlder');if(!button)return;button.disabled=true;button.textContent='טוען…';try{const oldest=historyMessages[0]?.createdAt;if(!oldest)return;const data=await request(`/api/dms/${encodeURIComponent(cur.id)}/messages?limit=80&before=${encodeURIComponent(oldest)}`);hasOlder=Boolean(data.hasMore);const previousHeight=box.scrollHeight;paint(mergeMessages(data.messages||[]),{keepScroll:true});box.scrollTop=box.scrollHeight-previousHeight;}catch(error){toast(error.message||'טעינת ההיסטוריה נכשלה','err');button.disabled=false;}});
 
   const fileInput=$('#dmFile'),attachButton=$('#dmAttach'),attachmentPreview=$('#dmAttachmentPreview');
   let draftPreviewUrl='';

@@ -324,6 +324,19 @@ export async function api(req,env,ctx={waitUntil(){}}){
       return json(result);
     }
     requireThat(u,401,'יש להתחבר כדי להמשיך');
+    const dmMessagesMatch=path.match(/^\/api\/dms\/([^/]+)\/messages$/);
+    if(dmMessagesMatch&&req.method==='GET'){
+      const convId=decodeURIComponent(dmMessagesMatch[1]),conv=await db.get('dms',convId);
+      requireThat(conv&&conv.members?.includes(u.id),403,'אין הרשאה לצפות בשיחה זו');
+      const limit=Math.min(100,Math.max(20,Number(url.searchParams.get('limit'))||80));
+      const before=String(url.searchParams.get('before')||'');
+      const query=before
+        ? env.DB.prepare("SELECT data,id,version,created_at FROM records WHERE collection='dmsgs' AND json_extract(data,'$.convId')=? AND created_at<? ORDER BY created_at DESC LIMIT ?").bind(convId,before,limit)
+        : env.DB.prepare("SELECT data,id,version,created_at FROM records WHERE collection='dmsgs' AND json_extract(data,'$.convId')=? ORDER BY created_at DESC LIMIT ?").bind(convId,limit);
+      const result=await query.all();
+      const messages=result.results.map(row=>safeRecord('dmsgs',{...JSON.parse(row.data),id:row.id,_version:row.version},u)).reverse();
+      return json({messages,hasMore:messages.length===limit});
+    }
     if(path==='/api/translate'&&req.method==='POST'){
       requireThat(env.AI,503,'שירות התרגום אינו זמין כרגע');await limit(env,'translate:'+u.id,120,86400);
       const raw=await req.text();requireThat(raw.length<=12000,413,'בקשת התרגום גדולה מדי');let payload;try{payload=JSON.parse(raw);}catch{throw new HttpError(400,'בקשת התרגום אינה תקינה');}

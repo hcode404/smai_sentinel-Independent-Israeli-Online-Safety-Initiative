@@ -196,6 +196,7 @@
 @media(max-width:520px){.fr-grid{grid-template-columns:minmax(0,1fr)!important}.fr-grid>.fr-card .fr-act .btn{flex:1 1 120px}}
 
 .dm-mobile-back{display:none}
+.dm-sync-state{width:max-content;margin-top:3px;padding:2px 7px;border-radius:999px;background:var(--surface3);color:var(--ink3);font-size:9px;font-weight:700}.dm-sync-state::before{content:'';display:inline-block;width:5px;height:5px;margin-inline-end:5px;border-radius:50%;background:currentColor}.dm-sync-state.synced{color:var(--ok)}.dm-sync-state.syncing{color:var(--brand)}.dm-sync-state.syncing::before{animation:assistantPulse 1.2s infinite}.dm-sync-state.offline{color:var(--warn)}.dm-load-older{position:sticky;top:0;z-index:3;align-self:center;margin:0 auto 8px;box-shadow:var(--shadow-1);backdrop-filter:blur(8px)}
 @media(max-width:700px){
   .dm-window{width:calc(100vw - 20px)!important;max-width:100%;height:calc(100dvh - 82px)!important;min-height:0!important;margin:0 auto!important;border-radius:14px!important;grid-template-columns:minmax(0,1fr)!important;overflow:hidden!important}
   .dm-window.has-chat .hub-side{display:none!important}
