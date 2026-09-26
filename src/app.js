@@ -5173,10 +5173,32 @@ function initDemoStrip(){
     <a href="/setup">חברו את האתר ל-Firebase</a> כדי לעבוד באמת.</div>`;
 }
 
+function initInstallApp(){
+  if(!('serviceWorker' in navigator))return;
+  navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(()=>{});
+  const installed=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  if(installed){document.documentElement.classList.add('installed-app');return;}
+  let promptEvent=null;
+  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  const button=document.createElement('button');
+  button.type='button';button.className='install-app-button';button.hidden=true;
+  button.innerHTML=`${ic('download',18)}<span>התקנת האפליקציה</span>`;
+  document.body.append(button);
+  addEventListener('beforeinstallprompt',event=>{event.preventDefault();promptEvent=event;button.hidden=false;});
+  if(isIOS)button.hidden=false;
+  setTimeout(()=>{if(button.isConnected&&!installed)button.hidden=false;},1800);
+  button.onclick=async()=>{
+    if(promptEvent){promptEvent.prompt();const choice=await promptEvent.userChoice;promptEvent=null;if(choice.outcome==='accepted')button.hidden=true;return;}
+    if(isIOS){openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('download',20)}</span><h3>התקנת SMAI ב־iPhone או iPad</h3></div><div class="m-b install-guide"><span>1</span><p>לחצו על כפתור השיתוף בתחתית Safari.</p><span>2</span><p>בחרו „הוספה למסך הבית”.</p><span>3</span><p>לחצו „הוספה”. האפליקציה תופיע לצד שאר האפליקציות.</p></div><div class="m-f"><button class="btn btn-p" onclick="closeModal()">הבנתי</button></div>`);return;}
+    toast('פתחו את תפריט הדפדפן ובחרו „התקנת SMAI Sentinel” או „הוספה למסך הבית”','warn');
+  };
+  addEventListener('appinstalled',()=>{button.remove();toast('SMAI Sentinel הותקנה בהצלחה','ok');});
+}
+
 
 /* Boot never writes demo data or bypasses authentication. */
 (async function boot(){
- initTheme();initLanguage();initSfx();initBurger();initNotif();renderFooter();$('#demoStrip').style.display='none';
+ initTheme();initLanguage();initSfx();initBurger();initNotif();initInstallApp();renderFooter();$('#demoStrip').style.display='none';
  try{await Auth.refresh();await CFG.load();}catch(e){toast(e.message,'warn');}
  Presence.init();
  const navigate=path=>{history.pushState(null,'',path);closeModal();window.scrollTo({top:0});return render();};

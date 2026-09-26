@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "SMAI Sentinel — הגנה ברשת",
+  "short_name": "SMAI Sentinel",
+  "description": "דיווח, ליווי, קהילה וכלים לבטיחות ברשת.",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/?source=app",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#080c13",
+  "theme_color": "#080c13",
+  "categories": ["social", "utilities", "education"],
+  "icons": [
+    {"src":"/icons/app-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/icons/app-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"/icons/app-maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  ],
+  "shortcuts": [
+    {"name":"פתיחת פנייה","short_name":"פנייה חדשה","url":"/report?source=shortcut","icons":[{"src":"/icons/app-192.png","sizes":"192x192"}]},
+    {"name":"ההודעות שלי","short_name":"הודעות","url":"/dm?source=shortcut","icons":[{"src":"/icons/app-192.png","sizes":"192x192"}]},
+    {"name":"הכלים שלי","short_name":"כלים","url":"/daily?source=shortcut","icons":[{"src":"/icons/app-192.png","sizes":"192x192"}]}
+  ]
+}
