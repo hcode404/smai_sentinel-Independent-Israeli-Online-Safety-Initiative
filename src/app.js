@@ -3780,7 +3780,7 @@ route('/dm', async (app, id)=>{
 
   app.innerHTML = `
   <div class="crumb anim-in"><a href="/community">קהילה</a> ← הודעות פרטיות</div>
-  <div class="hub dm-window anim-up">
+  <div class="hub dm-window ${cur?'has-chat':'no-chat'} anim-up">
     <div class="hub-side">
       <div class="hs-h"><span>${ic('message',16)} שיחות</span>
         <span class="row" style="gap:4px">
@@ -3804,6 +3804,7 @@ route('/dm', async (app, id)=>{
     <div class="hub-main">
       ${cur ? `
       <div class="hm-h">
+        <a class="iconbtn dm-mobile-back" href="/dm/list" aria-label="חזרה לרשימת השיחות" title="חזרה לרשימת השיחות">${ic('chevron-right',17)}</a>
         ${isGroup(cur) ? `<span class="grp-av lg">${ic('users',20)}</span>` : avatar(otherU || { id:other, name:cur.names?.[other] })}
         <div style="flex:1;min-width:0"><div class="row" style="gap:6px"><b>${esc(convTitle(cur, me.id, users))}</b>
           ${isGroup(cur) ? `<span class="b b-brand" style="font-size:.62rem">קבוצה</span>` : (otherU?rankBadge(otherU.rank):'')}</div>

@@ -194,3 +194,21 @@
 .fr-grid>.fr-card .fr-av{grid-area:avatar;align-self:start}.fr-grid>.fr-card .fr-mid{grid-area:details;width:100%;min-width:0}.fr-grid>.fr-card .fr-mid>.row{display:flex;flex-wrap:wrap;align-items:center;min-width:0}.fr-grid>.fr-card .fr-mid b{max-width:100%!important;min-width:0}.fr-grid>.fr-card .fr-mid>.tiny{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;line-height:1.45;overflow-wrap:anywhere}
 .fr-grid>.fr-card .fr-act{grid-area:actions;display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:7px;min-width:0;padding-top:10px;border-top:1px solid var(--line)}.fr-grid>.fr-card .fr-act .btn{max-width:100%;white-space:normal;line-height:1.25;text-align:center}.fr-grid>.fr-card .fr-act .btn:first-child{flex:1 1 auto}.fr-grid>.fr-card .fr-act .b{max-width:100%;white-space:normal}
 @media(max-width:520px){.fr-grid{grid-template-columns:minmax(0,1fr)!important}.fr-grid>.fr-card .fr-act .btn{flex:1 1 120px}}
+
+.dm-mobile-back{display:none}
+@media(max-width:700px){
+  .dm-window{width:calc(100vw - 20px)!important;max-width:100%;height:calc(100dvh - 82px)!important;min-height:0!important;margin:0 auto!important;border-radius:14px!important;grid-template-columns:minmax(0,1fr)!important;overflow:hidden!important}
+  .dm-window.has-chat .hub-side{display:none!important}
+  .dm-window.no-chat .hub-side{position:static!important;display:flex!important;inset:auto!important;width:100%!important;height:100%!important;max-height:none!important;transform:none!important;box-shadow:none!important;border:0!important}
+  .dm-window.no-chat .hub-main{display:none!important}
+  .dm-window .hub-main{width:100%;height:100%;min-width:0!important;min-height:0!important;overflow:hidden!important}
+  .dm-window .hm-h{flex:0 0 auto;display:flex;flex-wrap:nowrap!important;gap:7px!important;width:100%;min-width:0;padding:8px 9px!important;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none}
+  .dm-window .hm-h::-webkit-scrollbar{display:none}.dm-window .hm-h>div{min-width:130px!important}.dm-window .hm-h>.av,.dm-window .hm-h>.grp-av,.dm-window .hm-h>.iconbtn,.dm-window .hm-h>.btn{flex:0 0 auto}
+  .dm-mobile-back{display:inline-grid!important;place-items:center;text-decoration:none}
+  .dm-window .hm-b{flex:1 1 auto!important;width:100%;min-width:0!important;min-height:0!important;max-height:none!important;padding:10px 8px!important;overflow-x:hidden!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch}
+  .dm-window .chat{gap:10px}.dm-window .msg{width:100%;max-width:100%;min-width:0;gap:6px}.dm-window .msg>.av{flex:0 0 30px;width:30px;height:30px}.dm-window .msg .bub{min-width:0;max-width:calc(100% - 76px)!important;padding:9px 11px!important;overflow:hidden}.dm-window .msg.sys .bub{max-width:94%!important}.dm-window .msg .bub .txt{overflow-wrap:anywhere;word-break:break-word}.dm-window .msg .acts{flex:0 0 30px;display:flex;flex-direction:column;gap:3px}.dm-window .msg .acts button{width:30px!important;height:30px!important}
+  .dm-window .chat-attachment,.dm-window .chat-attachment.video,.dm-window .chat-file,.dm-window .msg-link-preview{max-width:100%!important;height:auto}
+  .dm-window .hm-f{flex:0 0 auto;width:100%;min-width:0;padding:8px!important;padding-bottom:max(8px,env(safe-area-inset-bottom))!important;overflow:hidden}.dm-window .hm-f>.callout{max-width:100%;margin-bottom:7px;flex-wrap:wrap}
+  .dm-window .composer{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto;align-items:end;gap:6px!important;width:100%;min-width:0;margin:0!important;padding:0!important}.dm-window .composer textarea{width:100%!important;min-width:0!important;min-height:42px!important;max-height:96px!important;padding:9px 10px!important;resize:none}.dm-window .composer .iconbtn{width:40px!important;height:42px!important;min-height:42px!important}.dm-window .composer .btn{width:44px!important;min-width:44px!important;height:42px!important;min-height:42px!important;padding:0!important}.dm-window .mention-list{max-width:100%;overflow-x:hidden}
+  .dm-window #dmAttachmentPreview{max-width:100%;overflow:hidden}.dm-window .attachment-draft{max-width:100%;width:100%}.dm-window .attachment-draft.attachment-visual{min-width:0}
+}
