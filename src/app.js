@@ -417,12 +417,13 @@ function avatar(user, size='m'){
   let inner = esc(initials(n));
   if(av.startsWith('e:')) inner = `<span style="font-size:1.25em;line-height:1">${esc(av.slice(2))}</span>`;
   else if(/^(https?:|data:image)/.test(av)) inner = `<img src="${esc(av)}" alt="">`;
-  return `<span class="av ${size}" style="background:${bg}" title="${esc(n)}">${inner}${pres}</span>`;
+  const founder=user?.rank==='founder'||user?.isOwner;
+  return `<span class="av ${size}${founder?' founder-avatar':''}" style="background:${bg}" title="${esc(n)}">${inner}${founder?`<i class="founder-crown" aria-label="יוצר SMAI">${ic('crown',9,2.8)}</i>`:''}${pres}</span>`;
 }
 function rankBadge(rank){
   const r = RANKS[rank] || RANKS.citizen;
   if(rank==='citizen' || !rank) return '';
-  return `<span class="rank ${r.cls}">${ic(r.ico,11,2.4)}${esc(r.l)}</span>`;
+  return `<span class="rank ${r.cls}">${ic(r.ico,11,2.4)}${esc(rank==='founder'?'יוצר ומייסד SMAI':r.l)}</span>`;
 }
 const lvl = u => (RANKS[u?.rank] || RANKS.citizen).lvl;
 const can = (u,capKey) => lvl(u) >= (CAP[capKey] ?? 999);
@@ -1486,6 +1487,7 @@ function channelModal(srv, existing){
     <div style="flex:1"><h3 style="margin:0">${existing?'עריכת ערוץ':'ערוץ חדש'}</h3>
     <div class="tiny mute">בשרת ${esc(srv.name)}</div></div></div>
   <div class="m-b">
+    ${u.rank==='founder'?`<div class="founder-profile-card"><span>${ic('crown',24,2.4)}</span><div><b>החשבון הרשמי של יוצר SMAI Sentinel</b><small>חשבון מערכת ייחודי עם הרשאות ניהול ואימות קבוע.</small></div></div>`:''}
     <div class="field"><label class="fl">שם הערוץ</label>
       <input id="cnName" maxlength="40" value="${esc(e.name||'')}" placeholder="לדוגמה: שאלות-הורים"></div>
     <div class="field"><label class="fl">סוג הערוץ</label>
@@ -3826,7 +3828,8 @@ route('/dm', async (app, id)=>{
       <div class="hm-b chat" id="dchat" style="max-height:none">${loader()}</div>
       <div class="hm-f">
         ${!isGroup(cur)&&cur.dmAccepted===false&&cur.ownerId!==me.id?`<div class="callout c-info" id="dmRequestBar"><span class="ic">${ic('message',18)}</span><div style="flex:1"><b>בקשת הודעה חדשה</b><div class="small">אפשר לקרוא עד שתי הודעות לפני שמחליטים.</div></div><button class="btn btn-p btn-sm" id="acceptDm" type="button">אישור השיחה</button><button class="btn btn-g btn-sm" id="rejectDm" type="button">חסימה</button></div>`:''}
-        ${!isGroup(cur)&&cur.dmAccepted===false&&cur.ownerId===me.id?`<div class="callout c-warn"><span class="ic">${ic('clock',18)}</span><div>זו בקשת הודעה. אפשר לשלוח עד שתי הודעות עד שהנמען יאשר את השיחה.</div></div>`:''}
+        ${!isGroup(cur)&&cur.dmAccepted===false&&cur.ownerId===me.id&&me.rank!=='founder'?`<div class="callout c-warn"><span class="ic">${ic('clock',18)}</span><div>זו בקשת הודעה. אפשר לשלוח עד שתי הודעות עד שהנמען יאשר את השיחה.</div></div>`:''}
+        ${!isGroup(cur)&&cur.ownerId===me.id&&me.rank==='founder'?`<div class="founder-dm-note">${ic('crown',14,2.4)} שיחה רשמית של יוצר SMAI — אין צורך בהמתנה לאישור.</div>`:''}
         ${Auth.muted()
           ? `<div class="callout c-warn" style="padding:11px 13px;font-size:.86rem"><span class="ic">${ic('volume-x',17)}</span>
              <div>אתם מושתקים עד ${fmtTime(me.muteUntil)} ${fmtDate(me.muteUntil)}.</div></div>`

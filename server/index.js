@@ -468,7 +468,9 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     if(col==='dmsgs'&&req.method==='POST'){
       const conv=await db.get('dms',body.convId);
-      if(conv?.kind==='direct'&&conv.dmAccepted===false&&conv.ownerId===u.id){
+      if(conv?.kind==='direct'&&conv.dmAccepted===false&&conv.ownerId===u.id&&isFounder(u)){
+        await db.put('dms',{...conv,dmAccepted:true,acceptedAt:now(),acceptedBySystem:'founder'},conv);
+      }else if(conv?.kind==='direct'&&conv.dmAccepted===false&&conv.ownerId===u.id){
         const sent=(await db.list('dmsgs')).filter(m=>m.convId===conv.id&&m.senderId===u.id&&!m.deleted).length;
         requireThat(sent<2,403,'אפשר לשלוח עד שתי הודעות עד שהמשתמש יאשר את בקשת השיחה');
       }
@@ -489,9 +491,9 @@ export async function api(req,env,ctx={waitUntil(){}}){
     if(col==='servers'&&!old)rec.invite=nonce().slice(0,24).toUpperCase();
     if(col==='dms'&&!old){
       rec.key=rec.members.length===2?[...rec.members].sort().join('__'):'g:'+rec.id;
-      if(rec.members.length===2)rec.dmAccepted=false;
+      if(rec.members.length===2){rec.dmAccepted=isFounder(u);if(rec.dmAccepted){rec.acceptedAt=now();rec.acceptedBySystem='founder';}}
       rec.names={};for(const member of rec.members)rec.names[member]=(await db.get('users',member))?.name||'משתמש';
-      const previous=(await db.list('dms')).find(d=>d.key===rec.key);if(previous)return json(safeRecord(col,previous,u));
+      const previous=(await db.list('dms')).find(d=>d.key===rec.key);if(previous){if(isFounder(u)&&previous.ownerId===u.id&&previous.dmAccepted!==true){const accepted={...previous,kind:'direct',dmAccepted:true,acceptedAt:now(),acceptedBySystem:'founder'};await db.put('dms',accepted,previous);return json(safeRecord(col,accepted,u));}return json(safeRecord(col,previous,u));}
     }
     for(const key of ['name','senderName','authorName','ico','cat','rank'])if(typeof rec[key]==='string')rec[key]=rec[key].replace(/[<>"'&]/g,'').slice(0,100);
     await db.put(col,rec,old);
