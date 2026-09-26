@@ -4,6 +4,7 @@ import {authReady,loginEmail,registerEmail,loginGoogle,resetPassword,requestEmai
 import { renderHome } from './home.js';
 import './ticket-fix.css';
 import './redesign.css';
+import './rewards.css';
 
 /* =====================================================================
    SMAI — Single-file app.  הדבק כאן את פרטי הפרויקט שלך מ-Firebase.
@@ -418,7 +419,8 @@ function avatar(user, size='m'){
   if(av.startsWith('e:')) inner = `<span style="font-size:1.25em;line-height:1">${esc(av.slice(2))}</span>`;
   else if(/^(https?:|data:image)/.test(av)) inner = `<img src="${esc(av)}" alt="">`;
   const founder=user?.rank==='founder'||user?.isOwner;
-  return `<span class="av ${size}${founder?' founder-avatar':''}" style="background:${bg}" title="${esc(n)}">${inner}${founder?`<i class="founder-crown" aria-label="יוצר SMAI">${ic('crown',9,2.8)}</i>`:''}${pres}</span>`;
+  const decoration=['aurora','sunset','cosmos','neon'].includes(user?.profileStyle)?` cosmetic-${user.profileStyle}`:'';
+  return `<span class="av ${size}${founder?' founder-avatar':''}${decoration}" style="background:${bg}" title="${esc(n)}">${inner}${founder?`<i class="founder-crown" aria-label="יוצר SMAI">${ic('crown',9,2.8)}</i>`:''}${pres}</span>`;
 }
 function rankBadge(rank){
   const r = RANKS[rank] || RANKS.citizen;
@@ -1196,6 +1198,7 @@ const NAV = [
   { p:'/press',     l:'עובדות',      ico:'info' },
   { p:'/dm',        l:'הודעות פרטיות', ico:'send' },
   { p:'/friends',   l:'חברים',       ico:'users' },
+  { p:'/shop', l:'משימות וחנות', ico:'star' },
   { p:'/community', l:'קהילה',       ico:'message' },
   { p:'/team-praise', l:'מילה טובה', ico:'heart' },
   { p:'/partners', l:'שיתופי פעולה', ico:'link' },
@@ -3637,7 +3640,7 @@ async function openProfile(userId){
   const followers=follows.filter(f=>f.to===userId),following=follows.filter(f=>f.from===userId),myFollow=me&&followers.find(f=>f.from===me.id),friendState=me?Friends.status(rels,me.id,userId):'none';
   const socials=(me?.ageBand==='under10'&&u.rank!=='founder'?[]:[['instagram','Instagram'],['tiktok','TikTok'],['roblox','Roblox'],['twitter','X / Twitter'],['youtube','YouTube'],['discord','Discord'],['facebook','Facebook'],['linkedin','LinkedIn'],['twitch','Twitch']]).filter(([k])=>u.socialLinks?.[k]);
   openModal(`
-  <div class="m-h"><span>${avatar({ ...u, id:userId },'l')}</span>
+  <div class="m-h profile-cover cosmetic-${['aurora','sunset','cosmos','neon'].includes(u.profileStyle)?u.profileStyle:'default'}"><span>${avatar({ ...u, id:userId },'l')}</span>
     <div style="flex:1"><h3 style="margin:0">${esc(u.name||'משתמש')}
       ${u.verified&&u.privacy?.showVerified!==false?`<span class="verified" title="חשבון מאומת">${ic('check',11,3)}</span>`:''}</h3>
       <div class="row" style="gap:6px;margin-top:5px">${rankBadge(u.rank)}
@@ -3794,6 +3797,7 @@ route('/dm', async (app, id)=>{
           <button class="iconbtn dm-list-close" id="dmListClose" style="width:30px;height:30px" title="סגירת רשימת השיחות" aria-label="סגירת רשימת השיחות">${ic('x',15)}</button>
           <button class="iconbtn" id="dmGrp" style="width:30px;height:30px" title="קבוצה חדשה">${ic('users',15)}</button>
           <button class="iconbtn" id="dmNew" style="width:30px;height:30px" title="שיחה חדשה">${ic('plus',15)}</button></span></div>
+      <label class="dm-search-label">חיפוש שיחה<input id="dmQuickSearch" type="search" placeholder="שם או הודעה אחרונה" autocomplete="off"></label>
       <div class="hs-b" style="padding:8px">
         ${mine.length ? mine.map(c=>{
           const g = isGroup(c);
@@ -3822,6 +3826,7 @@ route('/dm', async (app, id)=>{
         ${isGroup(cur)
           ? `<button class="btn btn-ghost btn-sm" id="dmMem">${ic('users',14)} משתתפים</button>`
           : `<button class="btn btn-ghost btn-sm" id="dmProf">${ic('user',14)} פרופיל</button>`}
+        <button class="iconbtn" id="dmLatest" title="להודעה האחרונה" aria-label="מעבר להודעה האחרונה">↓</button>
         <button class="iconbtn" id="dmVoice" title="שיחת קול" aria-label="התחלת שיחת קול">${ic('phone',17)}</button>
         <button class="iconbtn" id="dmVideo" title="שיחת וידאו" aria-label="התחלת שיחת וידאו">${ic('camera',17)}</button>
       </div>
@@ -3847,6 +3852,7 @@ route('/dm', async (app, id)=>{
   </div>`;
 
   $('#dmNew').onclick = ()=>dmPickModal();
+  $('#dmQuickSearch').oninput=event=>{const query=event.target.value.trim().toLocaleLowerCase();$$('.dm-item').forEach(item=>item.hidden=!item.textContent.toLocaleLowerCase().includes(query));};
   $('#dmGrp').onclick = ()=>groupCreateModal();
   const dmWindow=$('.dm-window'),openDmList=()=>dmWindow?.classList.add('dm-list-open'),closeDmList=()=>dmWindow?.classList.remove('dm-list-open');
   const dmListToggle=$('#dmListToggle');if(dmListToggle)dmListToggle.onclick=openDmList;
@@ -3859,6 +3865,7 @@ route('/dm', async (app, id)=>{
   const rejectDm=$('#rejectDm');if(rejectDm)rejectDm.onclick=async()=>{rejectDm.disabled=true;try{await Friends.block(other);toast('הבקשה נחסמה');location.hash='#/dm';render();}catch(e){toast(e.message||'לא ניתן לחסום','err');rejectDm.disabled=false;}};
 
   const box = $('#dchat');
+  $('#dmLatest').onclick=()=>{box.scrollTop=box.scrollHeight;};
   let pendingMessages=[],lastServerMessages=[],historyMessages=[],draftAttachment=null,chatReady=false,hasOlder=false,syncTimer=null;const translationCache=new Map();
   const setSyncState=(label,state='')=>{const node=$('#dmSyncState');if(node){node.textContent=label;node.className='dm-sync-state '+state;}};
   const enableChat=()=>{if(chatReady)return;chatReady=true;const input=$('#din'),send=$('#dbtn'),attach=$('#dmAttach');if(input){input.disabled=false;input.placeholder='הודעה פרטית... (Enter לשליחה)';}if(send)send.disabled=false;if(attach){attach.disabled=false;attach.title='העלאת תמונה, סרטון או קובץ';}};
@@ -3867,12 +3874,18 @@ route('/dm', async (app, id)=>{
     box.scrollTop=box.scrollHeight;
     requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;});});
   };
+  let paintedSignature='';
   const paint = (list,{fromCache=false,keepScroll=false}={})=>{
     if(!box || $('#dchat') !== box) return;
     lastServerMessages=list;
     enableChat();
     const msgs = [...list.filter(m=>m.convId===cur.id && !m.deleted),...pendingMessages]
                      .sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
+    const signature=JSON.stringify([msgs,hasOlder]);
+    if(signature===paintedSignature)return;
+    const previousTop=box.scrollTop;
+    const followLatest=!paintedSignature||box.scrollHeight-box.scrollTop-box.clientHeight<110||msgs.at(-1)?._pending;
+    paintedSignature=signature;
     box.innerHTML = `${hasOlder?`<button class="btn btn-g btn-sm dm-load-older" id="dmLoadOlder" type="button">${ic('clock',14)} טעינת הודעות ישנות יותר</button>`:''}`+(msgs.length ? msgs.map(m=>{
       const isMine = m.senderId === me.id;
       if(m.system) return `<div class="sys-msg">${esc(m.text)}</div>`;
@@ -3886,7 +3899,8 @@ route('/dm', async (app, id)=>{
     }).join('') : `<div class="empty"><div class="ico">${ic('message',26)}</div><p class="small">אין עדיין הודעות בשיחה הזו.</p></div>`);
     if(!fromCache)DMCache.write(me.id,cur.id,msgs);
     if(me.autoTranslate&&me.preferredLanguage)msgs.filter(m=>m.senderId!==me.id&&m.text&&!m.system&&!m._pending).forEach(async m=>{const node=box.querySelector(`[data-translate-message="${CSS.escape(m.id)}"]`);if(!node||node.nextElementSibling?.classList.contains('auto-translation'))return;let translated=translationCache.get(m.id);try{if(!translated){translated=(await request('/api/translate','POST',{text:m.text,target:me.preferredLanguage})).translated;translationCache.set(m.id,translated);}if(!node.isConnected||!translated||translated.trim()===String(m.text).trim())return;node.insertAdjacentHTML('afterend',`<div class="auto-translation"><span>${ic('sparkle',12)} תרגום אוטומטי</span>${esc(translated)}</div>`);}catch{}});
-    if(!keepScroll)scrollDmToLatest();
+    if(!keepScroll&&followLatest)scrollDmToLatest();
+    else box.scrollTop=previousTop;
     /* צליל רק על הודעה חדשה של מישהו אחר, ולא בטעינה הראשונה */
     const last = msgs[msgs.length-1];
     if(last && lastSeen && last.id !== lastSeen && last.senderId !== me.id) Sfx.play('msgIn');
@@ -3899,8 +3913,9 @@ route('/dm', async (app, id)=>{
   let lastSeen = null;
   const mergeMessages=rows=>{const byId=new Map(historyMessages.map(m=>[m.id,m]));rows.forEach(m=>byId.set(m.id,m));historyMessages=[...byId.values()].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));return historyMessages;};
   const cached=DMCache.read(me.id,cur.id);if(cached.length){historyMessages=cached;paint(historyMessages,{fromCache:true});setSyncState('מוצג מהמכשיר · מסנכרן','syncing');}else{enableChat();setSyncState('מסנכרן הודעות','syncing');}
-  const syncLatest=async()=>{try{const data=await request(`/api/dms/${encodeURIComponent(cur.id)}/messages?limit=80`);hasOlder=Boolean(data.hasMore);paint(mergeMessages(data.messages||[]));setSyncState('מסונכרן','synced');}catch{setSyncState(cached.length?'מצב לא מקוון · מוצג מהמכשיר':'בעיית חיבור · אפשר עדיין לנסות לשלוח','offline');}finally{syncTimer=setTimeout(syncLatest,3000);}};
-  syncLatest();onCleanup(()=>clearTimeout(syncTimer));
+  let syncStopped=false;
+  const syncLatest=async()=>{try{if(document.hidden)return;const data=await request(`/api/dms/${encodeURIComponent(cur.id)}/messages?limit=80`);if(syncStopped)return;hasOlder=Boolean(data.hasMore);paint(mergeMessages(data.messages||[]));setSyncState('מסונכרן','synced');}catch{if(!syncStopped)setSyncState(cached.length?'מצב לא מקוון · מוצג מהמכשיר':'בעיית חיבור · אפשר עדיין לנסות לשלוח','offline');}finally{if(!syncStopped)syncTimer=setTimeout(syncLatest,3000);}};
+  syncLatest();onCleanup(()=>{syncStopped=true;clearTimeout(syncTimer);});
   box.addEventListener('click',async event=>{const button=event.target.closest('#dmLoadOlder');if(!button)return;button.disabled=true;button.textContent='טוען…';try{const oldest=historyMessages[0]?.createdAt;if(!oldest)return;const data=await request(`/api/dms/${encodeURIComponent(cur.id)}/messages?limit=80&before=${encodeURIComponent(oldest)}`);hasOlder=Boolean(data.hasMore);const previousHeight=box.scrollHeight;paint(mergeMessages(data.messages||[]),{keepScroll:true});box.scrollTop=box.scrollHeight-previousHeight;}catch(error){toast(error.message||'טעינת ההיסטוריה נכשלה','err');button.disabled=false;}});
 
   const fileInput=$('#dmFile'),attachButton=$('#dmAttach'),attachmentPreview=$('#dmAttachmentPreview');
@@ -4249,6 +4264,24 @@ route('/login',app=>{
  $('#googleLogin').onclick=async()=>{status.textContent='מעביר להתחברות מאובטחת עם Google…';try{await loginGoogle();}catch(e){status.textContent=message(e);}};
  form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;status.textContent=signup?'יוצר חשבון…':'מתחבר…';try{if(signup){await registerEmail($('#authEmail').value.trim(),$('#authPassword').value,$('#authName').value.trim());await Auth.refresh();await request('/api/auth/email-verification','POST',{});status.textContent='החשבון נוצר ונשלח מייל אימות מעוצב.';}else await loginEmail($('#authEmail').value.trim(),$('#authPassword').value);await finish();}catch(e){status.textContent=message(e);}finally{submit.disabled=false;}};
  $('#forgotPassword').onclick=async()=>{const email=$('#authEmail').value.trim();if(!email){status.textContent='הזינו קודם את כתובת המייל.';$('#authEmail').focus();return;}const b=$('#forgotPassword');b.disabled=true;status.textContent='שולח הודעת איפוס מאובטחת…';try{await resetPassword(email);status.textContent='אם קיים חשבון עם הכתובת הזו, נשלחה הודעת איפוס.';}catch(e){status.textContent=message(e);}finally{b.disabled=false;}};
+});
+
+route('/shop',async app=>{
+  if(!Auth.user)return app.innerHTML=requireLogin('התחברו כדי לצבור נקודות ולעצב את הפרופיל');
+  app.innerHTML=loader();
+  let state;
+  const render=()=>{
+    app.innerHTML=`<section class="rewards-head"><div><h1>הפרופיל שלכם, בדרך שלכם</h1><p>משלימים משימות, אוספים נקודות ובוחרים עיצוב.</p><small>נקודות קהילה בלבד — ללא תשלום כספי. כל משימה מזכה פעם אחת.</small></div><div class="reward-balance"><b>${state.balance}</b><span>נקודות זכות</span></div></section>
+      <h2>המשימות שלי</h2><p class="small mute">פעולות שכבר ביצעתם נחשבות. פותחים פנייה רק כשצריך עזרה אמיתית.</p><div class="reward-grid">${state.missions.map(m=>`<article class="reward-card"><span class="b b-brand">+${m.points} נקודות</span><h3>${esc(m.name)}</h3>${m.claimed?'<span>✓ הפרס נאסף</span>':m.done?`<button class="btn btn-p" data-action="claim" data-id="${m.id}">איסוף נקודות</button>`:`<a class="btn btn-g" href="${m.href}">מעבר למשימה</a>`}</article>`).join('')}</div>
+      <h2>חנות העיצובים</h2><p class="small mute">תצוגה מקדימה חיה. העיצוב מופיע בפרופיל ובמסגרת התמונה שלכם.</p><div class="reward-grid">${state.catalog.map(item=>{const owned=state.owned.includes(item.id),equipped=state.equipped===item.id;return `<article class="reward-card"><div class="reward-preview">${avatar({...Auth.user,profileStyle:item.id},'l')}</div><h3>${esc(item.name)}</h3><p>${esc(item.description)}</p><b>${owned?'באוסף שלכם':item.price+' נקודות'}</b><button class="btn ${owned?'btn-g':'btn-p'}" data-action="${owned?'equip':'buy'}" data-id="${equipped?'':item.id}" ${!owned&&state.balance<item.price?'disabled':''}>${equipped?'הסרת העיצוב':owned?'החלת העיצוב':state.balance<item.price?'חסרות '+(item.price-state.balance)+' נקודות':'רכישה בנקודות'}</button></article>`;}).join('')}</div>
+      <h2>היסטוריית נקודות</h2><div class="reward-ledger">${state.history.length?state.history.map(row=>`<div><span>${esc(row.text)}</span><b dir="ltr">${row.points>0?'+':''}${row.points}</b></div>`).join(''):'<p class="mute">כאן יופיעו הפרסים והרכישות שלכם.</p>'}</div>`;
+    app.querySelectorAll('[data-action]').forEach(button=>button.onclick=async()=>{
+      app.querySelectorAll('[data-action]').forEach(b=>b.disabled=true);
+      try{state=await request('/api/rewards','POST',{action:button.dataset.action,id:button.dataset.id});Auth.user.profileStyle=state.equipped;render();toast('השינוי נשמר','ok');}
+      catch(error){toast(error.message,'err');render();}
+    });
+  };
+  try{state=await request('/api/rewards');render();}catch(error){app.innerHTML=`<div class="card pad"><h2>החנות אינה זמינה כרגע</h2><p>${esc(error.message)}</p><a class="btn btn-g" href="/shop">ניסיון נוסף</a></div>`;}
 });
 
 route('/account',async app=>{

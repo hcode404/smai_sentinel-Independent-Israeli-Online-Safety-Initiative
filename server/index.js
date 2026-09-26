@@ -1,5 +1,6 @@
 import {HttpError,requireThat,pick,rank,isFounder,banned,collections,officialIds,canRead,safeRecord,authorizeWrite} from './policy.js';
 import {createRemoteJWKSet,jwtVerify} from 'jose';
+import {rewards} from './rewards.js';
 import {connect as tlsConnect} from 'node:tls';
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -362,6 +363,11 @@ export async function api(req,env,ctx={waitUntil(){}}){
       try{body=JSON.parse(raw);}catch{throw new HttpError(400,'בקשה לא תקינה');}
       requireThat(body&&typeof body==='object'&&!Array.isArray(body),400,'בקשה לא תקינה');
       await limit(env,'write:'+u.id,100);
+    }
+    if(path==='/api/rewards'){
+      requireThat(['GET','POST'].includes(req.method),405,'שיטה לא נתמכת');
+      requireThat(!banned(u),403,'החשבון חסום');
+      return json(await rewards(env,db,u,body,req.method));
     }
     const emergencyEvidence=path.match(/^\/api\/emergency\/([^/]+)\/evidence$/);
     if(emergencyEvidence&&req.method==='GET'){

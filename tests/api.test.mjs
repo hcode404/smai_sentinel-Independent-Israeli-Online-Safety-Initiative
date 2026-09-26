@@ -24,6 +24,24 @@ function fixture(){
  return {DB,env,call,db:database(env)};
 }
 const ticket={title:'דיווח בדיקה',description:'זהו דיווח בדיקה מקומי לצורך בדיקת התוכנה בלבד',dept:'other'};
+test('rewards enforce eligibility, single claims, balance and cosmetic ownership',async()=>{
+ const {call,db,DB}=fixture();
+ try{
+  assert.equal((await call('rewards')).data.balance,0);
+  assert.equal((await call('rewards','POST',{action:'claim',id:'hello'})).status,400);
+  assert.equal((await call('rewards','POST',{action:'buy',id:'aurora'})).status,400);
+  assert.equal((await call('rewards','POST',{action:'equip',id:'neon'})).status,403);
+  const user=(await db.list('users')).find(u=>u.name==='alice');
+  await db.put('dmsgs',{id:'reward-message',senderId:user.id,text:'hello'});
+  assert.equal((await call('rewards','POST',{action:'claim',id:'hello'})).data.balance,40);
+  assert.equal((await call('rewards','POST',{action:'claim',id:'hello'})).data.balance,40);
+  assert.equal((await call('rewards','POST',{action:'buy',id:'aurora'})).data.balance,0);
+  assert.equal((await call('rewards','POST',{action:'buy',id:'aurora'})).data.balance,0);
+  assert.equal((await call('rewards','POST',{action:'equip',id:'aurora'})).data.equipped,'aurora');
+  assert.equal((await call('rewards', 'GET',undefined,'bob')).data.balance,0);
+  assert.equal((await call('rewards','GET',undefined,null)).status,401);
+ }finally{DB.close();}
+});
 test('report form wires every field from a query-all collection',async()=>{
  const source=await readFile(new URL('../src/app.js',import.meta.url),'utf8');
  assert.match(source,/for\(const el of \$\$\('#rf input,#rf textarea,#rf select'\)\)/);
