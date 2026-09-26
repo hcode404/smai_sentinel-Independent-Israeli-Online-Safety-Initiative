@@ -3789,6 +3789,7 @@ route('/dm', async (app, id)=>{
     <div class="hub-side">
       <div class="hs-h"><span>${ic('message',16)} שיחות</span>
         <span class="row" style="gap:4px">
+          <button class="iconbtn dm-list-close" id="dmListClose" style="width:30px;height:30px" title="סגירת רשימת השיחות" aria-label="סגירת רשימת השיחות">${ic('x',15)}</button>
           <button class="iconbtn" id="dmGrp" style="width:30px;height:30px" title="קבוצה חדשה">${ic('users',15)}</button>
           <button class="iconbtn" id="dmNew" style="width:30px;height:30px" title="שיחה חדשה">${ic('plus',15)}</button></span></div>
       <div class="hs-b" style="padding:8px">
@@ -3809,7 +3810,7 @@ route('/dm', async (app, id)=>{
     <div class="hub-main">
       ${cur ? `
       <div class="hm-h">
-        <a class="iconbtn dm-mobile-back" href="/dm/list" aria-label="חזרה לרשימת השיחות" title="חזרה לרשימת השיחות">${ic('chevron-right',17)}</a>
+        <button class="iconbtn dm-mobile-back" id="dmListToggle" type="button" aria-label="פתיחת כל השיחות" title="כל השיחות">${ic('message',17)}</button>
         ${isGroup(cur) ? `<span class="grp-av lg">${ic('users',20)}</span>` : avatar(otherU || { id:other, name:cur.names?.[other] })}
         <div style="flex:1;min-width:0"><div class="row" style="gap:6px"><b>${esc(convTitle(cur, me.id, users))}</b>
           ${isGroup(cur) ? `<span class="b b-brand" style="font-size:.62rem">קבוצה</span>` : (otherU?rankBadge(otherU.rank):'')}</div>
@@ -3839,10 +3840,15 @@ route('/dm', async (app, id)=>{
         ${emptyState('message','אין שיחה פתוחה','פתחו שיחה פרטית מכל פרופיל בקהילה, או לחצו על + כדי לבחור משתמש.',
           `<button class="btn btn-p" onclick="${bind(()=>dmPickModal())}">${ic('plus',15)} שיחה חדשה</button>`)}</div>`}
     </div>
+    <button class="dm-list-backdrop" id="dmListBackdrop" type="button" aria-label="סגירת רשימת השיחות"></button>
   </div>`;
 
   $('#dmNew').onclick = ()=>dmPickModal();
   $('#dmGrp').onclick = ()=>groupCreateModal();
+  const dmWindow=$('.dm-window'),openDmList=()=>dmWindow?.classList.add('dm-list-open'),closeDmList=()=>dmWindow?.classList.remove('dm-list-open');
+  const dmListToggle=$('#dmListToggle');if(dmListToggle)dmListToggle.onclick=openDmList;
+  const dmListClose=$('#dmListClose');if(dmListClose)dmListClose.onclick=closeDmList;
+  const dmListBackdrop=$('#dmListBackdrop');if(dmListBackdrop)dmListBackdrop.onclick=closeDmList;
   const dp = $('#dmProf'); if(dp) dp.onclick = ()=>openProfile(other);
   const dmem = $('#dmMem'); if(dmem) dmem.onclick = ()=>groupMembersModal(cur, users);
   if(!cur) return;
