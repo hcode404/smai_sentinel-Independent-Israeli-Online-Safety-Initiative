@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="he">
+  <id>https://smai-support.jo3.org/</id>
+  <title>SMAI Sentinel — עדכונים רשמיים</title>
+  <subtitle>מידע רשמי על היוזמה הישראלית העצמאית לבטיחות ילדים ובני נוער ברשת.</subtitle>
+  <updated>2026-09-27T00:00:00+03:00</updated>
+  <link href="https://smai-support.jo3.org/" rel="alternate" type="text/html"/>
+  <link href="https://smai-support.jo3.org/feed.xml" rel="self" type="application/atom+xml"/>
+  <author><name>SMAI Sentinel</name><uri>https://smai-support.jo3.org/</uri></author>
+  <entry>
+    <id>https://smai-support.jo3.org/about-smai.html</id>
+    <title>מה זה SMAI Sentinel?</title>
+    <updated>2026-09-27T00:00:00+03:00</updated>
+    <link href="https://smai-support.jo3.org/about-smai.html"/>
+    <summary>SMAI Sentinel היא יוזמה ישראלית עצמאית המספקת מידע, כלי דיווח וקהילה לבטיחות ילדים, בני נוער והורים ברשת. אין קשר ל‑Microsoft Sentinel או ל‑SiMa.ai.</summary>
+  </entry>
+  <entry>
+    <id>https://smai-support.jo3.org/faq.html</id>
+    <title>שאלות ותשובות רשמיות על SMAI Sentinel</title>
+    <updated>2026-09-27T00:00:00+03:00</updated>
+    <link href="https://smai-support.jo3.org/faq.html"/>
+    <summary>השם הרשמי, כתובת האתר, תחומי הפעילות והבהרות על זהות היוזמה.</summary>
+  </entry>
+</feed>
