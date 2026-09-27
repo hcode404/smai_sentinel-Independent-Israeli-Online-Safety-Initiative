@@ -7,6 +7,7 @@ import './redesign.css';
 import './rewards.css';
 import {cosmetic,profileScene} from './profile-catalog.js';
 import './profile-studio.css';
+import {initNativeApp,showNativeNotices} from './native-app.js';
 
 /* =====================================================================
    SMAI — Single-file app.  הדבק כאן את פרטי הפרויקט שלך מ-Firebase.
@@ -5163,6 +5164,7 @@ function syncNotificationBadge(){
     button.classList.toggle('has-notifications',count>0);
     const topShortcut=$('#topNotifShortcut');
     if(topShortcut){const label=currentLang()==='en'?'Notifications':'התראות';topShortcut.innerHTML=count?`${label}<span class="top-notif-count">${Math.min(count,99)}</span>`:label;topShortcut.classList.toggle('has-notifications',count>0);}
+    showNativeNotices(rows).catch(()=>{});
   });
 }
 function initDemoStrip(){
@@ -5198,7 +5200,7 @@ function initInstallApp(){
 
 /* Boot never writes demo data or bypasses authentication. */
 (async function boot(){
- initTheme();initLanguage();initSfx();initBurger();initNotif();initInstallApp();renderFooter();$('#demoStrip').style.display='none';
+ initTheme();initLanguage();initSfx();initBurger();initNotif();initInstallApp();initNativeApp().catch(()=>{});renderFooter();$('#demoStrip').style.display='none';
  try{await Auth.refresh();await CFG.load();}catch(e){toast(e.message,'warn');}
  Presence.init();
  const navigate=path=>{history.pushState(null,'',path);closeModal();window.scrollTo({top:0});return render();};

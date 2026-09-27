@@ -1,5 +1,5 @@
 import {getAuthToken} from './firebase-auth.js';
-const API_ORIGIN=String(import.meta.env.VITE_API_ORIGIN||'').replace(/\/$/,'');
+const API_ORIGIN=String(import.meta.env.VITE_API_ORIGIN||'https://smai-sentinel-api.smai-sentinel-hcode404.workers.dev').replace(/\/$/,'');
 const apiUrl=path=>`${API_ORIGIN}${path}`;
 export async function request(path,method='GET',data){
   let res;

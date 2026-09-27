@@ -1,0 +1,15 @@
+{
+  "appId": "org.jo3.smai.sentinel",
+  "appName": "SMAI Sentinel",
+  "webDir": "dist/client",
+  "backgroundColor": "#080c13",
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#080c13",
+    "preferredContentMode": "mobile"
+  },
+  "android": {
+    "backgroundColor": "#080c13",
+    "allowMixedContent": false
+  }
+}
