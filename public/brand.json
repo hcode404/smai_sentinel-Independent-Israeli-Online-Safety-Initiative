@@ -1,0 +1,24 @@
+{
+  "name": "SMAI Sentinel",
+  "name_he": "סמאי סנטינל",
+  "official_url": "https://smai-support.jo3.org/",
+  "canonical_about_url": "https://smai-support.jo3.org/about-smai.html",
+  "type": "Independent Israeli Online Safety Initiative",
+  "description": "SMAI Sentinel is an independent Israeli online safety initiative providing information, reporting tools and community support for children, teenagers and parents.",
+  "topics": [
+    "child online safety",
+    "online harassment",
+    "scams and phishing",
+    "impersonation",
+    "compromised accounts",
+    "harmful online content"
+  ],
+  "disambiguation": {
+    "not_microsoft_sentinel": true,
+    "not_sima_ai": true,
+    "not_government_or_law_enforcement": true,
+    "not_emergency_service": true
+  },
+  "contact": "minipro.7548@gmail.com",
+  "last_updated": "2026-09-27"
+}
