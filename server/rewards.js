@@ -2,6 +2,20 @@ import {requireThat,isFounder} from './policy.js';
 import {catalog} from '../src/profile-catalog.js';
 export {catalog};
 export async function rewards(env,db,u,body,method){
+  if(method==='POST'&&['inspectBalance','adjustBalance'].includes(body.action)){
+    requireThat(isFounder(u),403,'רק יוצר האתר יכול לנהל נקודות');
+    const target=await db.get('users',String(body.userId||''));requireThat(target,404,'המשתמש לא נמצא');
+    if(body.action==='inspectBalance')return rewards(env,db,target,{},'GET');
+    const amount=body.amount,reason=String(body.reason||'').trim();
+    requireThat(Number.isSafeInteger(amount)&&amount!==0&&Math.abs(amount)<=100000,400,'יש להזין שינוי של עד 100,000 נקודות');
+    requireThat(reason.length>=3&&reason.length<=300,400,'יש לציין סיבה של 3–300 תווים');
+    const old=await db.get('rewardWallets',target.id);
+    const view=await rewards(env,db,target,{},'GET');
+    requireThat(view.balance+amount>=0,400,'אי אפשר להפחית מעבר ליתרה הקיימת');
+    const wallet=old||{id:target.id,claimed:[],owned:[],spent:0,history:[]};
+    await db.put('rewardWallets',{...wallet,adjustment:Number(wallet.adjustment||0)+amount,history:[{text:'התאמת יתרה: '+reason,points:amount,actorId:u.id,at:new Date().toISOString()},...wallet.history]},old);
+    return {balance:view.balance+amount};
+  }
   const exists=async(col,where,values)=>Boolean(await env.DB.prepare(`SELECT id FROM records WHERE collection=? AND ${where} LIMIT 1`).bind(col,...values).first());
   const [message,friend,ticket]=await Promise.all([
     exists('dmsgs',"json_extract(data,'$.senderId')=? AND coalesce(json_extract(data,'$.deleted'),0)=0",[u.id]),
@@ -19,7 +33,7 @@ export async function rewards(env,db,u,body,method){
   const wallet=old||{id:u.id,claimed:[],owned:[],spent:0,history:[]};
   if(isFounder(u)&&!wallet.owned.includes('football'))wallet.owned=[...wallet.owned,'football'];
   const earned=missions.filter(m=>wallet.claimed.includes(m.id)).reduce((sum,m)=>sum+m.points,0);
-  let balance=earned-wallet.spent;
+  let balance=earned-wallet.spent+Number(wallet.adjustment||0);
   if(method==='POST'){
     const action=body.action;
     if(action==='claim'){

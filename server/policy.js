@@ -1,3 +1,4 @@
+import {gameWrite} from './games.js';
 export class HttpError extends Error {constructor(status,message){super(message);this.status=status;}}
 export const requireThat=(condition,status=403,message='אין הרשאה לפעולה זו')=>{if(!condition)throw new HttpError(status,message);};
 export const pick=(obj,keys)=>Object.fromEntries(keys.filter(k=>Object.hasOwn(obj,k)).map(k=>[k,obj[k]]));
@@ -9,9 +10,13 @@ export const muted=u=>Date.parse(u?.muteUntil)>Date.now();
 export const ranks={citizen:0,trainee:10,agent:20,senior:30,lead:40,head:50,admin:60,founder:70};
 export const collections=new Set('users tickets messages notifications reports feedback applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends followers dms dmsgs config updates articles campaigns emergencyRequests'.split(' '));
 export const officialIds=new Set(['s-welcome','s-help','s-parents','s-teens','s-gaming','s-security']);
+collections.add('gameRooms');
+collections.add('lawRequests');
 export async function canRead(col,r,u,get){
   if(!r)return false;
+  if(col==='gameRooms')return !!u&&!banned(u);
   const n=rank(u),id=u?.id;
+  if(col==='lawRequests')return n>=50||!!id&&r.byId===id;
   if(col==='users')return u?.id===r.id||n>=50||r.privacy?.profileVis!=='private';
   if(col==='config'||col==='updates'||col==='articles'||col==='campaigns')return true;
   if(col==='tickets')return n>=10||!!id&&r.reporterId===id;
@@ -54,7 +59,17 @@ export function safeRecord(col,r,u){
 export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
   requireThat(u,401,'יש להתחבר כדי להמשיך');
   requireThat(!banned(u)||col==='appeals');
+  if(col==='gameRooms'){requireThat(method!=='DELETE');return gameWrite(old,input,u,requireThat);}
   const n=rank(u),id=u.id,isNew=!old;
+  if(col==='lawRequests'){
+    requireThat(method!=='DELETE',403,'לא ניתן למחוק בקשת גורמי אכיפה');
+    if(old){requireThat(n>=50);requireThat(['pending','reviewing','closed'].includes(input.status),400,'מצב לא תקין');return {status:input.status};}
+    const fields=['agency','contactName','officialEmail','phone','caseNumber','incident','reason','users','authority'];
+    const data=Object.fromEntries(fields.map(key=>[key,String(input[key]||'').trim()]));
+    requireThat(fields.every(key=>data[key].length>=2&&data[key].length<=2000),400,'יש למלא את כל פרטי הבקשה');
+    requireThat(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.officialEmail),400,'כתובת מייל לא תקינה');
+    return {...data,byId:id,status:'pending',identityVerified:false};
+  }
   const owns=old&&(old.senderId===id||old.authorId===id||old.ownerId===id);
   const manageServer=async sid=>{const s=await get('servers',sid);return s&&(n>=40||s.ownerId===id||s.admins?.includes(id));};
   if(method==='DELETE'){

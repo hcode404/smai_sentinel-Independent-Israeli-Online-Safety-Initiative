@@ -9,6 +9,7 @@ import {cosmetic,profileScene} from './profile-catalog.js';
 import './profile-studio.css';
 import './interface.css';
 import {mountGifPicker} from './gif-picker.js';
+import {searchSurprise} from './search-surprises.js';
 import {initNativeApp,showNativeNotices} from './native-app.js';
 
 /* =====================================================================
@@ -411,9 +412,9 @@ const AVATAR_EMOJI = ['\u{1F642}','\u{1F60E}','\u{1F913}','\u{1F984}','\u{1F98A}
 const PRESENCE={online:{label:'אונליין',en:'Online'},afk:{label:'AFK',en:'AFK'},busy:{label:'עסוק',en:'Busy'},offline:{label:'אופליין',en:'Offline'}};
 const COUNTRY_NAMES={IL:'ישראל',US:'ארצות הברית',GB:'בריטניה',CA:'קנדה',AU:'אוסטרליה',FR:'צרפת',DE:'גרמניה',ES:'ספרד',IT:'איטליה',BR:'ברזיל',RU:'רוסיה',UA:'אוקראינה',TR:'טורקיה',IN:'הודו',JP:'יפן',KR:'קוריאה הדרומית',CN:'סין',ZZ:'אחר'};
 const countryFlag=code=>/^[A-Z]{2}$/.test(code)&&code!=='ZZ'?[...code].map(c=>String.fromCodePoint(127397+c.charCodeAt(0))).join(''):'🌍';
-const effectivePresence=user=>user?.presenceUntil&&Date.parse(user.presenceUntil)<=Date.now()?'online':(user?.presenceMode||'online');
+const effectivePresence=user=>{const mode=user?.presenceUntil&&Date.parse(user.presenceUntil)<=Date.now()?'online':(user?.presenceMode||'offline');return user?.id!==Auth.user?.id&&user?.lastSeenAt&&Date.now()-Date.parse(user.lastSeenAt)>120000?'offline':mode;};
 const presenceOf=user=>PRESENCE[effectivePresence(user)]||PRESENCE.online;
-const presenceBadge=(user,compact=false)=>{const mode=effectivePresence(user),item=presenceOf(user);return `<span class="presence-label ${mode}${compact?' compact':''}"><i class="status-dot ${mode}"></i>${esc(currentLang()==='en'?item.en:item.label)}</span>`;};
+const presenceBadge=(user,compact=false)=>{const mode=effectivePresence(user),item=presenceOf(user);return `<span data-presence-user="${esc(user?.id||'')}" class="presence-label ${mode}${compact?' compact':''}"><i class="status-dot ${mode}"></i>${esc(currentLang()==='en'?item.en:item.label)}</span>`;};
 function avatar(user, size='m'){
   const n = user?.name || user?.email || '?';
   const mode=user?.presenceMode||user?.presence;
@@ -603,6 +604,13 @@ const Presence=(()=>{
   const init=()=>{['pointermove','pointerdown','keydown','scroll','touchstart'].forEach(type=>addEventListener(type,activity,{passive:true}));document.addEventListener('visibilitychange',visibility);setInterval(()=>{if(Auth.user?.presenceUntil&&Date.parse(Auth.user.presenceUntil)<=Date.now())set('online',{auto:false}).catch(()=>{});},60000);arm();};
   return {set,init,activity};
 })();
+let refreshingPresence=false;
+setInterval(async()=>{
+  if(document.hidden||!Auth.user||refreshingPresence)return;
+  const badges=$$('[data-presence-user]');if(!badges.length)return;
+  refreshingPresence=true;
+  try{const users=await Store.list('users');for(const badge of badges){const user=users.find(u=>u.id===badge.dataset.presenceUser);if(user&&badge.isConnected)badge.outerHTML=presenceBadge(user,badge.classList.contains('compact'));}}catch{}finally{refreshingPresence=false;}
+},15000);
 window.smaiLogout=async()=>{await Auth.signOut();location.hash='#/login';await render();};
 
 /* =====================================================================
@@ -1203,6 +1211,8 @@ const NAV = [
   { p:'/press',     l:'עובדות',      ico:'info' },
   { p:'/dm',        l:'הודעות פרטיות', ico:'send' },
   { p:'/friends',   l:'חברים',       ico:'users' },
+  { p:'/games', l:'משחקים', ico:'grid' },
+  { p:'/law-enforcement', l:'פניות גורמי אכיפה', ico:'shield' },
   { p:'/shop', l:'משימות וחנות', ico:'star' },
   { p:'/daily', l:'הכלים שלי', ico:'check' },
   { p:'/support', l:'תמיכה ביוזמה', ico:'heart' },
@@ -1222,7 +1232,7 @@ function renderNav(){
   });
   if(Auth.isStaff()) items.push(`<a href="/admin" class="${cur==='admin'?'on':''}">${ic('shield',14)} פאנל צוות</a>`);
   $('#nav').innerHTML = `<form id="userQuickSearch" class="nav-user-search" role="search"><input id="userQuickName" aria-label="חיפוש משתמש לפי שם מדויק" placeholder="חיפוש שם משתמש מדויק"><button class="iconbtn" aria-label="חיפוש">${ic('search',15)}</button></form>`+items.join('');
-  $('#userQuickSearch').onsubmit=async e=>{e.preventDefault();const q=$('#userQuickName').value.trim().toLocaleLowerCase('he');if(!q)return;const users=await Store.list('users');const found=users.find(x=>String(x.name||'').trim().toLocaleLowerCase('he')===q);if(!found)return toast('לא נמצא משתמש בשם המדויק הזה','warn');openProfile(found.id);};
+  $('#userQuickSearch').onsubmit=async e=>{e.preventDefault();const q=$('#userQuickName').value.trim().toLocaleLowerCase('he');if(!q||searchSurprise(q))return;const users=await Store.list('users');const found=users.find(x=>String(x.name||'').trim().toLocaleLowerCase('he')===q);if(!found)return toast('לא נמצא משתמש בשם המדויק הזה','warn');openProfile(found.id);};
   const u = Auth.user;
   $('#authSlot').innerHTML = u
     ? `<button class="iconbtn" id="meBtn" title="${esc(u.name||u.email)}" style="width:auto;padding:0 6px;gap:7px;display:flex">
@@ -1910,6 +1920,13 @@ function runCleanup(){ CLEANUP.forEach(f=>{ try{ f(); }catch(e){} }); CLEANUP = 
 
 /* ===================== דף הבית ===================== */
 route('/', async app => renderHome(app, {ic,esc,Auth,DEPTS}));
+route('/games',async(app,id)=>{const {renderGames}=await import('./games.js');return renderGames(app,{Store:remoteStore,user:Auth.user,esc,onCleanup},id);});
+route('/law-enforcement',async app=>{
+  if(!Auth.user)return app.innerHTML=requireLogin();
+  app.innerHTML=`<section class="card"><h1>פניות גורמי אכיפה</h1><p>הגשת בקשה לצוות הבכיר. שליחת הטופס אינה מקנה גישה למידע ואינה מאמתת את זהות הפונה.</p><div class="callout c-warn">אין לצרף סיסמאות, קודי גישה או תוכן פוגעני. בסכנה מיידית פנו למוקד החירום הרלוונטי.</div><form id="lawForm">${[['agency','גוף ויחידה'],['contactName','שם ותפקיד הפונה'],['officialEmail','מייל רשמי'],['phone','טלפון לאימות חוזר'],['caseNumber','מספר תיק או אסמכתה'],['incident','תיאור האירוע ומועדיו'],['reason','מטרת הבקשה והמידע הנדרש'],['users','שמות משתמשים או קישורים רלוונטיים'],['authority','הסמכות והאסמכתה לבקשת המידע']].map(([name,label])=>`<label style="display:block;margin-top:16px">${label}<textarea name="${name}" required minlength="2" maxlength="2000" rows="2"></textarea></label>`).join('')}<p id="lawStatus" role="status"></p><button type="submit" class="btn btn-p">הגשת בקשה לבדיקה</button></form></section><section id="lawReview"></section>`;
+  $('#lawForm').onsubmit=async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;try{const saved=await remoteStore.add('lawRequests',Object.fromEntries(new FormData(form)));form.reset();$('#lawStatus').textContent='הבקשה נקלטה לבדיקה. מספר אסמכתה: '+saved.id;}catch(e){$('#lawStatus').textContent=e.message;}finally{button.disabled=false;}};
+  if(lvl(Auth.user)>=50){try{const rows=await remoteStore.list('lawRequests');$('#lawReview').innerHTML='<h2>תיבת פניות לצוות בכיר</h2>'+rows.map(r=>`<article class="card" style="margin-top:12px"><h3>${esc(r.agency)} · ${esc(r.caseNumber)}</h3><p>זהות הפונה טרם אומתה באופן עצמאי.</p>${['contactName','officialEmail','phone','incident','reason','users','authority'].map(k=>`<p style="white-space:pre-wrap">${esc(r[k])}</p>`).join('')}<span class="b">${esc(r.status)}</span></article>`).join('');}catch(e){$('#lawReview').textContent=e.message;}}
+});
 
 route('/press', async app => {
   app.innerHTML = `<div class="page-h anim-up"><div class="eyebrow">Press / Facts</div>
@@ -3455,6 +3472,7 @@ async function userActionsModal(userId, usersCache){
     <div style="margin-top:5px">${rankBadge(u.rank)}
       ${banned?'<span class="b b-dang">מורחק</span>':''}${muted?'<span class="b b-warn">מושתק</span>':''}</div></div></div>
   <div class="m-b">
+    ${me.rank==='founder'?'<button type="button" class="btn btn-p btn-block" id="uaBalance">ניהול scoint</button>':''}
     <dl class="kv small" style="margin-bottom:18px">
       <dt>הצטרף</dt><dd>${fmtDate(u.createdAt)}</dd>
       <dt>דרגה</dt><dd>${RANKS[u.rank]?.l||'משתמש'}</dd>
@@ -3478,6 +3496,12 @@ async function userActionsModal(userId, usersCache){
   <div class="m-f"><button class="btn btn-g" onclick="closeModal()">סגירה</button></div>`);
 
   const el = s => $('#'+s);
+  if(el('uaBalance'))el('uaBalance').onclick=async()=>{
+    try{const wallet=await request('/api/rewards','POST',{action:'inspectBalance',userId:u.id});
+      openModal(`<div class="m-h"><h3>scoint של ${esc(u.name)}</h3></div><form id="balanceForm"><div class="m-b"><p>יתרה נוכחית: <b>${wallet.balance}</b> scoint</p><label>שינוי ביתרה (מספר שלילי להפחתה)<input name="amount" type="number" min="-100000" max="100000" step="1" required></label><label>סיבת השינוי<textarea name="reason" minlength="3" maxlength="300" required></textarea></label><p class="small mute">השינוי נשמר בהיסטוריית ה־scoint עם זיהוי היוצר.</p><p id="balanceError" role="status"></p></div><div class="m-f"><button class="btn btn-p" type="submit">אישור שינוי</button><button class="btn btn-g" type="button" onclick="closeModal()">ביטול</button></div></form>`);
+      $('#balanceForm').onsubmit=async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('[type=submit]');button.disabled=true;try{await request('/api/rewards','POST',{action:'adjustBalance',userId:u.id,amount:Number(form.elements.amount.value),reason:form.elements.reason.value});closeModal();toast('היתרה עודכנה');}catch(error){$('#balanceError').textContent=error.message;button.disabled=false;}};
+    }catch(error){toast(error.message,'err');}
+  };
   el('uaMute') && (el('uaMute').onclick = ()=>muteModal(u));
   el('uaUnmute') && (el('uaUnmute').onclick = async ()=>{ await Store.update('users',u.id,{muteUntil:null}); closeModal(); toast('ההשתקה בוטלה'); });
   el('uaBan') && (el('uaBan').onclick = ()=>banModal(u));
