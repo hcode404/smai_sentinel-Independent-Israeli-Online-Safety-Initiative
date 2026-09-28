@@ -609,8 +609,8 @@ setInterval(async()=>{
   if(document.hidden||!Auth.user||refreshingPresence)return;
   const badges=$$('[data-presence-user]');if(!badges.length)return;
   refreshingPresence=true;
-  try{const users=await Store.list('users');for(const badge of badges){const user=users.find(u=>u.id===badge.dataset.presenceUser);if(user&&badge.isConnected)badge.outerHTML=presenceBadge(user,badge.classList.contains('compact'));}}catch{}finally{refreshingPresence=false;}
-},15000);
+  try{const ids=[...new Set(badges.map(b=>b.dataset.presenceUser).filter(Boolean))];const users=await Promise.all(ids.map(id=>Store.get('users',id).catch(()=>null)));for(const badge of badges){const user=users.find(u=>u?.id===badge.dataset.presenceUser);if(user&&badge.isConnected)badge.outerHTML=presenceBadge(user,badge.classList.contains('compact'));}}catch{}finally{refreshingPresence=false;}
+},60000);
 window.smaiLogout=async()=>{await Auth.signOut();location.hash='#/login';await render();};
 
 /* =====================================================================
@@ -3956,7 +3956,7 @@ route('/dm', async (app, id)=>{
   const mergeMessages=rows=>{const byId=new Map(historyMessages.map(m=>[m.id,m]));rows.forEach(m=>byId.set(m.id,m));historyMessages=[...byId.values()].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));return historyMessages;};
   const cached=DMCache.read(me.id,cur.id);if(cached.length){historyMessages=cached;paint(historyMessages,{fromCache:true});setSyncState('מוצג מהמכשיר · מסנכרן','syncing');}else{enableChat();setSyncState('מסנכרן הודעות','syncing');}
   let syncStopped=false;
-  const syncLatest=async()=>{try{if(document.hidden)return;const data=await request(`/api/dms/${encodeURIComponent(cur.id)}/messages?limit=80`);if(syncStopped)return;hasOlder=Boolean(data.hasMore);paint(mergeMessages(data.messages||[]));setSyncState('מסונכרן','synced');}catch{if(!syncStopped)setSyncState(cached.length?'מצב לא מקוון · מוצג מהמכשיר':'בעיית חיבור · אפשר עדיין לנסות לשלוח','offline');}finally{if(!syncStopped)syncTimer=setTimeout(syncLatest,3000);}};
+  const syncLatest=async()=>{try{if(document.hidden)return;const data=await request(`/api/dms/${encodeURIComponent(cur.id)}/messages?limit=40`);if(syncStopped)return;hasOlder=Boolean(data.hasMore);paint(mergeMessages(data.messages||[]));setSyncState('מסונכרן','synced');}catch{if(!syncStopped)setSyncState(cached.length?'מצב לא מקוון · מוצג מהמכשיר':'בעיית חיבור · אפשר עדיין לנסות לשלוח','offline');}finally{if(!syncStopped)syncTimer=setTimeout(syncLatest,document.hidden?120000:15000);}};
   syncLatest();onCleanup(()=>{syncStopped=true;clearTimeout(syncTimer);});
   box.addEventListener('click',async event=>{const button=event.target.closest('#dmLoadOlder');if(!button)return;button.disabled=true;button.textContent='טוען…';try{const oldest=historyMessages[0]?.createdAt;if(!oldest)return;const data=await request(`/api/dms/${encodeURIComponent(cur.id)}/messages?limit=80&before=${encodeURIComponent(oldest)}`);hasOlder=Boolean(data.hasMore);const previousHeight=box.scrollHeight;paint(mergeMessages(data.messages||[]),{keepScroll:true});box.scrollTop=box.scrollHeight-previousHeight;}catch(error){toast(error.message||'טעינת ההיסטוריה נכשלה','err');button.disabled=false;}});
 

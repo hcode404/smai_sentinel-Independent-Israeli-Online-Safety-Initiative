@@ -308,7 +308,17 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const binary=atob(object.data),bytes=Uint8Array.from(binary,char=>char.charCodeAt(0));
       return new Response(bytes,{headers:{'Content-Type':object.type||'application/octet-stream','Content-Disposition':`inline; filename="${String(object.name||'file').replace(/["\r\n]/g,'')}"`,'Cache-Control':'private, max-age=86400','X-Content-Type-Options':'nosniff'}});
     }
-    const u=await identity(req,env,db,ctx);
+    let u;
+    try{u=await identity(req,env,db,ctx);}catch(identityError){
+      if(path!=='/api/session')throw identityError;
+      const token=req.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if(!token)throw identityError;
+      const project=env.FIREBASE_PROJECT_ID||'smai-support';
+      const {payload}=await jwtVerify(token,firebaseKeys,{issuer:`https://securetoken.google.com/${project}`,audience:project,algorithms:['RS256']});
+      const email=String(payload.email||'').toLowerCase(),verified=payload.email_verified===true;
+      const owner=verified&&(env.ADMIN_EMAILS||'').split(',').map(value=>value.trim().toLowerCase()).includes(email);
+      return json({user:{id:payload.sub,email,name:String(payload.name||email.split('@')[0]||'משתמש'),avatar:String(payload.picture||''),rank:owner?'founder':'citizen',rankLvl:owner?70:0,isOwner:owner,verified:owner,emailVerified:verified,degraded:true}});
+    }
     if(path==='/api/donations'&&req.method==='GET'){
       const settings=await db.get('donationSettings','site');
       return json({url:settings?.url||'',label:settings?.label||'תמיכה ב-SMAI Sentinel'});
@@ -623,7 +633,7 @@ export async function api(req,env,ctx={waitUntil(){}}){
       try{await db.put('logs',log);if(['users','reports','cmsgs','threads','tmsgs'].includes(col))await db.put('modlog',log);}catch{}
     }
     return json(safeRecord(col,rec,u),old?200:201);
-  }catch(e){return json({error:e instanceof HttpError?e.message:'תקלה בשרת. נסו שוב מאוחר יותר.'},e.status||500);}
+  }catch(e){const exhausted=/D1|row read|limit exceeded|storage operation/i.test(String(e?.message||''));return json({error:e instanceof HttpError?e.message:exhausted?'מסד הנתונים הגיע למכסה היומית. החשבון והמידע שמורים; השירות יחזור לאחר איפוס המכסה.':'תקלה בשרת. נסו שוב מאוחר יותר.',exhausted},e.status||(exhausted?503:500));}
 }
 export default {async fetch(req,env,ctx){
   const path=new URL(req.url).pathname;

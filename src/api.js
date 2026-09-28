@@ -18,5 +18,5 @@ export const remoteStore={
   set(col,id,data){return request('/api/records/'+col+'/'+encodeURIComponent(id),'PATCH',data);},
   update(col,id,data){return this.set(col,id,data);},
   remove(col,id){return request('/api/records/'+col+'/'+encodeURIComponent(id),'DELETE',{});},
-  watch(col,cb,filter){let stopped=false,timer,last='';const interval=col==='dmsgs'?2500:col==='dms'?5000:10000;const run=async()=>{try{const rows=await this.list(col,filter);const val=JSON.stringify(rows);if(!stopped&&val!==last){last=val;cb(rows);}}catch(e){if(!stopped)window.dispatchEvent(new CustomEvent('smai:connection-error',{detail:e.message}));}finally{if(!stopped)timer=setTimeout(run,interval);}};run();return()=>{stopped=true;clearTimeout(timer);};}
+  watch(col,cb,filter){let stopped=false,timer,last='';const interval=col==='dmsgs'?15000:col==='dms'?30000:60000;const run=async()=>{try{if(document.hidden)return;const rows=await this.list(col,filter);const val=JSON.stringify(rows);if(!stopped&&val!==last){last=val;cb(rows);}}catch(e){if(!stopped)window.dispatchEvent(new CustomEvent('smai:connection-error',{detail:e.message}));}finally{if(!stopped)timer=setTimeout(run,document.hidden?120000:interval);}};run();return()=>{stopped=true;clearTimeout(timer);};}
 };
