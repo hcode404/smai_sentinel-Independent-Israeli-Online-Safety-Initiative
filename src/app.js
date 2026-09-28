@@ -7,6 +7,7 @@ import './redesign.css';
 import './rewards.css';
 import {cosmetic,profileScene} from './profile-catalog.js';
 import './profile-studio.css';
+import './interface.css';
 import {initNativeApp,showNativeNotices} from './native-app.js';
 
 /* =====================================================================
@@ -481,7 +482,7 @@ window.copyText = copyText;
 const Sfx = (()=>{
   let ctx = null, master = null;
   const KEY = 'smai_sfx', VKEY = 'smai_vib';
-  const isOn  = ()=> localStorage.getItem(KEY)  !== 'off';
+  const isOn  = ()=> localStorage.getItem(KEY) !== 'off' && Auth.user?.sound !== false;
   const vibOn = ()=> localStorage.getItem(VKEY) !== 'off';
   const isMobile = ()=> matchMedia('(pointer:coarse)').matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||'');
 
@@ -519,7 +520,7 @@ const Sfx = (()=>{
 
   /* כל צליל = רצף תווים. אין קבצים חיצוניים, הכל מיוצר בקוד */
   const BANK = {
-    msgIn:   { v:[15],     n:[[660,880,.11,'sine',.8],[880,990,.09,'sine',.5,.07]] },
+    msgIn:   { v:[15], n:[[784,784,.24,'sine',.6],[1175,1175,.32,'sine',.38,.09],[1568,1568,.22,'sine',.10,.1]] },
     msgOut:  { v:[],       n:[[520,700,.07,'triangle',.5]] },
     notify:  { v:[18,60,18],n:[[784,784,.09,'sine',.9],[1046,1046,.13,'sine',.7,.09]] },
     success: { v:[12],     n:[[587,587,.08,'sine',.7],[880,880,.14,'sine',.6,.08]] },
@@ -3930,6 +3931,18 @@ route('/dm', async (app, id)=>{
   box.addEventListener('click',async event=>{const button=event.target.closest('#dmLoadOlder');if(!button)return;button.disabled=true;button.textContent='טוען…';try{const oldest=historyMessages[0]?.createdAt;if(!oldest)return;const data=await request(`/api/dms/${encodeURIComponent(cur.id)}/messages?limit=80&before=${encodeURIComponent(oldest)}`);hasOlder=Boolean(data.hasMore);const previousHeight=box.scrollHeight;paint(mergeMessages(data.messages||[]),{keepScroll:true});box.scrollTop=box.scrollHeight-previousHeight;}catch(error){toast(error.message||'טעינת ההיסטוריה נכשלה','err');button.disabled=false;}});
 
   const fileInput=$('#dmFile'),attachButton=$('#dmAttach'),attachmentPreview=$('#dmAttachmentPreview');
+  if(attachButton){
+    const pickerButton=document.createElement('button');
+    pickerButton.type='button';pickerButton.className='iconbtn';pickerButton.title='אימוג׳ים ו־GIF';pickerButton.setAttribute('aria-label','אימוג׳ים ו־GIF');pickerButton.innerHTML=ic('plus',18);
+    attachButton.after(pickerButton);
+    pickerButton.onclick=()=>{
+      if($('#din')?.disabled)return;
+      openModal(`<div class="m-h"><h3>אימוג׳ים ו־GIF</h3></div><div class="m-b"><div class="emoji-grid">${['😀','😊','😍','🥳','😎','🤔','😢','❤️','💙','👍','👏','🙏','🎉','✨','🔥','✅','👋','💪','😂','🤝','🙌','💯','🫶','😴'].map(e=>`<button type="button" class="btn btn-g" data-emoji="${e}">${e}</button>`).join('')}</div><button type="button" class="btn btn-p" id="pickGif" style="margin-top:18px">בחירת קובץ GIF מהמכשיר</button><p class="small mute">הקובץ יוצג כתצוגה מקדימה לפני השליחה, עד 4MB.</p></div>`);
+      $$('[data-emoji]').forEach(b=>b.onclick=()=>{const input=$('#din');const start=input.selectionStart,end=input.selectionEnd;input.setRangeText(b.dataset.emoji,start,end,'end');input.dispatchEvent(new Event('input',{bubbles:true}));closeModal();input.focus();});
+      $('#pickGif').onclick=()=>{closeModal();fileInput.accept='image/gif';fileInput.click();};
+    };
+    attachButton.addEventListener('click',()=>{fileInput.accept='image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,text/plain';},true);
+  }
   let draftPreviewUrl='';
   const clearDmAttachment=()=>{draftAttachment=null;attachmentPreview.innerHTML='';fileInput.value='';if(draftPreviewUrl){URL.revokeObjectURL(draftPreviewUrl);draftPreviewUrl='';}};
   const uploadDmFile=async file=>{if(!file)return;if(file.size>4*1024*1024){toast('אפשר להעלות קובץ עד 4MB','warn');return;}if(draftPreviewUrl)URL.revokeObjectURL(draftPreviewUrl);draftPreviewUrl=file.type.startsWith('image/')?URL.createObjectURL(file):'';attachButton.disabled=true;attachmentPreview.innerHTML=`<div class="attachment-draft attachment-visual ${draftPreviewUrl?'has-thumb':''}">${draftPreviewUrl?`<img src="${draftPreviewUrl}" alt="תצוגה מקדימה">`:`<span class="attachment-file-icon">${ic('file',18)}</span>`}<span><b>${esc(file.name||'תמונה שהודבקה')}</b><small>מכין לשליחה…</small></span><i class="mini-spinner"></i></div>`;try{const form=new FormData();form.append('convId',cur.id);form.append('file',file,file.name||`pasted-${Date.now()}.png`);draftAttachment=await upload('/api/uploads/dm',form);attachmentPreview.innerHTML=`<div class="attachment-draft attachment-visual ${draftPreviewUrl?'has-thumb':''}">${draftPreviewUrl?`<img src="${draftPreviewUrl}" alt="תצוגה מקדימה">`:`<span class="attachment-file-icon">${ic('file',18)}</span>`}<span><b>${esc(draftAttachment.name)}</b><small>מוכן לשליחה</small></span><button type="button" id="dmAttachmentRemove" aria-label="הסרת הקובץ">×</button></div>`;$('#dmAttachmentRemove').onclick=clearDmAttachment;}catch(error){clearDmAttachment();toast(error.message,'err');}finally{attachButton.disabled=false;}};
@@ -5131,8 +5144,8 @@ function initNotif(){
       : [];
     const row = t=>`<a class="ch" href="/ticket/${t.id}" onclick="closeModal()">
       ${ic('file',16)}<span class="nm">${esc(t.title)}</span>${statusBadge(t.status)}</a>`;
-    const notice=n=>`<a class="ch ${n.read?'':'notification-unread'}" href="${esc(n.href||n.ticketId&&`/ticket/${encodeURIComponent(n.ticketId)}`||'/account')}" onclick="closeModal()">
-      ${ic('message',16)}<span class="nm"><b>${esc(n.title||'תשובה חדשה בפנייה')}</b><small>${esc(n.text||'')}</small></span></a>`;
+    const notice=n=>`<a class="notice-card ${n.read?'':'notification-unread'}" href="${esc(n.href||n.ticketId&&`/ticket/${encodeURIComponent(n.ticketId)}`||'/account')}" onclick="closeModal()">
+      <span class="notice-icon">${ic(n.type==='securityLogin'?'shield':n.type==='friendRequest'?'users':n.type==='mention'?'bell':'message',22)}</span><span class="notice-content"><b>${esc(n.title||'תשובה חדשה בפנייה')}</b><small>${esc(n.text||'')}</small><span class="notice-meta">${n.createdAt&&Number.isFinite(Date.parse(n.createdAt))?esc(new Date(n.createdAt).toLocaleString(currentLang()==='en'?'en-GB':'he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})):''}<span>${currentLang()==='en'?'View update':'צפייה בעדכון'} ←</span></span></span></a>`;
     openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('bell',20)}</span><h3>התראות</h3>${notifications.some(n=>!n.read)?'<button class="btn btn-g btn-sm" id="markAllNotifications" type="button">סמן הכול כנקרא</button>':''}</div>
     <div class="m-b" style="padding:14px">
       ${notifications.length?`<h4 class="small mute" style="margin:0 0 8px">התראות חדשות</h4><div class="stack" style="gap:4px;margin-bottom:16px">${notifications.slice(0,10).map(notice).join('')}</div>`:''}
@@ -5157,7 +5170,11 @@ function syncNotificationBadge(){
   if(!button||!user){notificationWatchStop?.();notificationWatchStop=null;notificationWatchUser='';return;}
   if(notificationWatchUser===user.id)return;
   notificationWatchStop?.();notificationWatchUser=user.id;
+  let seenNotices=null;
   notificationWatchStop=Store.watch('notifications',rows=>{
+    const incoming=seenNotices&&rows.some(n=>!seenNotices.has(n.id)&&!n.read&&['directMessage','ticketReply','mention'].includes(n.type)&&!(n.href&&location.pathname===n.href));
+    seenNotices=new Set(rows.map(n=>n.id));
+    if(incoming)Sfx.play('msgIn');
     const count=rows.filter(n=>!n.read).length;
     button.innerHTML=`${ic('bell',18)}${count?`<span class="notif-badge">${Math.min(count,99)}</span>`:''}`;
     button.setAttribute('aria-label',count?`${count} התראות שלא נקראו`:'התראות');

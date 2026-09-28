@@ -56,7 +56,8 @@ function mailShell({title,preheader='',icon='✦',accent='#22d3ee',content,actio
   <body style="margin:0;background:#06101c;font-family:Arial,'Helvetica Neue',sans-serif;color:#eaf6ff"><div style="display:none;max-height:0;overflow:hidden;opacity:0">${mailEsc(preheader)}</div>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#06101c;padding:30px 12px"><tr><td align="center">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:610px;background:#0c1b2c;border:1px solid #1b405b;border-radius:22px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.35)">
-  <tr><td style="padding:30px 32px;background:linear-gradient(135deg,#0c2941,#0b5363);border-bottom:3px solid ${accent}"><table role="presentation" width="100%"><tr><td><div style="font-size:12px;letter-spacing:2.4px;color:#9be9f7">${MAIL_BRAND}</div><h1 style="margin:9px 0 0;font-size:25px;line-height:1.35;color:#fff">${mailEsc(title)}</h1></td><td width="56" align="left"><div style="width:52px;height:52px;line-height:52px;text-align:center;border-radius:16px;background:rgba(255,255,255,.12);font-size:25px">${icon}</div></td></tr></table></td></tr>
+  <tr><td style="padding:24px 28px;background:#151d32;border-top:5px solid ${accent}"><table role="presentation" width="100%"><tr><td style="font-size:13px;font-weight:bold;letter-spacing:2px;color:#fff">SMAI SENTINEL</td><td align="left" style="font-size:11px;color:#a6b7d5">ACCOUNT &amp; COMMUNITY</td></tr></table></td></tr>
+  <tr><td style="padding:16px 28px 30px;background:#151d32;border-bottom:1px solid #334363"><div style="font-size:12px;color:${accent};font-weight:bold;letter-spacing:1px">${mailEsc(MAIL_BRAND)}</div><h1 style="margin:14px 0 10px;font-size:30px;line-height:1.35;color:#fff">${mailEsc(title)}</h1><p style="margin:0;color:#a6b7d5;font-size:14px;line-height:1.7">${mailEsc(preheader)}</p></td></tr>
   <tr><td style="padding:32px;color:#cfe2f2;font-size:16px;line-height:1.75">${content}<div style="margin-top:28px"><a href="${mailEsc(url)}" style="display:inline-block;background:${accent};color:#041820;text-decoration:none;font-weight:800;padding:13px 24px;border-radius:11px">${mailEsc(actionLabel)}</a></div>${notice?`<div style="margin-top:24px;padding:14px 16px;background:#10283d;border:1px solid #244a65;border-radius:12px;color:#9fb9ce;font-size:13px">${mailEsc(notice)}</div>`:''}</td></tr>
   <tr><td style="padding:18px 32px;border-top:1px solid #19364d;color:#7897ad;font-size:12px;line-height:1.6">הודעה אוטומטית ומאובטחת של ${MAIL_BRAND}. לעולם לא נבקש סיסמה או קוד אימות במייל.</td></tr></table></td></tr></table></body></html>`;
 }
@@ -188,6 +189,15 @@ async function identity(req,env,db,ctx){
   }
   const network=req.headers.get('CF-Connecting-IP');
   if(network){
+    // Firebase auth_time is stable across token refreshes and network changes.
+    // Claim each authenticated sign-in atomically, not each HTTP request.
+    const signInTime=Number(claims.auth_time);
+    let freshSignIn=true;
+    if(Number.isFinite(signInTime)&&signInTime>0){
+      const claim=await env.DB.prepare('INSERT OR IGNORE INTO records (collection,id,data,created_at) VALUES (?,?,?,?)')
+        .bind('login_sessions',`${id}:${signInTime}`,JSON.stringify({userId:id,authTime:signInTime}),now()).run();
+      freshSignIn=Number(claim.meta?.changes||0)>0;
+    }
     const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(network+'|'+id));
     const networkHash=[...new Uint8Array(digest)].slice(0,12).map(x=>x.toString(16).padStart(2,'0')).join('');
     if(u.lastNetworkHash!==networkHash){
@@ -203,9 +213,9 @@ async function identity(req,env,db,ctx){
       const seen=await env.DB.prepare('INSERT OR IGNORE INTO records (collection,id,data,created_at) VALUES (?,?,?,?)')
         .bind('login_networks',`${id}:${networkHash}`,JSON.stringify({userId:id,networkHash,firstSeenAt:now()}),now()).run();
       const newNetwork=Number(seen.meta?.changes||0)>0;
-      const updated={...u,lastNetworkHash:networkHash,lastLoginAt:now(),securityEvents:first||trusted?(u.securityEvents||[]):[{type:'new_network',createdAt:now()},...(u.securityEvents||[])].slice(0,10)};
+      const updated={...u,lastNetworkHash:networkHash,lastLoginAt:now(),securityEvents:first||trusted||!newNetwork||!freshSignIn?(u.securityEvents||[]):[{type:'new_network',createdAt:now()},...(u.securityEvents||[])].slice(0,10)};
       await db.put('users',updated,u);u=await db.get('users',id);
-      if(!first&&!trusted&&newNetwork){
+      if(!first&&!trusted&&newNetwork&&freshSignIn){
         await db.put('notifications',{id:nonce(),userId:u.id,type:'securityLogin',title:'כניסה חדשה לחשבון',text:'זוהתה כניסה מרשת או ממכשיר חדשים. אם זו לא הייתה הכניסה שלך, מומלץ לאפס סיסמה.',href:'/account',read:false,createdAt:now()});
         scheduleMail(ctx,sendUserMail(env,u,'securityLogin',{when:new Date().toLocaleString('he-IL'),device:req.headers.get('User-Agent')?.slice(0,80)||'דפדפן חדש'}));
       }
