@@ -3845,7 +3845,7 @@ route('/dm', async (app, id)=>{
 
   app.innerHTML = `
   <div class="crumb anim-in"><a href="/community">קהילה</a> ← הודעות פרטיות</div>
-  ${dmOffline?`<div class="callout c-warn anim-in" style="margin-bottom:12px"><span class="ic">${ic('clock',18)}</span><div><b>ההודעות במצב זמני</b><div class="small">המידע לא נמחק. מוצגות שיחות שנשמרו במכשיר, והחיבור המלא יחזור לאחר איפוס מכסת השרת בשעה 03:00.</div></div></div>`:''}
+  ${dmOffline?`<div class="callout c-warn anim-in" style="margin-bottom:12px"><span class="ic">${ic('clock',18)}</span><div><b>תקלה זמנית בשרתים</b><div class="small">מוצגות כרגע שיחות אחרונות שנשמרו במכשיר. נסו שוב מאוחר יותר.</div></div></div>`:''}
   <div class="hub dm-window ${cur?'has-chat':'no-chat'} anim-up">
     <div class="hub-side">
       <div class="hs-h"><span>${ic('message',16)} שיחות</span>
@@ -3901,15 +3901,15 @@ route('/dm', async (app, id)=>{
               <button class="btn btn-p" id="dbtn" style="height:46px" disabled>${ic('send',17)}</button></div>
              <div class="tiny mute" style="margin-top:7px">${ic('shield-check',11)} גם הודעות פרטיות נסרקות. אפשר לדווח על כל הודעה.</div>`}
       </div>` : `<div class="hm-b" style="display:grid;place-items:center">
-        ${emptyState('message',dmOffline?'ההודעות אינן זמינות כרגע':'אין שיחה פתוחה',dmOffline?'מכסת מסד הנתונים היומית מוצתה. השיחות שמורות בבטחה ויחזרו אחרי 03:00.':'פתחו שיחה פרטית מכל פרופיל בקהילה, או לחצו על + כדי לבחור משתמש.',
+        ${emptyState('message',dmOffline?'תקלה זמנית בשרתים':'אין שיחה פתוחה',dmOffline?'לא ניתן לטעון כרגע את ההודעות. נסו שוב מאוחר יותר.':'פתחו שיחה פרטית מכל פרופיל בקהילה, או לחצו על + כדי לבחור משתמש.',
           dmOffline?'':`<button class="btn btn-p" onclick="${bind(()=>dmPickModal())}">${ic('plus',15)} שיחה חדשה</button>`)}</div>`}
     </div>
     <button class="dm-list-backdrop" id="dmListBackdrop" type="button" aria-label="סגירת רשימת השיחות"></button>
   </div>`;
 
-  $('#dmNew').onclick = ()=>dmOffline?toast('פתיחת שיחה חדשה תחזור אחרי איפוס מכסת השרת','warn'):dmPickModal();
+  $('#dmNew').onclick = ()=>dmOffline?toast('יש תקלה זמנית בשרתים. נסו שוב מאוחר יותר','warn'):dmPickModal();
   $('#dmQuickSearch').oninput=event=>{const query=event.target.value.trim().toLocaleLowerCase();$$('.dm-item').forEach(item=>item.hidden=!item.textContent.toLocaleLowerCase().includes(query));};
-  $('#dmGrp').onclick = ()=>dmOffline?toast('יצירת קבוצה תחזור אחרי איפוס מכסת השרת','warn'):groupCreateModal();
+  $('#dmGrp').onclick = ()=>dmOffline?toast('יש תקלה זמנית בשרתים. נסו שוב מאוחר יותר','warn'):groupCreateModal();
   const dmWindow=$('.dm-window'),openDmList=()=>dmWindow?.classList.add('dm-list-open'),closeDmList=()=>dmWindow?.classList.remove('dm-list-open');
   const dmListToggle=$('#dmListToggle');if(dmListToggle)dmListToggle.onclick=openDmList;
   const dmListClose=$('#dmListClose');if(dmListClose)dmListClose.onclick=closeDmList;
