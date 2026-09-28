@@ -21,5 +21,11 @@
 			"database_id": "325a976c-eff5-4b6c-abe6-0560db70ca92",
 			"migrations_dir": "drizzle"
 		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "BACKUP",
+			"id": "2dca23a7270149c78f96c1b9ca35ba3d"
+		}
 	]
 }

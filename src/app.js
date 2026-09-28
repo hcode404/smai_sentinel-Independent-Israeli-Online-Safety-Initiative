@@ -3917,6 +3917,7 @@ route('/dm', async (app, id)=>{
   const dp = $('#dmProf'); if(dp) dp.onclick = ()=>openProfile(other);
   const dmem = $('#dmMem'); if(dmem) dmem.onclick = ()=>groupMembersModal(cur, users);
   if(!cur) return;
+  if(dmOffline)request('/api/backup/conversation','POST',{id:cur.id,members:cur.members,kind:cur.kind,name:cur.name,names:cur.names,ownerId:cur.ownerId,dmAccepted:cur.dmAccepted,lastText:cur.lastText,lastAt:cur.lastAt,createdAt:cur.createdAt}).catch(()=>{});
   const acceptDm=$('#acceptDm');if(acceptDm)acceptDm.onclick=async()=>{acceptDm.disabled=true;try{await Store.update('dms',cur.id,{dmAccepted:true});toast('בקשת ההודעה אושרה');render();}catch(e){toast(e.message||'לא ניתן לאשר','err');acceptDm.disabled=false;}};
   const rejectDm=$('#rejectDm');if(rejectDm)rejectDm.onclick=async()=>{rejectDm.disabled=true;try{await Friends.block(other);toast('הבקשה נחסמה');location.hash='#/dm';render();}catch(e){toast(e.message||'לא ניתן לחסום','err');rejectDm.disabled=false;}};
 
