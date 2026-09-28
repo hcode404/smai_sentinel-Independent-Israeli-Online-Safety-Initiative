@@ -187,6 +187,9 @@ async function identity(req,env,db,ctx){
     const updated={...u,email,emailVerified:verified,...(owner?{verified:true}:{}),authProvider:claims.firebase?.sign_in_provider||u.authProvider,rank:owner?'founder':u.isOwner?'citizen':u.rank,rankLvl:owner?70:u.isOwner?0:u.rankLvl,isOwner:owner};
     await db.put('users',updated,u);u=await db.get('users',id);
   }
+  // Presence and security telemetry must never prevent an otherwise valid
+  // account from signing in. Keep these writes best-effort.
+  try{
   const network=req.headers.get('CF-Connecting-IP');
   if(network){
     // Firebase auth_time is stable across token refreshes and network changes.
@@ -222,6 +225,7 @@ async function identity(req,env,db,ctx){
     }
   }
   if(!u.lastSeenAt||Date.now()-Date.parse(u.lastSeenAt)>60000){const updated={...u,lastSeenAt:now()};await db.put('users',updated,u);u=await db.get('users',id);}
+  }catch(error){console.error('identity telemetry failed',error?.message||error);}
   return {...u,email};
 }
 async function limit(env,key,max,seconds=60){
