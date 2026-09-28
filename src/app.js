@@ -584,7 +584,7 @@ const Local = {col(){return [];}};
 const Store=remoteStore;
 async function ensureOwner(u){return u;}
 const Auth={user:null,_cbs:[],onChange(f){this._cbs.push(f);f(this.user);},_emit(){this._cbs.forEach(f=>f(this.user));},
-  async refresh(){await authReady();this.user=(await request('/api/session')).user;this._emit();},
+  async refresh(){await authReady();try{this.user=(await request('/api/session')).user;}catch(error){const fallback=firebaseUser();if(!fallback)throw error;const owner=String(fallback.email||'').toLowerCase()===SITE.email.toLowerCase();this.user={id:fallback.uid,email:fallback.email||'',name:fallback.displayName||String(fallback.email||'משתמש').split('@')[0],avatar:fallback.photoURL||'',rank:owner?'founder':'citizen',rankLvl:owner?70:0,isOwner:owner,verified:owner,emailVerified:fallback.emailVerified,degraded:true};sessionStorage.setItem('smai_degraded','1');}this._emit();},
   async signIn(){location.hash='#/login';},
   async signUp(){location.hash='#/login';},
   async signOut(){await logoutFirebase();this.user=null;this._emit();},
