@@ -3818,12 +3818,25 @@ const DMCache={
   read(userId,convId){try{const row=JSON.parse(localStorage.getItem(this.key(userId,convId))||'null');if(!row||row.userId!==userId||row.convId!==convId||Date.now()-row.savedAt>30*86400000)return [];return Array.isArray(row.messages)?row.messages:[];}catch{return [];}}
   ,write(userId,convId,messages){try{const safe=messages.filter(m=>!m._pending&&!m.deleted).slice(-80).map(m=>Object.fromEntries(['id','convId','senderId','senderName','senderRank','text','createdAt','deliveredAt','readAt','system','flagged','replyTo','attachment','callUrl','callType'].filter(k=>Object.hasOwn(m,k)).map(k=>[k,m[k]])));localStorage.setItem(this.key(userId,convId),JSON.stringify({userId,convId,savedAt:Date.now(),messages:safe}));}catch{}}
 };
+const DMIndexCache={
+  key:userId=>`smai_dm_index_v1_${userId}`,
+  read(userId){try{const row=JSON.parse(localStorage.getItem(this.key(userId))||'null');if(!row||row.userId!==userId||Date.now()-row.savedAt>30*86400000)return null;return {all:Array.isArray(row.all)?row.all:[],users:Array.isArray(row.users)?row.users:[]};}catch{return null;}},
+  write(userId,all,users){try{localStorage.setItem(this.key(userId),JSON.stringify({userId,savedAt:Date.now(),all:(all||[]).slice(0,120),users:(users||[]).slice(0,500)}));}catch{}}
+};
 
 route('/dm', async (app, id)=>{
   if(!Auth.user) return app.innerHTML = requireLogin('צריך להתחבר כדי לראות הודעות פרטיות');
   if(Auth.banInfo()) return renderBanned(app);
   const me = Auth.user;
-  const [all,users] = await Promise.all([Store.list('dms'),Store.list('users')]);
+  let all=[],users=[],dmOffline=false;
+  try{
+    [all,users] = await Promise.all([Store.list('dms'),Store.list('users')]);
+    DMIndexCache.write(me.id,all,users);
+  }catch(error){
+    const saved=DMIndexCache.read(me.id);
+    dmOffline=true;
+    if(saved){all=saved.all;users=saved.users;}
+  }
   const mine = all.filter(c=>(c.members||[]).includes(me.id))
                   .sort((a,b)=>String(b.lastAt).localeCompare(String(a.lastAt)));
   const cur = id ? mine.find(c=>c.id===id) : mine[0];
@@ -3832,6 +3845,7 @@ route('/dm', async (app, id)=>{
 
   app.innerHTML = `
   <div class="crumb anim-in"><a href="/community">קהילה</a> ← הודעות פרטיות</div>
+  ${dmOffline?`<div class="callout c-warn anim-in" style="margin-bottom:12px"><span class="ic">${ic('clock',18)}</span><div><b>ההודעות במצב זמני</b><div class="small">המידע לא נמחק. מוצגות שיחות שנשמרו במכשיר, והחיבור המלא יחזור לאחר איפוס מכסת השרת בשעה 03:00.</div></div></div>`:''}
   <div class="hub dm-window ${cur?'has-chat':'no-chat'} anim-up">
     <div class="hub-side">
       <div class="hs-h"><span>${ic('message',16)} שיחות</span>
@@ -3887,15 +3901,15 @@ route('/dm', async (app, id)=>{
               <button class="btn btn-p" id="dbtn" style="height:46px" disabled>${ic('send',17)}</button></div>
              <div class="tiny mute" style="margin-top:7px">${ic('shield-check',11)} גם הודעות פרטיות נסרקות. אפשר לדווח על כל הודעה.</div>`}
       </div>` : `<div class="hm-b" style="display:grid;place-items:center">
-        ${emptyState('message','אין שיחה פתוחה','פתחו שיחה פרטית מכל פרופיל בקהילה, או לחצו על + כדי לבחור משתמש.',
-          `<button class="btn btn-p" onclick="${bind(()=>dmPickModal())}">${ic('plus',15)} שיחה חדשה</button>`)}</div>`}
+        ${emptyState('message',dmOffline?'ההודעות אינן זמינות כרגע':'אין שיחה פתוחה',dmOffline?'מכסת מסד הנתונים היומית מוצתה. השיחות שמורות בבטחה ויחזרו אחרי 03:00.':'פתחו שיחה פרטית מכל פרופיל בקהילה, או לחצו על + כדי לבחור משתמש.',
+          dmOffline?'':`<button class="btn btn-p" onclick="${bind(()=>dmPickModal())}">${ic('plus',15)} שיחה חדשה</button>`)}</div>`}
     </div>
     <button class="dm-list-backdrop" id="dmListBackdrop" type="button" aria-label="סגירת רשימת השיחות"></button>
   </div>`;
 
-  $('#dmNew').onclick = ()=>dmPickModal();
+  $('#dmNew').onclick = ()=>dmOffline?toast('פתיחת שיחה חדשה תחזור אחרי איפוס מכסת השרת','warn'):dmPickModal();
   $('#dmQuickSearch').oninput=event=>{const query=event.target.value.trim().toLocaleLowerCase();$$('.dm-item').forEach(item=>item.hidden=!item.textContent.toLocaleLowerCase().includes(query));};
-  $('#dmGrp').onclick = ()=>groupCreateModal();
+  $('#dmGrp').onclick = ()=>dmOffline?toast('יצירת קבוצה תחזור אחרי איפוס מכסת השרת','warn'):groupCreateModal();
   const dmWindow=$('.dm-window'),openDmList=()=>dmWindow?.classList.add('dm-list-open'),closeDmList=()=>dmWindow?.classList.remove('dm-list-open');
   const dmListToggle=$('#dmListToggle');if(dmListToggle)dmListToggle.onclick=openDmList;
   const dmListClose=$('#dmListClose');if(dmListClose)dmListClose.onclick=closeDmList;
