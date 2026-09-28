@@ -1483,11 +1483,15 @@ function linkPreviewHTML(text){
 }
 function attachmentHTML(file){
   if(!file?.url)return '';const url=esc(file.url),name=esc(file.name||'קובץ'),type=String(file.type||'');
-  if(type.startsWith('image/'))return `<a href="${url}" target="_blank" rel="noopener"><img class="chat-attachment image" src="${url}" alt="${name}" loading="lazy"></a>`;
-  if(type.startsWith('video/'))return `<video class="chat-attachment video" src="${url}" controls preload="metadata"></video>`;
+  if(type.startsWith('image/'))return `<button type="button" class="chat-image-open" data-chat-image="${url}" data-image-name="${name}" aria-label="הגדלת תמונה"><img class="chat-attachment image" src="${url}" alt="${name}" loading="lazy"></button>`;
+  if(type.startsWith('video/'))return `<video class="chat-attachment video" src="${url}" controls playsinline preload="metadata" aria-label="${name}"></video>`;
   return `<a class="chat-file" href="${url}" target="_blank" rel="noopener">${ic('file',18)}<span><b>${name}</b><small>${Math.max(1,Math.round(Number(file.size||0)/1024))} KB</small></span></a>`;
 }
 function campaignRichText(txt){return esc(String(txt||'')).replace(/\[([^\]]{1,80})\]\((https:\/\/[^\s)]+)\)/g,(_,label,url)=>`<a href="${url}" target="_blank" rel="noopener noreferrer nofollow">${label}</a>`).replace(/\n/g,'<br>');}
+document.addEventListener('click',event=>{
+  const button=event.target.closest('[data-chat-image]');if(!button)return;
+  openModal(`<div class="m-h"><h3>${esc(button.dataset.imageName||'תמונה')}</h3><button type="button" class="iconbtn" onclick="closeModal()" aria-label="סגירה">×</button></div><div class="image-viewer"><img src="${esc(button.dataset.chatImage)}" alt="${esc(button.dataset.imageName||'תמונה')}"></div>`,true);
+});
 
 /* ===================== ניהול ערוצים ===================== */
 function channelModal(srv, existing){
