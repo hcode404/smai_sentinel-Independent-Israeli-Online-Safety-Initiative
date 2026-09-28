@@ -8,6 +8,7 @@ import './rewards.css';
 import {cosmetic,profileScene} from './profile-catalog.js';
 import './profile-studio.css';
 import './interface.css';
+import {mountGifPicker} from './gif-picker.js';
 import {initNativeApp,showNativeNotices} from './native-app.js';
 
 /* =====================================================================
@@ -1479,6 +1480,7 @@ window.linkify = linkify;
 function linkPreviewHTML(text){
   const raw=String(text||'').match(/https?:\/\/[^\s<]{4,300}/)?.[0];if(!raw)return '';
   let url;try{url=new URL(raw.replace(/[.,;:!?)]+$/,''));}catch{return '';}
+  if(url.protocol==='https:'&&/^media\d*\.giphy\.com$/.test(url.hostname)&&url.pathname.endsWith('.gif'))return `<button type="button" class="chat-image-open" data-chat-image="${esc(url.href)}" data-image-name="GIF — GIPHY" aria-label="הגדלת GIF"><img class="chat-attachment image" src="${esc(url.href)}" alt="GIF — GIPHY" loading="lazy"></button><small class="mute">Powered by GIPHY</small>`;
   return `<a class="msg-link-preview" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer nofollow"><img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(url.hostname)}&sz=64" alt=""><span><b>${esc(url.hostname)}</b><small>${esc(url.pathname==='/'?'פתיחת הקישור':url.pathname.slice(0,80))}</small></span>${ic('chevron',15)}</a>`;
 }
 function attachmentHTML(file){
@@ -3937,7 +3939,7 @@ route('/dm', async (app, id)=>{
   const fileInput=$('#dmFile'),attachButton=$('#dmAttach'),attachmentPreview=$('#dmAttachmentPreview');
   if(attachButton){
     const pickerButton=document.createElement('button');
-    pickerButton.type='button';pickerButton.className='iconbtn';pickerButton.title='אימוג׳ים ו־GIF';pickerButton.setAttribute('aria-label','אימוג׳ים ו־GIF');pickerButton.innerHTML=ic('plus',18);
+    pickerButton.type='button';pickerButton.className='iconbtn emoji-toggle';pickerButton.title='אימוג׳ים';pickerButton.setAttribute('aria-label','בחירת אימוג׳י');pickerButton.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14c2 3 6 3 8 0"/><circle cx="8.5" cy="9" r=".7"/><circle cx="15.5" cy="9" r=".7"/></svg>';
     attachButton.after(pickerButton);
     pickerButton.onclick=()=>{
       if($('#din')?.disabled)return;
@@ -3950,7 +3952,15 @@ route('/dm', async (app, id)=>{
   let draftPreviewUrl='';
   const clearDmAttachment=()=>{draftAttachment=null;attachmentPreview.innerHTML='';fileInput.value='';if(draftPreviewUrl){URL.revokeObjectURL(draftPreviewUrl);draftPreviewUrl='';}};
   const uploadDmFile=async file=>{if(!file)return;if(file.size>4*1024*1024){toast('אפשר להעלות קובץ עד 4MB','warn');return;}if(draftPreviewUrl)URL.revokeObjectURL(draftPreviewUrl);draftPreviewUrl=file.type.startsWith('image/')?URL.createObjectURL(file):'';attachButton.disabled=true;attachmentPreview.innerHTML=`<div class="attachment-draft attachment-visual ${draftPreviewUrl?'has-thumb':''}">${draftPreviewUrl?`<img src="${draftPreviewUrl}" alt="תצוגה מקדימה">`:`<span class="attachment-file-icon">${ic('file',18)}</span>`}<span><b>${esc(file.name||'תמונה שהודבקה')}</b><small>מכין לשליחה…</small></span><i class="mini-spinner"></i></div>`;try{const form=new FormData();form.append('convId',cur.id);form.append('file',file,file.name||`pasted-${Date.now()}.png`);draftAttachment=await upload('/api/uploads/dm',form);attachmentPreview.innerHTML=`<div class="attachment-draft attachment-visual ${draftPreviewUrl?'has-thumb':''}">${draftPreviewUrl?`<img src="${draftPreviewUrl}" alt="תצוגה מקדימה">`:`<span class="attachment-file-icon">${ic('file',18)}</span>`}<span><b>${esc(draftAttachment.name)}</b><small>מוכן לשליחה</small></span><button type="button" id="dmAttachmentRemove" aria-label="הסרת הקובץ">×</button></div>`;$('#dmAttachmentRemove').onclick=clearDmAttachment;}catch(error){clearDmAttachment();toast(error.message,'err');}finally{attachButton.disabled=false;}};
-  if(attachButton&&fileInput){attachButton.onclick=()=>fileInput.click();fileInput.onchange=()=>uploadDmFile(fileInput.files?.[0]);}
+  if(attachButton&&fileInput){attachButton.onclick=()=>{
+    openModal(`<div class="m-h"><h3>הוספה לשיחה</h3><button type="button" class="iconbtn" onclick="closeModal()" aria-label="סגירה">×</button></div><div class="m-b attachment-menu">${[['image','תמונה','camera'],['video','סרטון','video'],['file','קובץ','file'],['gif','GIF מונפש','sparkle']].map(([kind,label,icon])=>`<button type="button" class="btn btn-g" data-upload-kind="${kind}">${ic(icon,22)}<span>${label}</span></button>`).join('')}</div>`);
+    $$('[data-upload-kind]').forEach(button=>button.onclick=()=>{
+      if(button.dataset.uploadKind==='gif'){
+        openModal('<div class="m-h"><h3>GIFים</h3><button class="iconbtn" onclick="closeModal()" aria-label="סגירה">×</button></div><div class="m-b" id="gifPicker"></div>');
+        mountGifPicker($('#gifPicker'),url=>{const input=$('#din');input.value+=(input.value?'\n':'')+url;closeModal();input.focus();});return;
+      }
+      fileInput.accept={image:'image/jpeg,image/png,image/gif,image/webp',video:'video/mp4,video/webm,video/quicktime',file:'application/pdf,text/plain'}[button.dataset.uploadKind];closeModal();fileInput.click();});
+  };fileInput.onchange=()=>uploadDmFile(fileInput.files?.[0]);}
   $('#din')?.addEventListener('paste',event=>{const image=[...(event.clipboardData?.files||[])].find(file=>file.type.startsWith('image/'));if(!image)return;event.preventDefault();uploadDmFile(image);});
 
   const sendD = async ()=>{
@@ -3990,7 +4000,17 @@ route('/dm', async (app, id)=>{
     }
     finally{ inp.disabled=false; inp.focus(); }
   };
-  const db = $('#dbtn'); if(db) db.onclick = sendD;
+  const db = $('#dbtn');
+  if(db){
+    let holdTimer=null,held=false;
+    const effects=()=>{held=true;openModal(`<div class="m-h"><h3>שליחה עם אפקט</h3></div><div class="m-b attachment-menu">${[['nod','הנהון'],['pop','קפיצה'],['glow','זוהר'],['wave','ניעור']].map(([effect,label])=>`<button type="button" class="btn btn-g" data-send-effect="${effect}">${label}</button>`).join('')}</div><div class="m-f small mute">תצוגת אפקט מקומית במכשיר שלך</div>`);$$('[data-send-effect]').forEach(b=>b.onclick=()=>{closeModal();sendD();requestAnimationFrame(()=>{const bubble=$('#dchat .msg.mine:last-child .bub');if(bubble)bubble.classList.add('send-effect-'+b.dataset.sendEffect);});});};
+    db.addEventListener('pointerdown',()=>{held=false;holdTimer=setTimeout(effects,550);});
+    const cancel=()=>{clearTimeout(holdTimer);};
+    ['pointerup','pointerleave','pointercancel'].forEach(type=>db.addEventListener(type,cancel));
+    db.addEventListener('contextmenu',event=>{event.preventDefault();cancel();if(!held)effects();});
+    db.onclick=()=>{if(held){held=false;return;}sendD();};
+    db.title='שליחה · לחיצה ארוכה לאפקטים';onCleanup(cancel);
+  }
   const di = $('#din'); if(di) di.addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey&&$('#dMentionList')?.style.display==='none'){e.preventDefault();sendD();} });
   if(di){
     const list=$('#dMentionList');let start=-1,items=[],selected=0;
