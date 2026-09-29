@@ -2,6 +2,7 @@ import {HttpError,requireThat,pick,rank,isFounder,banned,collections,officialIds
 import {createRemoteJWKSet,jwtVerify} from 'jose';
 import {rewards} from './rewards.js';
 import {connect as tlsConnect} from 'node:tls';
+export {ChatRoom} from './chat-room.js';
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const nonce=()=>crypto.randomUUID().replaceAll('-','');
@@ -156,8 +157,27 @@ export function database(env){
     do{const page=await env.BACKUP.list({prefix:`record:${col}:`,...(cursor?{cursor}:{})});cursor=page.list_complete?undefined:page.cursor;const values=await Promise.all(page.keys.map(key=>env.BACKUP.get(key.name,'json')));rows.push(...values.filter(Boolean));}while(cursor&&rows.length<10000);
     return rows;
   };
+  const chatRoom=convId=>env.CHAT_ROOMS?.getByName(String(convId));
+  const chatList=async(convId,before='',limit=80)=>{
+    const room=chatRoom(convId);
+    return room?room.listMessages(before,limit):null;
+  };
+  const chatCount=async(convId,senderId,maximum=3)=>{
+    const room=chatRoom(convId);
+    return room?room.countBySender(senderId,maximum):null;
+  };
+  const chatImport=async(convId,messages)=>{
+    const room=chatRoom(convId);
+    return room?room.importMessages(messages):0;
+  };
   const get=async(col,id)=>{
     if(!id)return null;
+    // New chat messages are indexed in KV by id so edits/deletes never need a
+    // global D1 lookup. Existing pre-migration messages still fall through.
+    if(col==='dmsgs'){
+      const backup=await backupGet(col,id);
+      if(backup)return backup;
+    }
     let row=null;try{row=await env.DB.prepare('SELECT data,version FROM records WHERE collection=? AND id=?').bind(col,id).first();}catch(error){const backup=await backupGet(col,id);if(backup)return backup;throw error;}
     if(row)return {...JSON.parse(row.data),id,_version:row.version};
     const backup=await backupGet(col,id);if(backup)return backup;
@@ -170,10 +190,17 @@ export function database(env){
     return old?._version?env.DB.prepare('UPDATE records SET data=?,version=version+1 WHERE collection=? AND id=? AND version=?').bind(JSON.stringify(data),col,r.id,old._version)
       :env.DB.prepare('INSERT INTO records (collection,id,data,created_at) VALUES (?,?,?,?)').bind(col,r.id,JSON.stringify(data),r.createdAt||now());
   };
-  const put=async(col,r,old)=>{let primary=true;try{const result=await statement(col,r,old).run();requireThat(result.meta?.changes!==0,409,'הפריט השתנה בינתיים. רעננו ונסו שוב.');}catch(error){primary=false;if(!env.BACKUP||!backedUp.has(col))throw error;}await backupPut(col,r);return {...r,...(!primary?{_backup:true}:{})};};
+  const put=async(col,r,old)=>{
+    if(col==='dmsgs'&&r?.convId&&chatRoom(r.convId)){
+      await chatRoom(r.convId).putMessage(r);
+      await backupPut(col,r);
+      return {...r,_chatStore:true};
+    }
+    let primary=true;try{const result=await statement(col,r,old).run();requireThat(result.meta?.changes!==0,409,'הפריט השתנה בינתיים. רעננו ונסו שוב.');}catch(error){primary=false;if(!env.BACKUP||!backedUp.has(col))throw error;}await backupPut(col,r);return {...r,...(!primary?{_backup:true}:{})};
+  };
   const list=async col=>{let primary=[];try{const r=await env.DB.prepare('SELECT data,id,version FROM records WHERE collection=? ORDER BY created_at DESC LIMIT 10000').bind(col).all();primary=r.results.map(x=>({...JSON.parse(x.data),id:x.id,_version:x.version}));}catch(error){if(!env.BACKUP||!backedUp.has(col))throw error;}const backup=await backupList(col);const merged=new Map(primary.map(x=>[x.id,x]));for(const row of backup){const current=merged.get(row.id);if(!current||String(row.updatedAt||row.createdAt||'')>=String(current.updatedAt||current.createdAt||''))merged.set(row.id,row);}return [...merged.values()].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));};
   const remove=async(col,id)=>{let primaryError;try{await env.DB.prepare('DELETE FROM records WHERE collection=? AND id=?').bind(col,id).run();}catch(error){primaryError=error;}if(env.BACKUP&&backedUp.has(col))await env.BACKUP.delete(backupKey(col,id));else if(primaryError)throw primaryError;};
-  return {get,put,list,remove,statement};
+  return {get,put,list,remove,statement,chatList,chatCount,chatImport};
 }
 const firebaseKeys=createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 async function identity(req,env,db,ctx){
@@ -374,12 +401,18 @@ export async function api(req,env,ctx={waitUntil(){}}){
       requireThat(conv&&conv.members?.includes(u.id),403,'אין הרשאה לצפות בשיחה זו');
       const limit=Math.min(100,Math.max(20,Number(url.searchParams.get('limit'))||80));
       const before=String(url.searchParams.get('before')||'');
-      let messages;
-      try{const query=before
-        ? env.DB.prepare("SELECT data,id,version,created_at FROM records WHERE collection='dmsgs' AND json_extract(data,'$.convId')=? AND created_at<? ORDER BY created_at DESC LIMIT ?").bind(convId,before,limit)
+      let messages=await db.chatList(convId,before,limit)||[];
+      // Import legacy history one requested page at a time. Once a page is in
+      // its room, following reads are local to that room and no longer touch D1.
+      if(messages.length<limit)try{const legacyBefore=messages[0]?.createdAt||before;const query=legacyBefore
+        ? env.DB.prepare("SELECT data,id,version,created_at FROM records WHERE collection='dmsgs' AND json_extract(data,'$.convId')=? AND created_at<? ORDER BY created_at DESC LIMIT ?").bind(convId,legacyBefore,limit-messages.length)
         : env.DB.prepare("SELECT data,id,version,created_at FROM records WHERE collection='dmsgs' AND json_extract(data,'$.convId')=? ORDER BY created_at DESC LIMIT ?").bind(convId,limit);
-        const result=await query.all();messages=result.results.map(row=>safeRecord('dmsgs',{...JSON.parse(row.data),id:row.id,_version:row.version},u)).reverse();
-      }catch{messages=(await db.list('dmsgs')).filter(row=>row.convId===convId&&(!before||String(row.createdAt)<before)).slice(0,limit).reverse().map(row=>safeRecord('dmsgs',row,u));}
+        const result=await query.all(),legacy=result.results.map(row=>({...JSON.parse(row.data),id:row.id,_version:row.version})).reverse();
+        await db.chatImport(convId,legacy);
+        const merged=new Map([...legacy,...messages].map(row=>[row.id,row]));
+        messages=[...merged.values()].sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||''))).slice(-limit);
+      }catch{if(!messages.length)messages=(await db.list('dmsgs')).filter(row=>row.convId===convId&&(!before||String(row.createdAt)<before)).slice(0,limit).reverse();}
+      messages=messages.map(row=>safeRecord('dmsgs',row,u));
       return json({messages,hasMore:messages.length===limit});
     }
     if(path==='/api/translate'&&req.method==='POST'){
@@ -536,7 +569,8 @@ export async function api(req,env,ctx={waitUntil(){}}){
       if(conv?.kind==='direct'&&conv.dmAccepted===false&&conv.ownerId===u.id&&isFounder(u)){
         await db.put('dms',{...conv,dmAccepted:true,acceptedAt:now(),acceptedBySystem:'founder'},conv);
       }else if(conv?.kind==='direct'&&conv.dmAccepted===false&&conv.ownerId===u.id){
-        const sent=(await db.list('dmsgs')).filter(m=>m.convId===conv.id&&m.senderId===u.id&&!m.deleted).length;
+        const roomCount=await db.chatCount(conv.id,u.id,3);
+        const sent=roomCount??(await db.list('dmsgs')).filter(m=>m.convId===conv.id&&m.senderId===u.id&&!m.deleted).length;
         requireThat(sent<2,403,'אפשר לשלוח עד שתי הודעות עד שהמשתמש יאשר את בקשת השיחה');
       }
     }
