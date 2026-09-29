@@ -375,6 +375,20 @@ export async function api(req,env,ctx={waitUntil(){}}){
       return json({url:settings?.url||'',label:settings?.label||'תמיכה ב-SMAI Sentinel'});
     }
     if(path==='/api/session')return json({user:u?safeRecord('users',u,u):null});
+    if(path==='/api/presence/typing'&&req.method==='POST'){
+      requireThat(u,401,'יש להתחבר כדי להמשיך');
+      const payload=await req.json(),convId=String(payload?.convId||'').slice(0,120);
+      const conv=await db.get('dms',convId);requireThat(conv?.members?.includes(u.id),403,'אין הרשאה לשיחה זו');
+      if(env.BACKUP)await env.BACKUP.put(`typing:${u.id}`,JSON.stringify({convId,until:Date.now()+6500}),{expirationTtl:15});
+      return json({ok:true});
+    }
+    const typingMatch=path.match(/^\/api\/presence\/typing\/([^/]+)$/);
+    if(typingMatch&&req.method==='GET'){
+      requireThat(rank(u)>=70,403,'החיווי זמין ליוצר בלבד');
+      const raw=env.BACKUP?await env.BACKUP.get(`typing:${decodeURIComponent(typingMatch[1])}`):null;
+      let state=null;try{state=raw?JSON.parse(raw):null;}catch{}
+      return json({typing:Boolean(state&&state.until>Date.now()),convId:state?.convId||''});
+    }
     if(path==='/api/status')return json({database:true,ai:true,aiMode:env.AI?'workers-ai':env.GEMINI_API_KEY?'gemini':'basic',mail:!!(env.MAIL_GATEWAY_URL&&env.MAIL_GATEWAY_SECRET||env.RESEND_API_KEY&&env.MAIL_FROM||env.GMAIL_USER&&env.GMAIL_APP_PASSWORD),mailFrom:rank(u)>=60?(env.MAIL_FROM||env.GMAIL_USER||MAIL_BRAND):undefined,migration:'new-database',version:'2.1',...(rank(u)>=60?{model:env.GEMINI_MODEL||'gemini-flash-latest'}:{})});
     if(path==='/api/auth/password-reset'&&req.method==='POST'){
       const raw=await req.text();requireThat(raw.length<=2000,413,'הבקשה גדולה מדי');let body;
