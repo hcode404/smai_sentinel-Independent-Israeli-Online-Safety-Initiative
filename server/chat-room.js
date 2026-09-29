@@ -75,4 +75,26 @@ export class ChatRoom {
     ).toArray();
     return rows.length;
   }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    try {
+      if (request.method === 'GET' && url.pathname === '/messages') {
+        return Response.json(await this.listMessages(url.searchParams.get('before') || '', url.searchParams.get('limit') || 80));
+      }
+      if (request.method === 'GET' && url.pathname === '/count') {
+        return Response.json({count: await this.countBySender(url.searchParams.get('senderId') || '', url.searchParams.get('maximum') || 3)});
+      }
+      if (request.method === 'POST' && url.pathname === '/message') {
+        return Response.json(await this.putMessage(await request.json()));
+      }
+      if (request.method === 'POST' && url.pathname === '/import') {
+        return Response.json({count: await this.importMessages(await request.json())});
+      }
+      return new Response('Not found', {status: 404});
+    } catch (error) {
+      console.error(JSON.stringify({event:'chat_room_error',message:String(error?.message || error).slice(0,500)}));
+      return Response.json({error:'chat room operation failed'}, {status: 500});
+    }
+  }
 }

@@ -160,15 +160,26 @@ export function database(env){
   const chatRoom=convId=>env.CHAT_ROOMS?.getByName(String(convId));
   const chatList=async(convId,before='',limit=80)=>{
     const room=chatRoom(convId);
-    return room?room.listMessages(before,limit):null;
+    if(!room)return null;
+    const query=new URLSearchParams({limit:String(limit),...(before?{before}:{})});
+    const response=await room.fetch(new Request(`https://chat-room/messages?${query}`));
+    if(!response.ok)throw new Error('chat room list failed');
+    return response.json();
   };
   const chatCount=async(convId,senderId,maximum=3)=>{
     const room=chatRoom(convId);
-    return room?room.countBySender(senderId,maximum):null;
+    if(!room)return null;
+    const query=new URLSearchParams({senderId:String(senderId),maximum:String(maximum)});
+    const response=await room.fetch(new Request(`https://chat-room/count?${query}`));
+    if(!response.ok)throw new Error('chat room count failed');
+    return (await response.json()).count;
   };
   const chatImport=async(convId,messages)=>{
     const room=chatRoom(convId);
-    return room?room.importMessages(messages):0;
+    if(!room)return 0;
+    const response=await room.fetch(new Request('https://chat-room/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(messages)}));
+    if(!response.ok)throw new Error('chat room import failed');
+    return (await response.json()).count;
   };
   const get=async(col,id)=>{
     if(!id)return null;
@@ -192,7 +203,8 @@ export function database(env){
   };
   const put=async(col,r,old)=>{
     if(col==='dmsgs'&&r?.convId&&chatRoom(r.convId)){
-      await chatRoom(r.convId).putMessage(r);
+      const response=await chatRoom(r.convId).fetch(new Request('https://chat-room/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(r)}));
+      if(!response.ok)throw new Error('chat room write failed');
       await backupPut(col,r);
       return {...r,_chatStore:true};
     }
@@ -687,7 +699,11 @@ export async function api(req,env,ctx={waitUntil(){}}){
       try{await db.put('logs',log);if(['users','reports','cmsgs','threads','tmsgs'].includes(col))await db.put('modlog',log);}catch{}
     }
     return json(safeRecord(col,rec,u),old?200:201);
-  }catch(e){const exhausted=/D1|row read|limit exceeded|storage operation/i.test(String(e?.message||''));return json({error:e instanceof HttpError?e.message:'תקלה זמנית בשרתים. נסו שוב מאוחר יותר.',exhausted},e.status||(exhausted?503:500));}
+  }catch(e){
+    const exhausted=/D1|row read|limit exceeded|storage operation/i.test(String(e?.message||''));
+    console.error(JSON.stringify({event:'api_error',path:new URL(req.url).pathname,status:e?.status||(exhausted?503:500),name:e?.name||'Error',message:String(e?.message||'unknown').slice(0,500)}));
+    return json({error:e instanceof HttpError?e.message:'תקלה זמנית בשרתים. נסו שוב מאוחר יותר.',exhausted},e.status||(exhausted?503:500));
+  }
 }
 export default {async fetch(req,env,ctx){
   const path=new URL(req.url).pathname;
