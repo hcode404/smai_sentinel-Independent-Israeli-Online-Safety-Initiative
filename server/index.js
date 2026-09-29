@@ -427,6 +427,48 @@ export async function api(req,env,ctx={waitUntil(){}}){
       messages=messages.map(row=>safeRecord('dmsgs',row,u));
       return json({messages,hasMore:messages.length===limit});
     }
+    const dmReactionMatch=path.match(/^\/api\/dms\/([^/]+)\/messages\/([^/]+)\/reaction$/);
+    if(dmReactionMatch&&req.method==='POST'){
+      const convId=decodeURIComponent(dmReactionMatch[1]),messageId=decodeURIComponent(dmReactionMatch[2]);
+      const conv=await db.get('dms',convId),message=await db.get('dmsgs',messageId);
+      requireThat(conv&&conv.members?.includes(u.id),403,'אין הרשאה להגיב בשיחה זו');
+      requireThat(message&&message.convId===convId&&!message.deleted,404,'ההודעה לא נמצאה');
+      await limit(env,'dm-reaction:'+u.id,180,3600);
+      const payload=await req.json();
+      const emoji=String(payload?.emoji||'');
+      requireThat(['👍','❤️','😂','😮','😢','🙏'].includes(emoji),400,'האימוג׳י אינו נתמך');
+      const reactions={};
+      for(const [key,value] of Object.entries(message.reactions||{})){
+        const members=Array.isArray(value)?value.filter(id=>typeof id==='string'&&conv.members.includes(id)):[];
+        if(members.length)reactions[key]=[...new Set(members)];
+      }
+      const alreadyReacted=(reactions[emoji]||[]).includes(u.id);
+      for(const key of Object.keys(reactions)){
+        reactions[key]=reactions[key].filter(id=>id!==u.id);
+        if(!reactions[key].length)delete reactions[key];
+      }
+      if(!alreadyReacted)reactions[emoji]=[...(reactions[emoji]||[]),u.id];
+      const updated={...message,reactions,updatedAt:now()};
+      await db.put('dmsgs',updated,message);
+      return json(safeRecord('dmsgs',updated,u));
+    }
+    const dmAiMatch=path.match(/^\/api\/dms\/([^/]+)\/ai$/);
+    if(dmAiMatch&&req.method==='POST'){
+      const convId=decodeURIComponent(dmAiMatch[1]),conv=await db.get('dms',convId);
+      requireThat(conv&&conv.members?.includes(u.id),403,'אין הרשאה להשתמש בעוזר בשיחה זו');
+      requireThat(!banned(u),403,'החשבון אינו מורשה לבצע פעולה זו');
+      await limit(env,'dm-ai:'+u.id,30,3600);
+      const payload=await req.json(),prompt=String(payload?.prompt||'').trim(),visible=payload?.visible===true;
+      requireThat(prompt.length>=2&&prompt.length<=3000,400,'נא לכתוב שאלה באורך מתאים');
+      const recent=(await db.chatList(convId,'',24)||[]).filter(message=>!message.deleted&&!message.system&&message.text).slice(-16);
+      const transcript=recent.map(message=>`${message.senderName||'משתמש'}: ${String(message.text).slice(0,700)}`).join('\n');
+      const requestText=`אתה עוזר SMAI בתוך שיחה פרטית. ענה בקצרה ובזהירות על השאלה, בהתבסס רק על קטע השיחה המצורף. אל תחשוף מידע שלא מופיע בו ואל תטען שאתה אדם.\n\nקטע שיחה:\n${transcript}\n\nשאלה מאת ${u.name}: ${prompt}`;
+      const result=await generate(env,requestText,[]);
+      if(!visible)return json({text:result.text,mode:result.mode});
+      const answer={id:nonce(),convId,text:result.text,senderId:'smai-ai',senderName:'SMAI AI',senderRank:'system',system:false,ai:true,replyTo:{id:'',text:prompt,sender:u.name},createdAt:now(),deliveredAt:now()};
+      await db.put('dmsgs',answer,null);
+      return json(safeRecord('dmsgs',answer,u));
+    }
     if(path==='/api/translate'&&req.method==='POST'){
       requireThat(env.AI,503,'שירות התרגום אינו זמין כרגע');await limit(env,'translate:'+u.id,120,86400);
       const raw=await req.text();requireThat(raw.length<=12000,413,'בקשת התרגום גדולה מדי');let payload;try{payload=JSON.parse(raw);}catch{throw new HttpError(400,'בקשת התרגום אינה תקינה');}

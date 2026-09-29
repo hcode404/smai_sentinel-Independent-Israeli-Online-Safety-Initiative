@@ -1213,6 +1213,7 @@ const NAV = [
   { p:'/friends',   l:'חברים',       ico:'users' },
   { p:'/games', l:'משחקים', ico:'grid' },
   { p:'/law-enforcement', l:'פניות גורמי אכיפה', ico:'shield' },
+  { p:'/business', l:'פניות עסקיות', ico:'building' },
   { p:'/shop', l:'משימות וחנות', ico:'star' },
   { p:'/daily', l:'הכלים שלי', ico:'check' },
   { p:'/support', l:'תמיכה ביוזמה', ico:'heart' },
@@ -1222,7 +1223,7 @@ const NAV = [
   { p:'/improve',   l:'באגים והצעות', ico:'sparkle' },
   { p:'/join',      l:'הצטרפות לצוות', ico:'users' }
 ];
-const NAV_EN={'/':'Home','/report':'New report','/my':'My cases','/track':'Track case','/articles':'Guides & articles','/press':'Facts','/dm':'Direct messages','/friends':'Friends','/community':'Community','/team-praise':'Kind words','/join':'Join the team','/partners':'Partners & resources','/improve':'Bugs & suggestions'};
+const NAV_EN={'/':'Home','/report':'New report','/my':'My cases','/track':'Track case','/articles':'Guides & articles','/press':'Facts','/dm':'Direct messages','/friends':'Friends','/community':'Community','/team-praise':'Kind words','/join':'Join the team','/partners':'Partners & resources','/improve':'Bugs & suggestions','/business':'Business inquiries'};
 const currentLang=()=>localStorage.getItem('smai_lang')==='en'?'en':'he';
 function renderNav(){
   const cur = location.pathname.split('/')[1] || '';
@@ -1500,7 +1501,7 @@ function attachmentHTML(file){
   return `<a class="chat-file" href="${url}" target="_blank" rel="noopener">${ic('file',18)}<span><b>${name}</b><small>${Math.max(1,Math.round(Number(file.size||0)/1024))} KB</small></span></a>`;
 }
 function campaignRichText(txt){return esc(String(txt||'')).replace(/\[([^\]]{1,80})\]\((https:\/\/[^\s)]+)\)/g,(_,label,url)=>`<a href="${url}" target="_blank" rel="noopener noreferrer nofollow">${label}</a>`).replace(/\n/g,'<br>');}
-document.addEventListener('click',event=>{
+document.addEventListener('contextmenu',event=>{
   const button=event.target.closest('[data-chat-image]');if(!button)return;
   openModal(`<div class="m-h"><h3>${esc(button.dataset.imageName||'תמונה')}</h3><button type="button" class="iconbtn" onclick="closeModal()" aria-label="סגירה">×</button></div><div class="image-viewer"><img src="${esc(button.dataset.chatImage)}" alt="${esc(button.dataset.imageName||'תמונה')}"></div>`,true);
 });
@@ -1926,6 +1927,12 @@ route('/law-enforcement',async app=>{
   app.innerHTML=`<section class="card"><h1>פניות גורמי אכיפה</h1><p>הגשת בקשה לצוות הבכיר. שליחת הטופס אינה מקנה גישה למידע ואינה מאמתת את זהות הפונה.</p><div class="callout c-warn">אין לצרף סיסמאות, קודי גישה או תוכן פוגעני. בסכנה מיידית פנו למוקד החירום הרלוונטי.</div><form id="lawForm">${[['agency','גוף ויחידה'],['contactName','שם ותפקיד הפונה'],['officialEmail','מייל רשמי'],['phone','טלפון לאימות חוזר'],['caseNumber','מספר תיק או אסמכתה'],['incident','תיאור האירוע ומועדיו'],['reason','מטרת הבקשה והמידע הנדרש'],['users','שמות משתמשים או קישורים רלוונטיים'],['authority','הסמכות והאסמכתה לבקשת המידע']].map(([name,label])=>`<label style="display:block;margin-top:16px">${label}<textarea name="${name}" required minlength="2" maxlength="2000" rows="2"></textarea></label>`).join('')}<p id="lawStatus" role="status"></p><button type="submit" class="btn btn-p">הגשת בקשה לבדיקה</button></form></section><section id="lawReview"></section>`;
   $('#lawForm').onsubmit=async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;try{const saved=await remoteStore.add('lawRequests',Object.fromEntries(new FormData(form)));form.reset();$('#lawStatus').textContent='הבקשה נקלטה לבדיקה. מספר אסמכתה: '+saved.id;}catch(e){$('#lawStatus').textContent=e.message;}finally{button.disabled=false;}};
   if(lvl(Auth.user)>=50){try{const rows=await remoteStore.list('lawRequests');$('#lawReview').innerHTML='<h2>תיבת פניות לצוות בכיר</h2>'+rows.map(r=>`<article class="card" style="margin-top:12px"><h3>${esc(r.agency)} · ${esc(r.caseNumber)}</h3><p>זהות הפונה טרם אומתה באופן עצמאי.</p>${['contactName','officialEmail','phone','incident','reason','users','authority'].map(k=>`<p style="white-space:pre-wrap">${esc(r[k])}</p>`).join('')}<span class="b">${esc(r.status)}</span></article>`).join('');}catch(e){$('#lawReview').textContent=e.message;}}
+});
+
+route('/business',async app=>{
+  if(!Auth.user)return app.innerHTML=requireLogin('צריך להתחבר כדי לשלוח פנייה עסקית');
+  app.innerHTML=`<div class="page-h anim-up"><div class="eyebrow">BUSINESS / SMAI</div><h1>פניות עסקיות</h1><p>שיתופי פעולה, חסויות, שירותים לארגונים ורעיונות מסחריים — ישירות ליוצר SMAI Sentinel.</p></div><form id="businessForm" class="card stack" style="max-width:760px"><div class="grid g2"><div class="field"><label>ארגון או עסק</label><input id="businessOrganization" required maxlength="140"></div><div class="field"><label>שם איש קשר</label><input id="businessContact" required maxlength="120"></div></div><div class="grid g2"><div class="field"><label>מייל</label><input id="businessEmail" type="email" required maxlength="254"></div><div class="field"><label>טלפון (רשות)</label><input id="businessPhone" maxlength="40"></div></div><div class="field"><label>נושא</label><select id="businessTopic"><option>שיתוף פעולה</option><option>חסות או תרומה</option><option>שירות לארגון</option><option>עיתונות ומדיה</option><option>אחר</option></select></div><div class="field"><label>אתר הארגון (רשות)</label><input id="businessWebsite" type="url" placeholder="https://"></div><div class="field"><label>פרטי הפנייה</label><textarea id="businessMessage" required minlength="20" maxlength="3000"></textarea></div><button class="btn btn-p">שליחת פנייה ליוצר</button><p id="businessStatus" class="small" role="status"></p></form>`;
+  $('#businessForm').onsubmit=async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button'),status=$('#businessStatus');button.disabled=true;status.textContent='שולח…';try{const saved=await Store.add('businessRequests',{organization:$('#businessOrganization').value.trim(),contactName:$('#businessContact').value.trim(),email:$('#businessEmail').value.trim(),phone:$('#businessPhone').value.trim(),topic:$('#businessTopic').value,message:$('#businessMessage').value.trim(),website:$('#businessWebsite').value.trim()});event.currentTarget.reset();status.textContent='הפנייה התקבלה. מספר מעקב: '+saved.id;toast('הפנייה העסקית נשלחה ליוצר');}catch(error){status.textContent=error.message;button.disabled=false;}};
 });
 
 route('/press', async app => {
@@ -3206,9 +3213,6 @@ const openMessageMenu=(event,message)=>{
   menu.onclick=async click=>{const action=click.target.closest('[data-cm]')?.dataset.cm;if(!action)return;menu.remove();if(action==='reply')message.querySelector('.reply-btn')?.click();if(action==='report')(message.querySelector('[data-act="report"],[data-ticket-act="report"]'))?.click();if(action==='delete')await deleteMessage(message.dataset.mid,message.dataset.msgCol);if(action==='share'){const text=message.dataset.msgText||'';try{if(navigator.share)await navigator.share({title:'הודעה מ-SMAI',text});else{await navigator.clipboard.writeText(text);toast('ההודעה הועתקה');}}catch{}}if(action==='forward')await forwardMessageModal(message.dataset.msgText||'',message.dataset.msgName||'משתמש');};
   const close=click=>{if(!menu.contains(click.target))menu.remove();document.removeEventListener('click',close);};setTimeout(()=>document.addEventListener('click',close),0);
 };
-document.addEventListener('contextmenu',event=>{
-  const message=event.target.closest('.msg[data-mid][data-msg-col]');if(!message)return;openMessageMenu(event,message);
-});
 document.addEventListener('click',event=>{
   const message=event.target.closest('.dm-window .msg[data-mid][data-msg-col]');
   if(!message||event.target.closest('a,button,input,textarea,video,audio')||getSelection()?.toString())return;
@@ -3835,7 +3839,7 @@ const lastSeenLabel=u=>{
 const DMCache={
   key:(userId,convId)=>`smai_dm_v1_${userId}_${convId}`,
   read(userId,convId){try{const row=JSON.parse(localStorage.getItem(this.key(userId,convId))||'null');if(!row||row.userId!==userId||row.convId!==convId||Date.now()-row.savedAt>30*86400000)return [];return Array.isArray(row.messages)?row.messages:[];}catch{return [];}}
-  ,write(userId,convId,messages){try{const safe=messages.filter(m=>!m._pending&&!m.deleted).slice(-80).map(m=>Object.fromEntries(['id','convId','senderId','senderName','senderRank','text','createdAt','deliveredAt','readAt','system','flagged','replyTo','attachment','callUrl','callType'].filter(k=>Object.hasOwn(m,k)).map(k=>[k,m[k]])));localStorage.setItem(this.key(userId,convId),JSON.stringify({userId,convId,savedAt:Date.now(),messages:safe}));}catch{}}
+  ,write(userId,convId,messages){try{const safe=messages.filter(m=>!m._pending&&!m.deleted).slice(-80).map(m=>Object.fromEntries(['id','convId','senderId','senderName','senderRank','text','createdAt','deliveredAt','readAt','system','flagged','reactions','replyTo','attachment','callUrl','callType'].filter(k=>Object.hasOwn(m,k)).map(k=>[k,m[k]])));localStorage.setItem(this.key(userId,convId),JSON.stringify({userId,convId,savedAt:Date.now(),messages:safe}));}catch{}}
 };
 const DMIndexCache={
   key:userId=>`smai_dm_index_v1_${userId}`,
@@ -3901,6 +3905,7 @@ route('/dm', async (app, id)=>{
         ${isGroup(cur)
           ? `<button class="btn btn-ghost btn-sm" id="dmMem">${ic('users',14)} משתתפים</button>`
           : `<button class="btn btn-ghost btn-sm" id="dmProf">${ic('user',14)} פרופיל</button>`}
+        <button class="iconbtn dm-ai-head" id="dmAi" title="שאלת AI פרטית על השיחה" aria-label="שאלת AI פרטית"><img src="/assets/smai-ai-assistant.png" alt=""></button>
         <button class="iconbtn dm-jump-latest" id="dmLatest" title="להודעה האחרונה" aria-label="מעבר להודעה האחרונה">${ic('chevron',17)}</button>
         <button class="iconbtn" id="dmVoice" title="שיחת קול" aria-label="התחלת שיחת קול">${ic('phone',17)}</button>
         <button class="iconbtn" id="dmVideo" title="שיחת וידאו" aria-label="התחלת שיחת וידאו">${ic('camera',17)}</button>
@@ -3935,6 +3940,7 @@ route('/dm', async (app, id)=>{
   const dmListBackdrop=$('#dmListBackdrop');if(dmListBackdrop)dmListBackdrop.onclick=closeDmList;
   const dp = $('#dmProf'); if(dp) dp.onclick = ()=>openProfile(other);
   const dmem = $('#dmMem'); if(dmem) dmem.onclick = ()=>groupMembersModal(cur, users);
+  const dmAi=$('#dmAi');if(dmAi)dmAi.onclick=()=>{openModal(`<div class="m-h"><img class="dm-ai-modal-avatar" src="/assets/smai-ai-assistant.png" alt=""><div><h3 style="margin:0">שאלה פרטית ל־SMAI AI</h3><div class="tiny mute">התשובה תופיע רק אצלך ולא תישלח לשיחה</div></div></div><div class="m-b"><div class="field"><label for="dmAiQuestion">מה תרצו להבין מהשיחה?</label><textarea id="dmAiQuestion" maxlength="3000" placeholder="למשל: מה סיכמנו עד עכשיו?"></textarea></div><div id="dmAiAnswer" class="dm-ai-private-answer" hidden></div></div><div class="m-f"><button class="btn btn-g" onclick="closeModal()">סגירה</button><button class="btn btn-p" id="dmAiAsk">שאלה לעוזר</button></div>`);$('#dmAiAsk').onclick=async()=>{const prompt=$('#dmAiQuestion').value.trim(),button=$('#dmAiAsk'),answer=$('#dmAiAnswer');if(prompt.length<2)return;button.disabled=true;button.textContent='חושב…';answer.hidden=false;answer.innerHTML='<span class="typing-dots"><i></i><i></i><i></i></span>';try{const result=await request(`/api/dms/${encodeURIComponent(cur.id)}/ai`,'POST',{prompt,visible:false});answer.textContent=result.text;}catch(error){answer.textContent=error.message;}finally{button.disabled=false;button.textContent='שאלה נוספת';}};};
   if(!cur) return;
   if(dmOffline)request('/api/backup/conversation','POST',{id:cur.id,members:cur.members,kind:cur.kind,name:cur.name,names:cur.names,ownerId:cur.ownerId,dmAccepted:cur.dmAccepted,lastText:cur.lastText,lastAt:cur.lastAt,createdAt:cur.createdAt}).catch(()=>{});
   const acceptDm=$('#acceptDm');if(acceptDm)acceptDm.onclick=async()=>{acceptDm.disabled=true;try{await Store.update('dms',cur.id,{dmAccepted:true});toast('בקשת ההודעה אושרה');render();}catch(e){toast(e.message||'לא ניתן לאשר','err');acceptDm.disabled=false;}};
@@ -3973,8 +3979,8 @@ route('/dm', async (app, id)=>{
         ${avatar({ id:m.senderId, name:m.senderName, avatar:(su?.avatar || (isMine?me.avatar:otherU?.avatar)),presenceMode:(su?.presenceMode||(isMine?me.presenceMode:otherU?.presenceMode)||'online') },'s')}
         <div class="bub"><div class="who">${esc(m.senderName||'משתמש')} ${rankBadge(m.senderRank)}
           ${m.flagged?`<span class="b b-warn">${ic('flag',10)} נבדק</span>`:''}</div>
-          ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}${attachmentHTML(m.attachment)}<div class="txt" data-translate-message="${esc(m.id)}">${linkify(m.text)}</div>${linkPreviewHTML(m.text)}${m.callUrl?`<a class="btn btn-p btn-sm" href="${esc(m.callUrl)}" target="_blank" rel="noopener noreferrer" style="margin-top:8px">${ic(m.callType==='video'?'camera':'phone',15)} הצטרפות לשיחה</a>`:''}<div class="tm">${fmtTime(m.createdAt)} ${isMine?`<span class="read-receipt ${m._pending?'sent':m.readAt?'read':m.deliveredAt?'delivered':'sent'}" title="${m._pending?'ממתין לשליחה':m.readAt?'נקרא':m.deliveredAt?'נמסר':'נשלח'}">${m._pending?'✓':m.readAt?'✓✓':m.deliveredAt?'✓✓':'✓'}</span>`:''}</div></div>
-        <div class="acts">${!isMine?`<button class="dm-report-flag" title="דיווח" aria-label="דיווח על ההודעה" data-act="report" data-id="${m.id}">${ic('flag',14)}</button>`:''}<button class="reply-btn dm-hidden-action" data-chat="d" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
+          ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}${attachmentHTML(m.attachment)}<div class="txt" data-translate-message="${esc(m.id)}">${linkify(m.text)}</div>${linkPreviewHTML(m.text)}${m.callUrl?`<button class="btn btn-p btn-sm dm-join-call" data-call-url="${esc(m.callUrl)}" data-call-type="${esc(m.callType||'audio')}" style="margin-top:8px">${ic(m.callType==='video'?'camera':'phone',15)} הצטרפות לשיחה בתוך SMAI</button>`:''}${Object.entries(m.reactions||{}).some(([,ids])=>ids?.length)?`<div class="dm-reaction-list">${Object.entries(m.reactions||{}).filter(([,ids])=>ids?.length).map(([emoji,ids])=>`<button type="button" class="dm-reaction-pill ${ids.includes(me.id)?'mine':''}" data-react="${esc(emoji)}" data-id="${m.id}" title="${ids.length} תגובות">${esc(emoji)} <b>${ids.length}</b></button>`).join('')}</div>`:''}<div class="tm">${fmtTime(m.createdAt)} ${isMine?`<span class="read-receipt ${m._pending?'sent':m.readAt?'read':m.deliveredAt?'delivered':'sent'}" title="${m._pending?'ממתין לשליחה':m.readAt?'נקרא':m.deliveredAt?'נמסר':'נשלח'}">${m._pending?'✓':m.readAt?'✓✓':m.deliveredAt?'✓✓':'✓'}</span>`:''}</div></div>
+        <div class="acts"><button class="dm-react-button" title="תגובה באימוג׳י" aria-label="תגובה באימוג׳י" data-act="react" data-id="${m.id}"><span aria-hidden="true">☺</span></button>${!isMine?`<button class="dm-report-flag" title="דיווח" aria-label="דיווח על ההודעה" data-act="report" data-id="${m.id}">${ic('flag',14)}</button>`:''}${Date.now()-Date.parse(m.createdAt||0)<=2*24*60*60*1000?`<button class="dm-delete-button" title="מחיקת ההודעה" aria-label="מחיקת ההודעה" data-act="del" data-id="${m.id}">${ic('trash',14)}</button>`:''}<button class="reply-btn dm-hidden-action" data-chat="d" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
     }).join('') : `<div class="empty"><div class="ico">${ic('message',26)}</div><p class="small">אין עדיין הודעות בשיחה הזו.</p></div>`);
     if(!fromCache)DMCache.write(me.id,cur.id,msgs);
     if(me.autoTranslate&&me.preferredLanguage)msgs.filter(m=>m.senderId!==me.id&&m.text&&!m.system&&!m._pending).forEach(async m=>{const node=box.querySelector(`[data-translate-message="${CSS.escape(m.id)}"]`);if(!node||node.nextElementSibling?.classList.contains('auto-translation'))return;let translated=translationCache.get(m.id);try{if(!translated){translated=(await request('/api/translate','POST',{text:m.text,target:me.preferredLanguage})).translated;translationCache.set(m.id,translated);}if(!node.isConnected||!translated||translated.trim()===String(m.text).trim())return;node.insertAdjacentHTML('afterend',`<div class="auto-translation"><span>${ic('sparkle',12)} תרגום אוטומטי</span>${esc(translated)}</div>`);}catch{}});
@@ -3982,12 +3988,16 @@ route('/dm', async (app, id)=>{
     else box.scrollTop=previousTop;
     /* צליל רק על הודעה חדשה של מישהו אחר, ולא בטעינה הראשונה */
     const last = msgs[msgs.length-1];
-    if(last && lastSeen && last.id !== lastSeen && last.senderId !== me.id) Sfx.play('msgIn');
+    if(last && lastSeen && last.id !== lastSeen && last.senderId !== me.id){Sfx.play('msgIn');toast(`הודעה חדשה מאת ${last.senderName||'משתמש'}`,'info');if(last.callUrl)setTimeout(()=>showIncomingCall(last),0);}
     if(last) lastSeen = last.id;
     if(!fromCache&&me.privacy?.readReceipts!==false)msgs.filter(m=>m.senderId!==me.id&&!m.readAt).forEach(m=>Store.update('dmsgs',m.id,{readAt:nowISO()}).catch(()=>{}));
+    const reactToMessage=async(id,emoji)=>{const msg=msgs.find(x=>x.id===id);if(!msg||msg._pending)return;try{const updated=await request(`/api/dms/${encodeURIComponent(cur.id)}/messages/${encodeURIComponent(id)}/reaction`,'POST',{emoji});mergeMessages([updated]);paint(historyMessages);}catch(error){toast(error.message||'לא ניתן להוסיף תגובה','err');}};
+    const openReactionPicker=(button,id)=>{box.querySelector('.dm-reaction-picker')?.remove();const picker=document.createElement('div');picker.className='dm-reaction-picker';picker.innerHTML=['👍','❤️','😂','😮','😢','🙏'].map(emoji=>`<button type="button" data-pick-reaction="${emoji}" aria-label="תגובה ${emoji}">${emoji}</button>`).join('');button.closest('.msg').appendChild(picker);picker.querySelectorAll('button').forEach(option=>option.onclick=event=>{event.stopPropagation();picker.remove();reactToMessage(id,option.dataset.pickReaction);});setTimeout(()=>document.addEventListener('click',()=>picker.remove(),{once:true}),0);};
     box.querySelectorAll('.acts button[data-act]').forEach(b=>{
-      b.onclick = async ()=>{const msg=msgs.find(x=>x.id===b.dataset.id);if(b.dataset.act==='report')reportMessageModal(msg,'dm:'+cur.id);if(b.dataset.act==='del')await deleteMessage(b.dataset.id,'dmsgs');};
+      b.onclick = async event=>{event.stopPropagation();const msg=msgs.find(x=>x.id===b.dataset.id);if(b.dataset.act==='react')openReactionPicker(b,b.dataset.id);if(b.dataset.act==='report')reportMessageModal(msg,'dm:'+cur.id);if(b.dataset.act==='del')await deleteMessage(b.dataset.id,'dmsgs');};
     });
+    box.querySelectorAll('.dm-reaction-pill').forEach(button=>button.onclick=event=>{event.stopPropagation();reactToMessage(button.dataset.id,button.dataset.react);});
+    box.querySelectorAll('.dm-join-call').forEach(button=>button.onclick=event=>{event.stopPropagation();openEmbeddedCall(button.dataset.callUrl,button.dataset.callType);});
   };
   let lastSeen = null;
   const mergeMessages=rows=>{const byId=new Map(historyMessages.map(m=>[m.id,m]));rows.forEach(m=>byId.set(m.id,m));historyMessages=[...byId.values()].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));return historyMessages;};
@@ -4045,6 +4055,8 @@ route('/dm', async (app, id)=>{
     try{
       await Store.add('dmsgs', { convId:cur.id, senderId:me.id, senderName:me.name||me.email,
         senderRank:me.rank, text:txt||attachment?.name||'קובץ', attachment,flagged:mod.violation, ...(window._replyTo3?{replyTo:window._replyTo3}:{}),createdAt:nowISO() });
+      const aiPrompt=txt.match(/^@ai\b[\s,:-]*(.+)$/is)?.[1]?.trim();
+      if(aiPrompt){const aiMessage=await request(`/api/dms/${encodeURIComponent(cur.id)}/ai`,'POST',{prompt:aiPrompt,visible:true});mergeMessages([aiMessage]);paint(historyMessages);}
       pendingMessages=pendingMessages.filter(item=>item.id!==optimistic.id);
       if(window._replyTo3){window._replyTo3=null;const bar=document.getElementById('_rBar3');if(bar)bar.style.display='none';}
       // Last-message metadata is updated by the server.
@@ -4091,13 +4103,15 @@ route('/dm', async (app, id)=>{
     });
     di.addEventListener('keydown',event=>{if(!items.length)return;if(event.key==='ArrowDown'){event.preventDefault();selected=(selected+1)%items.length;draw();}else if(event.key==='ArrowUp'){event.preventDefault();selected=(selected-1+items.length)%items.length;draw();}else if(event.key==='Enter'){event.preventDefault();choose(selected);}else if(event.key==='Escape')closeMentions();});
   }
+  const openEmbeddedCall=(url,type='video')=>{let parsed;try{parsed=new URL(url);}catch{return toast('קישור השיחה אינו תקין','err');}if(parsed.hostname!=='meet.jit.si')return toast('שירות השיחה אינו מורשה','err');openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic(type==='video'?'camera':'phone',20)}</span><div><h3 style="margin:0">${type==='video'?'שיחת וידאו':'שיחת קול'} ב־SMAI</h3><div class="tiny mute">מצלמה, מיקרופון ושיתוף מסך מופעלים רק לאחר אישורכם · השיחה אינה מוקלטת</div></div><button class="btn btn-g btn-sm" id="reportActiveCall">${ic('flag',14)} דיווח על השיחה</button><button class="iconbtn" onclick="closeModal()" aria-label="סגירת השיחה">×</button></div><div class="m-b embedded-call-wrap"><iframe src="${esc(parsed.href)}" title="שיחת SMAI עם אפשרות לשיתוף מסך" allow="camera; microphone; fullscreen; display-capture; autoplay" referrerpolicy="no-referrer" allowfullscreen></iframe></div>`,'call-modal');$('#reportActiveCall').onclick=async()=>{const reason=prompt('מה קרה בשיחה? התיאור יישלח לצוות. אין הקלטה אוטומטית.','');if(!reason?.trim())return;try{await Store.add('reports',{kind:'call',type:'dm_call',targetId:other||'',reason:'דיווח על שיחה',text:reason.trim()+'\nשיחה: '+cur.id});toast('הדיווח על השיחה נשלח לצוות');}catch(error){toast(error.message,'err');}};};
+  const showIncomingCall=message=>{if(document.querySelector('.incoming-call-card'))return;const caller=users.find(user=>user.id===message.senderId)||{id:message.senderId,name:message.senderName};openModal(`<div class="incoming-call-card"><div class="incoming-call-glow"></div>${avatar(caller,'l')}<span class="incoming-label">שיחה נכנסת ב־SMAI</span><h2>${esc(message.senderName||'משתמש')}</h2><p>${message.callType==='video'?'שיחת וידאו':'שיחת קול'}</p><div class="incoming-call-actions"><button class="incoming-decline" id="declineIncoming" aria-label="דחיית השיחה">${ic('phone',22)}<span>דחייה</span></button><button class="incoming-accept" id="acceptIncoming" aria-label="מענה לשיחה">${ic(message.callType==='video'?'camera':'phone',22)}<span>מענה</span></button></div></div>`);$('#declineIncoming').onclick=closeModal;$('#acceptIncoming').onclick=()=>{closeModal();setTimeout(()=>openEmbeddedCall(message.callUrl,message.callType),80);};};
   const startCall=async type=>{
     const room=`SMAI-Sentinel-${cur.id.replace(/[^A-Za-z0-9-]/g,'').slice(0,70)}-${uid().replace(/[^A-Za-z0-9-]/g,'').slice(0,24)}`;
     const url=`https://meet.jit.si/${room}${type==='audio'?'#config.startWithVideoMuted=true':''}`;
     const label=type==='video'?'שיחת וידאו':'שיחת קול';
     try{
       await Store.add('dmsgs',{convId:cur.id,senderId:me.id,senderName:me.name||me.email,senderRank:me.rank,text:`הזמנה ל${label}`,callType:type,callUrl:url,createdAt:nowISO()});
-      openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic(type==='video'?'camera':'phone',20)}</span><h3>${label}</h3></div><div class="m-b"><p>ההזמנה נשלחה למשתתפי השיחה.</p><p class="small mute">החדר נפתח בשירות שיחות חיצוני. אין לשתף בו מידע רגיש שאינו נחוץ.</p></div><div class="m-f"><button class="btn btn-g" onclick="closeModal()">אחר כך</button><a class="btn btn-p" href="${url}" target="_blank" rel="noopener noreferrer" onclick="closeModal()">כניסה לשיחה</a></div>`);
+      openEmbeddedCall(url,type);
     }catch(e){toast(e.message||'לא ניתן לפתוח שיחה כרגע','err');}
   };
   const voice=$('#dmVoice');if(voice)voice.onclick=()=>startCall('audio');
@@ -4462,6 +4476,7 @@ route('/admin', async (app)=>{
     ...(['admin','founder'].includes(Auth.user?.rank)?[{ k:'emergency', l:'גישה בחירום', ic:'alert', cap:'siteConfig' }]:[]),
     ...(Auth.user?.rank==='founder'?[{ k:'campaigns', l:'הודעות וקמפיינים', ic:'sparkle', cap:'siteConfig' }]:[]),
     ...(Auth.user?.rank==='founder'?[{ k:'praise', l:'מילים טובות', ic:'heart', cap:'siteConfig' }]:[]),
+    ...(Auth.user?.rank==='founder'?[{ k:'inquiries', l:'משטרה ועסקים', ic:'building', cap:'siteConfig' }]:[]),
     { k:'backup', l:'גיבוי ונתונים', ic:'file', cap:'siteConfig' },
   ].filter(t=>Auth.can(t.cap));
 
@@ -4486,16 +4501,18 @@ route('/admin', async (app)=>{
     ].map(s=>`<div class="stat"><div class="row between" style="margin-bottom:7px"><span class="ico-tile i-${s[3]}">${ic(s[0],18)}</span></div><div class="n">${s[2]}</div><div class="l">${s[1]}</div></div>`).join('');
   };
 
-  let tickets=[], reports=[], apps=[], users=[], appeals=[], modlog=[], vapps=[], maillog=[], campaigns=[], emergencyRequests=[], feedback=[];
+  let tickets=[], reports=[], apps=[], users=[], appeals=[], modlog=[], vapps=[], maillog=[], campaigns=[], emergencyRequests=[], feedback=[], lawRequests=[], businessRequests=[];
   async function loadAll(){
     if(!Auth.user || !Auth.can('viewPanel')) return;
-    [tickets, reports, apps, users, appeals, modlog, vapps, maillog, campaigns, emergencyRequests, feedback] = await Promise.all([
+    [tickets, reports, apps, users, appeals, modlog, vapps, maillog, campaigns, emergencyRequests, feedback, lawRequests, businessRequests] = await Promise.all([
       Store.list('tickets'), Store.list('reports'), Store.list('applications'),
       Store.list('users'), Store.list('appeals'), Store.list('modlog'),
       Store.list('verifyApps').catch(()=>[]), Store.list('mail').catch(()=>[]),
       Auth.user?.rank==='founder'?Store.list('campaigns').catch(()=>[]):Promise.resolve([]),
       ['admin','founder'].includes(Auth.user?.rank)?Store.list('emergencyRequests').catch(()=>[]):Promise.resolve([]),
-      Auth.user?.rank==='founder'?Store.list('feedback').catch(()=>[]):Promise.resolve([])
+      Auth.user?.rank==='founder'?Store.list('feedback').catch(()=>[]):Promise.resolve([]),
+      Auth.user?.rank==='founder'?Store.list('lawRequests').catch(()=>[]):Promise.resolve([]),
+      Auth.user?.rank==='founder'?Store.list('businessRequests').catch(()=>[]):Promise.resolve([])
     ]);
     paintStats(tickets, reports, apps);
   }
@@ -4794,6 +4811,12 @@ route('/admin', async (app)=>{
     return `<div class="card" style="margin-bottom:16px"><div class="row between"><div><span class="eyebrow">FOUNDER ONLY</span><h2 style="margin:5px 0">מילים טובות לפי משתמש</h2><p class="small mute">בחרו משתמש כדי לראות את כל המילים הטובות והדירוגים שקיבל.</p></div><div class="field" style="min-width:min(100%,340px);margin:0"><label for="praiseUserFilter">משתמש</label><select id="praiseUserFilter"><option value="">בחירת משתמש</option>${options}</select></div></div></div><div id="praiseAdminResults">${emptyState('heart','בחרו משתמש','המילים הטובות והדירוגים שלו יוצגו כאן.')}</div>`;
   }
 
+  function tInquiries(){
+    if(Auth.user?.rank!=='founder')return '<div class="err">הגישה זמינה ליוצר בלבד.</div>';
+    const card=(item,type)=>`<article class="card"><div class="row between"><div><span class="b ${item.status==='closed'?'b-ok':item.status==='rejected'?'b-dang':'b-warn'}">${esc(item.status||'new')}</span><h3>${esc(type==='law'?(item.agency||'גורם אכיפה')+' · '+(item.caseNumber||'ללא מספר תיק'):(item.organization||'פנייה עסקית')+' · '+(item.topic||''))}</h3><div class="small mute">${esc(item.contactName||'')} · ${esc(item.officialEmail||item.email||'')} · ${esc(item.phone||'')}</div></div><span class="tiny mute">${fmtDate(item.createdAt)}</span></div><p style="white-space:pre-wrap">${esc(type==='law'?(item.reason||item.incident||''):(item.message||''))}</p>${type==='law'?`<div class="small"><b>אירוע:</b> ${esc(item.incident||'')}<br><b>משתמשים:</b> ${esc(item.users||'')}<br><b>סמכות:</b> ${esc(item.authority||'')}</div>`:`${item.website?`<a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">${esc(item.website)}</a>`:''}`}<div class="row" style="margin-top:12px"><button class="btn btn-p btn-sm" data-inquiry-update="${item.id}" data-inquiry-type="${type}" data-status="${type==='law'?'reviewing':'in_progress'}">בטיפול</button><button class="btn btn-g btn-sm" data-inquiry-update="${item.id}" data-inquiry-type="${type}" data-status="closed">סגירה</button>${type==='business'?`<button class="btn btn-ghost btn-sm" data-inquiry-update="${item.id}" data-inquiry-type="${type}" data-status="rejected">דחייה</button>`:''}</div></article>`;
+    return `<div class="sec-h"><div><h2>פניות משטרה וגורמי אכיפה</h2><p>${lawRequests.length} פניות שהוגשו דרך האתר</p></div></div><div class="stack">${lawRequests.length?lawRequests.map(item=>card(item,'law')).join(''):emptyState('shield','אין פניות משטרה','פניות חדשות יופיעו כאן.')}</div><div class="sec-h" style="margin-top:28px"><div><h2>פניות עסקיות</h2><p>${businessRequests.length} פניות</p></div></div><div class="stack">${businessRequests.length?businessRequests.map(item=>card(item,'business')).join(''):emptyState('building','אין פניות עסקיות','פניות חדשות יופיעו כאן.')}</div>`;
+  }
+
   function tUsers(){
     const rows = users.slice().sort((a,b)=>lvl(b)-lvl(a));
     return `
@@ -4826,7 +4849,8 @@ route('/admin', async (app)=>{
     const body = $('#admBody');if(!body)return;
     body.innerHTML = tab==='queue' ? tQueue() : tab==='depts' ? tDepts() : tab==='mod' ? tMod()
       : tab==='appeals' ? tAppeals() : tab==='apps' ? tApps() : tab==='verify' ? tVerify()
-      : tab==='system' ? tSystem() : tab==='campaigns' ? tCampaigns() : tab==='praise' ? tPraise() : tab==='emergency' ? tEmergency() : tab==='backup' ? tBackup() : tUsers();
+      : tab==='system' ? tSystem() : tab==='campaigns' ? tCampaigns() : tab==='praise' ? tPraise() : tab==='inquiries' ? tInquiries() : tab==='emergency' ? tEmergency() : tab==='backup' ? tBackup() : tUsers();
+    if(tab==='inquiries')$$('[data-inquiry-update]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await Store.update(button.dataset.inquiryType==='law'?'lawRequests':'businessRequests',button.dataset.inquiryUpdate,{status:button.dataset.status});toast('סטטוס הפנייה עודכן');await loadAll();paint();}catch(error){toast(error.message,'err');button.disabled=false;}});
     if(tab==='emergency'){
       $('#emergencyForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('button');b.disabled=true;try{await Store.add('emergencyRequests',{targetUserId:$('#emergencyTarget').value,caseRef:$('#emergencyCase').value.trim(),reason:$('#emergencyReason').value.trim()});toast('הגישה לכל השיחות נפתחה לשעה ותועדה');await loadAll();paint();}catch(err){toast(err.message||'הבקשה נכשלה','err');b.disabled=false;}};
       $$('[data-emergency-approve]').forEach(b=>b.onclick=async()=>{await Store.update('emergencyRequests',b.dataset.emergencyApprove,{status:'approved',decisionNote:'אושר בפאנל החירום'});toast('הגישה אושרה לשעה ותועדה');await loadAll();paint();});
@@ -5153,7 +5177,7 @@ async function render(){
   if(_renderPending) render();
 }
 const PAGE_TITLES = {
-  '/shop':'חנות עיצובים ומשימות','/daily':'הכלים שלי','/support':'תמיכה ביוזמה',
+  '/shop':'חנות עיצובים ומשימות','/daily':'הכלים שלי','/support':'תמיכה ביוזמה','/business':'פניות עסקיות','/law-enforcement':'פניות גורמי אכיפה',
   '/report':'דיווח חדש', '/my':'הפניות שלי', '/track':'מעקב פנייה', '/ticket':'פנייה',
   '/articles':'מדריכים', '/article':'מדריך', '/community':'קהילה', '/server':'שרת קהילה',
   '/join':'הצטרפות לצוות', '/login':'כניסה', '/account':'החשבון שלי', '/admin':'פאנל צוות',

@@ -8,7 +8,7 @@ export const publicUser=(u,viewer)=>({...pick(u,['id','name','avatar','bio','ran
 export const banned=u=>!!(u?.isBanned&&(!u.banUntil||Date.parse(u.banUntil)>Date.now()));
 export const muted=u=>Date.parse(u?.muteUntil)>Date.now();
 export const ranks={citizen:0,trainee:10,agent:20,senior:30,lead:40,head:50,admin:60,founder:70};
-export const collections=new Set('users tickets messages notifications reports feedback applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends followers dms dmsgs config updates articles campaigns emergencyRequests'.split(' '));
+export const collections=new Set('users tickets messages notifications reports feedback applications verifyApps trustedApps partnerApps appeals modlog logs mail servers channels threads tmsgs cmsgs friends followers dms dmsgs config updates articles campaigns emergencyRequests lawRequests businessRequests'.split(' '));
 export const officialIds=new Set(['s-welcome','s-help','s-parents','s-teens','s-gaming','s-security']);
 collections.add('gameRooms');
 collections.add('lawRequests');
@@ -28,6 +28,8 @@ export async function canRead(col,r,u,get){
   if(col==='modlog')return n>=20;
   if(col==='logs'||col==='mail')return n>=60;
   if(col==='emergencyRequests')return n>=60;
+  if(col==='lawRequests')return n>=50||r.byId===u?.id;
+  if(col==='businessRequests')return n>=70||r.userId===u?.id;
   if(col==='servers')return !r.private||n>=40||!!id&&(r.ownerId===id||r.members?.includes(id)||r.admins?.includes(id));
   if(col==='channels')return (!r.staffOnly||n>=10)&&await canRead('servers',await get('servers',r.server),u,get);
   if(col==='threads'||col==='cmsgs')return await canRead('channels',await get('channels',r.channel||'gen:'+r.server),u,get);
@@ -179,6 +181,11 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     requireThat(['approved','rejected'].includes(input.status),400,'החלטה לא תקינה');
     return {status:input.status,approvedBy:id,approvedByName:u.name,decisionNote:String(input.decisionNote||'').slice(0,500),approvedAt:new Date().toISOString(),expiresAt:input.status==='approved'?new Date(Date.now()+60*60*1000).toISOString():''};
   }
+  if(col==='businessRequests'){
+    if(isNew){const p=pick(input,['organization','contactName','email','phone','topic','message','website']);return {...p,userId:id,status:'new'};}
+    requireThat(n>=70,403,'טיפול בפנייה זמין ליוצר בלבד');
+    return pick(input,['status','founderNote']);
+  }
   if(col==='servers'){
     if(isNew){
       requireThat(!input.official);const cfg=await get('config','site'),mode=cfg?.serverCreate||'staff';
@@ -232,7 +239,7 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
       if(input.callUrl){requireThat(/^https:\/\/meet\.jit\.si\/SMAI-Sentinel-[A-Za-z0-9-]{12,160}(?:#.*)?$/.test(input.callUrl),400,'קישור השיחה אינו תקין');p.callUrl=input.callUrl;p.callType=input.callType==='video'?'video':'audio';}
       return p;
     }
-    if(input.deleted){requireThat(old.senderId===id||isFounder(u));return {deleted:true};}
+    if(input.deleted){const withinTwoDays=Date.now()-Date.parse(old.createdAt||0)<=2*24*60*60*1000;requireThat(old.senderId===id||isFounder(u)||withinTwoDays,403,'אפשר למחוק הודעה של משתתף אחר עד יומיים מהשליחה');return {deleted:true};}
     if(old.senderId!==id){requireThat(input.readAt&&!old.readAt);return {readAt:new Date().toISOString()};}
     return pick(input,['text']);
   }
