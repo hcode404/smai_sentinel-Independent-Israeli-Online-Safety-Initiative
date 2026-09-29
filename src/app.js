@@ -1229,9 +1229,9 @@ function renderNav(){
   const cur = location.pathname.split('/')[1] || '';
   const items = NAV.map(n=>{
     const on = ('/'+cur) === n.p || (n.p==='/' && !cur);
-    const label=currentLang()==='en'?(NAV_EN[n.p]||n.l):n.l;return `<a href="${n.p}" class="${on?'on':''}" title="${label}" ${on?'aria-current="page"':''}><span class="nav-art">${ic(n.ico,18)}</span><span>${label}</span></a>`;
+    const label=currentLang()==='en'?(NAV_EN[n.p]||n.l):n.l;return `<a href="${n.p}" data-nav="${n.ico}" class="${on?'on':''}" title="${label}" ${on?'aria-current="page"':''}><span class="nav-art">${ic(n.ico,19)}</span><span class="nav-label">${label}</span><i class="nav-arrow">${ic('chevron',12)}</i></a>`;
   });
-  if(Auth.isStaff()) items.push(`<a href="/admin" class="${cur==='admin'?'on':''}">${ic('shield',14)} פאנל צוות</a>`);
+  if(Auth.isStaff()) items.push(`<a href="/admin" data-nav="admin" class="${cur==='admin'?'on':''}"><span class="nav-art">${ic('shield',19)}</span><span class="nav-label">פאנל צוות</span><i class="nav-arrow">${ic('chevron',12)}</i></a>`);
   $('#nav').innerHTML = `<i class="nav-glider" aria-hidden="true"></i><form id="userQuickSearch" class="nav-user-search" role="search"><input id="userQuickName" aria-label="חיפוש משתמש לפי שם מדויק" placeholder="חיפוש שם משתמש מדויק"><button class="iconbtn" aria-label="חיפוש">${ic('search',15)}</button></form>`+items.join('');
   const nav=$('#nav'),glider=$('.nav-glider',nav),active=$('a.on',nav);const placeGlider=el=>{if(!el||!glider)return;glider.style.transform=`translateY(${el.offsetTop}px)`;glider.style.height=el.offsetHeight+'px';glider.style.opacity='1';};requestAnimationFrame(()=>placeGlider(active));
   $$('a[href]',nav).forEach(link=>link.addEventListener('click',event=>{if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||link.target)return;const href=link.getAttribute('href');if(!href||href.startsWith('#'))return;event.preventDefault();placeGlider(link);nav.classList.add('nav-switching');setTimeout(()=>{location.href=href;},150);}));
