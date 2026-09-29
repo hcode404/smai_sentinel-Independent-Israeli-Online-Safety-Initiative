@@ -158,7 +158,19 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     if(isNew){const p={...input};for(const key of ['id','rank','rankLvl','isOwner'])delete p[key];return {...p,userId:id,status:'pending'};}
     requireThat(n>=40);return pick(input,['status','note','reviewNote','reviewedAt']);
   }
-  if(col==='config'){requireThat(n>=60);return pick(input,['serverCreate','welcome','announcement','registrationOpen','maintenance','autoAI','replyHours','chatMaxLen','integrationPromptSeenAt']);}
+  if(col==='config'){
+    requireThat(n>=60);
+    const allowed=['serverCreate','welcome','announcement','registrationOpen','maintenance','autoAI','replyHours','chatMaxLen','integrationPromptSeenAt'];
+    if(Object.hasOwn(input,'siteLocked')||Object.hasOwn(input,'siteLockTitle')||Object.hasOwn(input,'siteLockMessage')){
+      requireThat(isFounder(u),403,'רק יוצר האתר יכול לנעול את האתר');
+      allowed.push('siteLocked','siteLockTitle','siteLockMessage');
+    }
+    const config=pick(input,allowed);
+    if(Object.hasOwn(config,'siteLocked'))config.siteLocked=config.siteLocked===true;
+    if(Object.hasOwn(config,'siteLockTitle'))config.siteLockTitle=String(config.siteLockTitle||'').trim().slice(0,100);
+    if(Object.hasOwn(config,'siteLockMessage'))config.siteLockMessage=String(config.siteLockMessage||'').trim().slice(0,1200);
+    return config;
+  }
   if(col==='updates'){requireThat(n>=60);return pick(input,['version','name','description','changelog','category','releasedAt']);}
   if(col==='articles'){requireThat(n>=60);return pick(input,['title','sum','body','dept','tags','read']);}
   if(col==='campaigns'){

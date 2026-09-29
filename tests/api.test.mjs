@@ -24,6 +24,14 @@ function fixture(){
  return {DB,env,call,db:database(env)};
 }
 const ticket={title:'דיווח בדיקה',description:'זהו דיווח בדיקה מקומי לצורך בדיקת התוכנה בלבד',dept:'other'};
+test('only the founder can lock the site and the public lock message is readable',async()=>{
+ const {call,DB}=fixture();try{
+  assert.equal((await call('records/config/site','PATCH',{siteLocked:true,siteLockTitle:'תחזוקה מתוכננת',siteLockMessage:'נחזור בקרוב'},'alice')).status,403);
+  assert.ok([200,201].includes((await call('records/config/site','PATCH',{siteLocked:true,siteLockTitle:'תחזוקה מתוכננת',siteLockMessage:'נחזור בקרוב'},'owner')).status));
+  const publicState=await call('public-config','GET',undefined,null);
+  assert.equal(publicState.status,200);assert.equal(publicState.data.siteLocked,true);assert.equal(publicState.data.siteLockTitle,'תחזוקה מתוכננת');assert.equal(publicState.data.siteLockMessage,'נחזור בקרוב');
+ }finally{DB.close();}
+});
 test('donation configuration is owner-only, public-readable and validates payment links',async()=>{
  const {call,DB}=fixture();try{
   assert.equal((await call('donations','GET',undefined,null)).data.url,'');

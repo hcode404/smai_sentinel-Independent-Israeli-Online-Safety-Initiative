@@ -1749,7 +1749,10 @@ const CFG_DEFAULT = {
   serverCreate: 'staff',   // מי רשאי לפתוח שרת: staff | verified | all
   chatMaxLen: 2000,
   threadMaxLen: 4000,
-  autoBackup: true
+  autoBackup: true,
+  siteLocked: false,
+  siteLockTitle: 'SMAI Sentinel בתחזוקה',
+  siteLockMessage: 'אנחנו מבצעים כרגע עבודות תחזוקה ושיפור. האתר יחזור לפעילות בהקדם.'
 };
 const CFG = {
   _v: null,
@@ -1762,8 +1765,7 @@ const CFG = {
   get(k){ return this.cache()[k]; },
   async load(){
     try{
-      const rows = await Store.list('config');
-      const row = rows.find(r=>r.id==='site');
+      const row = await request('/api/public-config');
       if(row){ this._v = { ...CFG_DEFAULT, ...row }; localStorage.setItem('smai_cfg', JSON.stringify(this._v)); }
     }catch(e){}
     return this.cache();
@@ -4056,16 +4058,16 @@ route('/dm', async (app, id)=>{
         byName:'SMAI AI', status:'pending', createdAt:nowISO() });
       return;
     }
-    if(!isGroup(cur) && other){
-      const rels = await Friends.mine(me.id);
-      if(!dmAllowed(rels, me.id, other)){ toast('לא ניתן לשלוח הודעה למשתמש הזה','err'); return; }
-    }
+    // The server is authoritative for membership, blocks and DM permissions.
+    // Do not make sending depend on loading the full friends collection first:
+    // that auxiliary list can be unavailable while the room itself is healthy.
     const attachment=draftAttachment;draftAttachment=null;if(attachmentPreview)attachmentPreview.innerHTML='';if(draftPreviewUrl){URL.revokeObjectURL(draftPreviewUrl);draftPreviewUrl='';}
     const optimistic={id:'pending-'+uid(),convId:cur.id,senderId:me.id,senderName:me.name||me.email,senderRank:me.rank,text:txt||attachment?.name||'קובץ',attachment,createdAt:nowISO(),_pending:true};
     pendingMessages.push(optimistic);inp.value='';paint(lastServerMessages);inp.disabled = true;
     try{
-      await Store.add('dmsgs', { convId:cur.id, senderId:me.id, senderName:me.name||me.email,
+      const saved=await Store.add('dmsgs', { convId:cur.id, senderId:me.id, senderName:me.name||me.email,
         senderRank:me.rank, text:txt||attachment?.name||'קובץ', attachment,flagged:mod.violation, ...(window._replyTo3?{replyTo:window._replyTo3}:{}),createdAt:nowISO() });
+      mergeMessages([saved]);
       const aiPrompt=txt.match(/^@ai\b[\s,:-]*(.+)$/is)?.[1]?.trim();
       if(aiPrompt){const aiMessage=await request(`/api/dms/${encodeURIComponent(cur.id)}/ai`,'POST',{prompt:aiPrompt,visible:true});mergeMessages([aiMessage]);paint(historyMessages);}
       pendingMessages=pendingMessages.filter(item=>item.id!==optimistic.id);
@@ -4489,6 +4491,7 @@ route('/admin', async (app)=>{
     { k:'system', l:'מערכת ומיילים', ic:'settings', cap:'siteConfig' },
     ...(['admin','founder'].includes(Auth.user?.rank)?[{ k:'emergency', l:'גישה בחירום', ic:'alert', cap:'siteConfig' }]:[]),
     ...(Auth.user?.rank==='founder'?[{ k:'campaigns', l:'הודעות וקמפיינים', ic:'sparkle', cap:'siteConfig' }]:[]),
+    ...(Auth.user?.rank==='founder'?[{ k:'siteLock', l:'נעילת האתר', ic:'lock', cap:'siteConfig' }]:[]),
     ...(Auth.user?.rank==='founder'?[{ k:'praise', l:'מילים טובות', ic:'heart', cap:'siteConfig' }]:[]),
     ...(Auth.user?.rank==='founder'?[{ k:'inquiries', l:'משטרה ועסקים', ic:'building', cap:'siteConfig' }]:[]),
     { k:'backup', l:'גיבוי ונתונים', ic:'file', cap:'siteConfig' },
@@ -4828,6 +4831,12 @@ route('/admin', async (app)=>{
     return `<div class="grid g2">${form}${list}</div>`;
   }
 
+  function tSiteLock(){
+    if(Auth.user?.rank!=='founder')return '<div class="err">נעילת האתר זמינה ליוצר בלבד.</div>';
+    const active=CFG.get('siteLocked')===true;
+    return `<form id="siteLockForm" class="card stack" style="max-width:760px"><div class="row between"><div><span class="eyebrow">FOUNDER ONLY</span><h2>נעילת האתר לכל המשתמשים</h2><p class="small mute">כשהנעילה פעילה, רק חשבון היוצר ממשיך להשתמש באתר. עמוד הכניסה נשאר זמין כדי שתוכל להיכנס ולבטל אותה.</p></div><span class="b ${active?'b-dang':'b-ok'}">${active?'האתר נעול':'האתר פתוח'}</span></div><label class="check"><input id="siteLocked" type="checkbox" ${active?'checked':''}><span><span class="t">הפעלת נעילת אתר</span><span class="d">כל המשתמשים יוצגו במסך התחזוקה המותאם</span></span></label><div class="field"><label>כותרת מסך הנעילה</label><input id="siteLockTitle" maxlength="100" required value="${esc(CFG.get('siteLockTitle')||'SMAI Sentinel בתחזוקה')}"></div><div class="field"><label>הודעה מותאמת אישית</label><textarea id="siteLockMessage" maxlength="1200" rows="5" required>${esc(CFG.get('siteLockMessage')||'')}</textarea></div><div id="siteLockStatus" class="small mute"></div><button class="btn ${active?'btn-g':'btn-d'}" type="submit">${active?'עדכון או פתיחת האתר':'שמירה והפעלת הנעילה'}</button></form>`;
+  }
+
   function tPraise(){
     if(Auth.user?.rank!=='founder')return '<div class="err">צפייה מרוכזת במילים טובות זמינה ליוצר בלבד.</div>';
     const options=users.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','he')).map(u=>`<option value="${esc(u.id)}">${esc(u.name||u.email)}${isStaffUser(u)?' · '+esc(RANKS[u.rank]?.l||'צוות'):''}</option>`).join('');
@@ -4872,7 +4881,7 @@ route('/admin', async (app)=>{
     const body = $('#admBody');if(!body)return;
     body.innerHTML = tab==='queue' ? tQueue() : tab==='depts' ? tDepts() : tab==='mod' ? tMod()
       : tab==='appeals' ? tAppeals() : tab==='apps' ? tApps() : tab==='verify' ? tVerify()
-      : tab==='system' ? tSystem() : tab==='campaigns' ? tCampaigns() : tab==='praise' ? tPraise() : tab==='inquiries' ? tInquiries() : tab==='emergency' ? tEmergency() : tab==='backup' ? tBackup() : tUsers();
+      : tab==='system' ? tSystem() : tab==='campaigns' ? tCampaigns() : tab==='siteLock' ? tSiteLock() : tab==='praise' ? tPraise() : tab==='inquiries' ? tInquiries() : tab==='emergency' ? tEmergency() : tab==='backup' ? tBackup() : tUsers();
     if(tab==='inquiries')$$('[data-inquiry-update]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await Store.update(button.dataset.inquiryType==='law'?'lawRequests':'businessRequests',button.dataset.inquiryUpdate,{status:button.dataset.status});toast('סטטוס הפנייה עודכן');await loadAll();paint();}catch(error){toast(error.message,'err');button.disabled=false;}});
     if(tab==='emergency'){
       $('#emergencyForm').onsubmit=async e=>{e.preventDefault();const b=e.currentTarget.querySelector('button');b.disabled=true;try{await Store.add('emergencyRequests',{targetUserId:$('#emergencyTarget').value,caseRef:$('#emergencyCase').value.trim(),reason:$('#emergencyReason').value.trim()});toast('הגישה לכל השיחות נפתחה לשעה ותועדה');await loadAll();paint();}catch(err){toast(err.message||'הבקשה נכשלה','err');b.disabled=false;}};
@@ -4884,6 +4893,9 @@ route('/admin', async (app)=>{
       const type=$('#campaignType'),media=$('#campaignMedia'),body=$('#campaignBody');if(type&&!type.querySelector('[value="text"]'))type.insertAdjacentHTML('afterbegin','<option value="text">טקסט בלבד</option>');if(media)media.required=false;if(body){body.maxLength=1000;body.insertAdjacentHTML('afterend','<button class="btn btn-g btn-sm" type="button" id="campaignAddLink">הוספת קישור לטקסט המסומן</button>');$('#campaignAddLink').onclick=()=>{const label=body.value.slice(body.selectionStart,body.selectionEnd)||'כאן',url=prompt('כתובת HTTPS לקישור:','https://');if(!url||!/^https:\/\//.test(url))return;body.setRangeText(`[${label}](${url})`,body.selectionStart,body.selectionEnd,'end');body.focus();};}
       $('#campaignForm').onsubmit=async e=>{e.preventDefault();const val=id=>$('#'+id).value;await Store.add('campaigns',{title:val('campaignTitle').trim(),body:val('campaignBody').trim(),mediaType:val('campaignType'),mediaUrl:val('campaignMedia').trim(),linkUrl:val('campaignLink').trim(),audience:val('campaignAudience'),placement:val('campaignPlacement'),startAt:val('campaignStart')?new Date(val('campaignStart')).toISOString():'',endAt:val('campaignEnd')?new Date(val('campaignEnd')).toISOString():'',seconds:Number(val('campaignSeconds')),frequency:val('campaignFrequency'),active:$('#campaignActive').checked,notifyUsers:$('#campaignNotify').checked});toast('ההודעה פורסמה');await loadAll();paint();};
       $$('[data-campaign-toggle]').forEach(b=>b.onclick=async()=>{await Store.update('campaigns',b.dataset.campaignToggle,{active:b.dataset.active!=='1'});await loadAll();paint();});
+    }
+    if(tab==='siteLock'){
+      $('#siteLockForm').onsubmit=async event=>{event.preventDefault();const button=event.currentTarget.querySelector('[type=submit]'),status=$('#siteLockStatus'),locked=$('#siteLocked').checked;button.disabled=true;status.textContent='שומר…';try{await CFG.set({siteLocked:locked,siteLockTitle:$('#siteLockTitle').value.trim(),siteLockMessage:$('#siteLockMessage').value.trim()});status.textContent=locked?'האתר ננעל. חשבון היוצר נשאר פעיל.':'הנעילה בוטלה והאתר פתוח לכולם.';toast(status.textContent,locked?'warn':'ok');paint();}catch(error){status.textContent=error.message||'השמירה נכשלה';button.disabled=false;}};
     }
     if(tab==='praise'){
       const select=$('#praiseUserFilter');select.onchange=()=>{const uid=select.value,target=users.find(u=>u.id===uid),rows=feedback.filter(x=>(x.targetId||x.staffId)===uid).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));$('#praiseAdminResults').innerHTML=!uid?emptyState('heart','בחרו משתמש','המילים הטובות והדירוגים שלו יוצגו כאן.'):rows.length?`<div class="sec-h"><div><h2>${esc(target?.name||target?.email||'משתמש')}</h2><p>${rows.length} פריטי משוב חיובי ודירוג</p></div></div><div class="stack">${rows.map(x=>`<article class="card"><div class="row between"><span class="b ${x.kind==='ticket_rating'?'b-warn':'b-ok'}">${x.kind==='ticket_rating'?`דירוג ${x.rating}/5`:'מילה טובה'}</span><span class="tiny mute">${fmtDate(x.createdAt)} ${fmtTime(x.createdAt)}</span></div>${x.kind==='ticket_rating'?`<div class="rating-stars" aria-label="${x.rating} מתוך 5">${[1,2,3,4,5].map(n=>`<span class="${n<=x.rating?'on':''}">★</span>`).join('')}</div>`:''}<p>${esc(x.text)}</p>${x.ticketCode?`<a class="btn btn-g btn-sm" href="/ticket/${encodeURIComponent(x.ticketId)}">פתיחת פנייה ${esc(x.ticketCode)}</a>`:''}</article>`).join('')}</div>`:emptyState('heart','אין עדיין מילים טובות','המשתמש עדיין לא קיבל מילה טובה או דירוג טיפול.');};
@@ -5175,6 +5187,14 @@ async function render(){
   document.body.classList.toggle('is-auth', path === '/login');
   app.classList.toggle('admin-workspace',path==='/admin');
 
+  const founderAccess=Auth.user?.rank==='founder'||Auth.user?.isOwner===true;
+  if(CFG.get('siteLocked')===true&&!founderAccess&&path!=='/login'){
+    const title=CFG.get('siteLockTitle')||'SMAI Sentinel בתחזוקה';
+    const message=CFG.get('siteLockMessage')||'האתר סגור זמנית לצורך תחזוקה ושיפור.';
+    app.innerHTML=`<section class="site-lock-screen"><div class="site-lock-glow"></div><div class="site-lock-card anim-up"><span class="site-lock-icon">${ic('lock',34)}</span><span class="eyebrow">SMAI SENTINEL · SYSTEM LOCK</span><h1>${esc(title)}</h1><p>${esc(message).replace(/\n/g,'<br>')}</p><div class="site-lock-status"><i></i> הגישה מוגבלת זמנית על ידי יוצר האתר</div><a class="btn btn-p" href="/login">כניסת היוצר</a></div></section>`;
+    document.title=title+' · '+SITE.name;RENDERING=false;return;
+  }
+
   // חסימת מורחקים מכל האתר למעט מסכי מידע
   if(Auth.user && Auth.banInfo() && !['/privacy','/terms','/login','/'].includes(path)){
     window.scrollTo({top:0}); if(renderBanned(app)){ RENDERING = false; return; }
@@ -5359,7 +5379,8 @@ function initInstallApp(){
 /* Boot never writes demo data or bypasses authentication. */
 (async function boot(){
  initTheme();initLanguage();initSfx();initBurger();initNotif();initInstallApp();initNativeApp().catch(()=>{});renderFooter();$('#demoStrip').style.display='none';
- try{await Auth.refresh();await CFG.load();}catch(e){toast(e.message,'warn');}
+ try{await Auth.refresh();}catch(e){if(firebaseUser())toast(e.message,'warn');}
+ try{await CFG.load();}catch(e){toast(e.message,'warn');}
  Presence.init();
  const navigate=path=>{history.pushState(null,'',path);closeModal();window.scrollTo({top:0});return render();};
  window.navigate=navigate;

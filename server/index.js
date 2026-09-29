@@ -430,6 +430,10 @@ export async function api(req,env,ctx={waitUntil(){}}){
       if(body.requireModel)requireThat(['gemini','workers-ai'].includes(result.mode),503,'ספק ה-AI לא קיבל את הבקשה. יש לבדוק את המפתח, המודל והמכסה בשרת.');
       return json(result);
     }
+    if(path==='/api/public-config'&&req.method==='GET'){
+      const config=await db.get('config','site')||{};
+      return json({siteLocked:config.siteLocked===true,siteLockTitle:String(config.siteLockTitle||'').slice(0,100),siteLockMessage:String(config.siteLockMessage||'').slice(0,1200)});
+    }
     requireThat(u,401,'יש להתחבר כדי להמשיך');
     const dmMessagesMatch=path.match(/^\/api\/dms\/([^/]+)\/messages$/);
     if(dmMessagesMatch&&req.method==='GET'){
@@ -782,8 +786,10 @@ export async function api(req,env,ctx={waitUntil(){}}){
       try{await db.put('dms',{...conv,lastText:rec.text.slice(0,60),lastAt:rec.createdAt},conv);}catch{}
       for(const member of conv?.members||[]){
         if(member===u.id)continue;
-        await db.put('notifications',{id:nonce(),userId:member,messageId:rec.id,type:rec.callUrl?'callInvite':'directMessage',title:rec.callUrl?(rec.callType==='video'?'הזמנה לשיחת וידאו':'הזמנה לשיחת קול'):`הודעה חדשה מ־${u.name}`,text:rec.callUrl?'לחצו כדי להצטרף לשיחה':rec.text.slice(0,180),href:`/dm/${conv.id}`,read:false,createdAt:now()});
-        if(conv.kind==='direct'&&conv.dmAccepted===false)scheduleMail(ctx,sendUserMail(env,await db.get('users',member),'dmRequest',{sender:u.name,text:rec.text.slice(0,500),convId:conv.id}));
+        try{
+          await db.put('notifications',{id:nonce(),userId:member,messageId:rec.id,type:rec.callUrl?'callInvite':'directMessage',title:rec.callUrl?(rec.callType==='video'?'הזמנה לשיחת וידאו':'הזמנה לשיחת קול'):`הודעה חדשה מ־${u.name}`,text:rec.callUrl?'לחצו כדי להצטרף לשיחה':rec.text.slice(0,180),href:`/dm/${conv.id}`,read:false,createdAt:now()});
+          if(conv.kind==='direct'&&conv.dmAccepted===false)scheduleMail(ctx,sendUserMail(env,await db.get('users',member),'dmRequest',{sender:u.name,text:rec.text.slice(0,500),convId:conv.id}));
+        }catch(error){console.warn(JSON.stringify({event:'dm_notification_deferred',convId:rec.convId,messageId:rec.id,error:String(error?.message||error).slice(0,160)}));}
       }
     }
     if(rank(u)>=10&&col!=='logs'){
