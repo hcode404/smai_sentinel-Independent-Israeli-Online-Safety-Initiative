@@ -477,7 +477,8 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const recent=(await db.chatList(convId,'',24)||[]).filter(message=>!message.deleted&&!message.system&&message.text).slice(-16);
       const transcript=recent.map(message=>`${message.senderName||'משתמש'}: ${String(message.text).slice(0,700)}`).join('\n');
       const requestText=`אתה עוזר SMAI בתוך שיחה פרטית. ענה בקצרה ובזהירות על השאלה, בהתבסס רק על קטע השיחה המצורף. אל תחשוף מידע שלא מופיע בו ואל תטען שאתה אדם.\n\nקטע שיחה:\n${transcript}\n\nשאלה מאת ${u.name}: ${prompt}`;
-      const result=await generate(env,requestText,[]);
+      const privateHistory=Array.isArray(payload?.history)?payload.history.slice(-8).filter(item=>item&&['user','model'].includes(item.role)&&typeof item.text==='string').map(item=>({role:item.role,text:item.text.slice(0,1500)})):[];
+      const result=await generate(env,requestText,privateHistory);
       if(!visible)return json({text:result.text,mode:result.mode});
       const answer={id:nonce(),convId,text:result.text,senderId:'smai-ai',senderName:'SMAI AI',senderRank:'system',system:false,ai:true,replyTo:{id:'',text:prompt,sender:u.name},createdAt:now(),deliveredAt:now()};
       await db.put('dmsgs',answer,null);
@@ -664,6 +665,12 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     for(const key of ['name','senderName','authorName','ico','cat','rank'])if(typeof rec[key]==='string')rec[key]=rec[key].replace(/[<>"'&]/g,'').slice(0,100);
     await db.put(col,rec,old);
+    if(['dmsgs','messages','cmsgs','tmsgs'].includes(col)&&old&&rec.deleted){
+      const notifications=await db.list('notifications');
+      const href=col==='dmsgs'?`/dm/${old.convId}`:col==='messages'?`/ticket/${old.ticketId}`:'';
+      const stale=notifications.filter(item=>item.messageId===rec.id||!item.messageId&&href&&item.href===href&&['directMessage','mention','ticketReply'].includes(item.type)&&String(item.text||'').includes(String(old.text||'').slice(0,120)));
+      await Promise.all(stale.map(item=>db.remove('notifications',item.id)));
+    }
     if(col==='feedback'&&!old){
       const target=await db.get('users',rec.targetId||rec.staffId);
       const praise=['praise','staff_praise'].includes(rec.kind);
@@ -701,7 +708,7 @@ export async function api(req,env,ctx={waitUntil(){}}){
       const targetId=rec.staffSide?ticket?.reporterId:ticket?.assignedTo;
       const target=targetId&&targetId!==u.id?await db.get('users',targetId):null;
       if(target){
-        await db.put('notifications',{id:nonce(),userId:target.id,ticketId:ticket.id,type:'ticketReply',title:`תשובה חדשה בפנייה ${ticket.code||''}`,text:`${rec.senderName||'צוות SMAI'}: ${rec.text.slice(0,180)}`,read:false,createdAt:now()});
+        await db.put('notifications',{id:nonce(),userId:target.id,ticketId:ticket.id,messageId:rec.id,type:'ticketReply',title:`תשובה חדשה בפנייה ${ticket.code||''}`,text:`${rec.senderName||'צוות SMAI'}: ${rec.text.slice(0,180)}`,href:`/ticket/${ticket.id}`,read:false,createdAt:now()});
         scheduleMail(ctx,sendUserMail(env,target,'ticketReply',{ticketId:ticket.id,code:ticket.code,title:ticket.title,sender:rec.senderName,text:rec.text.slice(0,1200)}));
       }
     }
@@ -735,7 +742,7 @@ export async function api(req,env,ctx={waitUntil(){}}){
         if(mentioned.id===u.id||!mentioned.name||!lower.includes('@'+mentioned.name.toLocaleLowerCase('he')))continue;
         if(!await canRead(col,rec,mentioned,db.get))continue;
         const href=col==='tmsgs'?`/thread/${rec.thread}`:col==='cmsgs'?`/server/${rec.server}`:col==='dmsgs'?`/dm/${rec.convId}`:`/ticket/${rec.ticketId}`;
-        await db.put('notifications',{id:nonce(),userId:mentioned.id,type:'mention',title:`${u.name} תייג/ה אותך`,text:rec.text.slice(0,180),href,read:false,createdAt:now()});
+        await db.put('notifications',{id:nonce(),userId:mentioned.id,messageId:rec.id,type:'mention',title:`${u.name} תייג/ה אותך`,text:rec.text.slice(0,180),href,read:false,createdAt:now()});
         if(!mailed.has(mentioned.id)){mailed.add(mentioned.id);scheduleMail(ctx,sendUserMail(env,mentioned,'mention',{sender:u.name,where:col==='dmsgs'?'שיחה פרטית':col==='messages'?'פנייה':col==='tmsgs'?'שרשור קהילתי':'צ׳אט קהילתי',text:rec.text.slice(0,1200),href}));}
       }
     }
@@ -745,7 +752,7 @@ export async function api(req,env,ctx={waitUntil(){}}){
       try{await db.put('dms',{...conv,lastText:rec.text.slice(0,60),lastAt:rec.createdAt},conv);}catch{}
       for(const member of conv?.members||[]){
         if(member===u.id)continue;
-        await db.put('notifications',{id:nonce(),userId:member,type:rec.callUrl?'callInvite':'directMessage',title:rec.callUrl?(rec.callType==='video'?'הזמנה לשיחת וידאו':'הזמנה לשיחת קול'):`הודעה חדשה מ־${u.name}`,text:rec.callUrl?'לחצו כדי להצטרף לשיחה':rec.text.slice(0,180),href:`/dm/${conv.id}`,read:false,createdAt:now()});
+        await db.put('notifications',{id:nonce(),userId:member,messageId:rec.id,type:rec.callUrl?'callInvite':'directMessage',title:rec.callUrl?(rec.callType==='video'?'הזמנה לשיחת וידאו':'הזמנה לשיחת קול'):`הודעה חדשה מ־${u.name}`,text:rec.callUrl?'לחצו כדי להצטרף לשיחה':rec.text.slice(0,180),href:`/dm/${conv.id}`,read:false,createdAt:now()});
         if(conv.kind==='direct'&&conv.dmAccepted===false)scheduleMail(ctx,sendUserMail(env,await db.get('users',member),'dmRequest',{sender:u.name,text:rec.text.slice(0,500),convId:conv.id}));
       }
     }
