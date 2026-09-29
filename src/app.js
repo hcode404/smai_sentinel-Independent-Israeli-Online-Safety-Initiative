@@ -3901,7 +3901,7 @@ route('/dm', async (app, id)=>{
         ${isGroup(cur)
           ? `<button class="btn btn-ghost btn-sm" id="dmMem">${ic('users',14)} משתתפים</button>`
           : `<button class="btn btn-ghost btn-sm" id="dmProf">${ic('user',14)} פרופיל</button>`}
-        <button class="iconbtn" id="dmLatest" title="להודעה האחרונה" aria-label="מעבר להודעה האחרונה">↓</button>
+        <button class="iconbtn dm-jump-latest" id="dmLatest" title="להודעה האחרונה" aria-label="מעבר להודעה האחרונה">${ic('chevron',17)}</button>
         <button class="iconbtn" id="dmVoice" title="שיחת קול" aria-label="התחלת שיחת קול">${ic('phone',17)}</button>
         <button class="iconbtn" id="dmVideo" title="שיחת וידאו" aria-label="התחלת שיחת וידאו">${ic('camera',17)}</button>
       </div>
@@ -3941,14 +3941,17 @@ route('/dm', async (app, id)=>{
   const rejectDm=$('#rejectDm');if(rejectDm)rejectDm.onclick=async()=>{rejectDm.disabled=true;try{await Friends.block(other);toast('הבקשה נחסמה');location.hash='#/dm';render();}catch(e){toast(e.message||'לא ניתן לחסום','err');rejectDm.disabled=false;}};
 
   const box = $('#dchat');
-  $('#dmLatest').onclick=()=>{box.scrollTop=box.scrollHeight;};
+  const jumpLatest=$('#dmLatest');
+  const updateJumpLatest=()=>{if(!box||!jumpLatest)return;const away=box.scrollHeight-box.scrollTop-box.clientHeight>140;jumpLatest.classList.toggle('show',away);};
+  jumpLatest.onclick=()=>{box.scrollTo({top:box.scrollHeight,behavior:'smooth'});jumpLatest.classList.remove('show');};
+  box.addEventListener('scroll',updateJumpLatest,{passive:true});
   let pendingMessages=[],lastServerMessages=[],historyMessages=[],draftAttachment=null,chatReady=false,hasOlder=false,syncTimer=null;const translationCache=new Map();
   const setSyncState=(label,state='')=>{const node=$('#dmSyncState');if(node){node.textContent=label;node.className='dm-sync-state '+state;}};
   const enableChat=()=>{if(chatReady)return;chatReady=true;const input=$('#din'),send=$('#dbtn'),attach=$('#dmAttach');if(input){input.disabled=false;input.placeholder='הודעה פרטית... (Enter לשליחה)';}if(send)send.disabled=false;if(attach){attach.disabled=false;attach.title='העלאת תמונה, סרטון או קובץ';}};
   const scrollDmToLatest=()=>{
     if(!box||$('#dchat')!==box)return;
-    box.scrollTop=box.scrollHeight;
-    requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;});});
+    box.scrollTop=box.scrollHeight;jumpLatest?.classList.remove('show');
+    requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;updateJumpLatest();});});
   };
   let paintedSignature='';
   const paint = (list,{fromCache=false,keepScroll=false}={})=>{
