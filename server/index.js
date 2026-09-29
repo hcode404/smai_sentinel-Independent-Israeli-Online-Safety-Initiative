@@ -181,6 +181,16 @@ export function database(env){
     if(!response.ok)throw new Error('chat room import failed');
     return (await response.json()).count;
   };
+  const chatMigrationComplete=async convId=>{
+    const room=chatRoom(convId);if(!room)return false;
+    const response=await room.fetch(new Request('https://chat-room/migration'));
+    return response.ok&&(await response.json()).complete===true;
+  };
+  const chatMarkMigrationComplete=async convId=>{
+    const room=chatRoom(convId);if(!room)return false;
+    const response=await room.fetch(new Request('https://chat-room/migration/complete',{method:'POST'}));
+    return response.ok;
+  };
   const get=async(col,id)=>{
     if(!id)return null;
     // New chat messages are indexed in KV by id so edits/deletes never need a
@@ -212,7 +222,7 @@ export function database(env){
   };
   const list=async col=>{let primary=[];try{const r=await env.DB.prepare('SELECT data,id,version FROM records WHERE collection=? ORDER BY created_at DESC LIMIT 10000').bind(col).all();primary=r.results.map(x=>({...JSON.parse(x.data),id:x.id,_version:x.version}));}catch(error){if(!env.BACKUP||!backedUp.has(col))throw error;}const backup=await backupList(col);const merged=new Map(primary.map(x=>[x.id,x]));for(const row of backup){const current=merged.get(row.id);if(!current||String(row.updatedAt||row.createdAt||'')>=String(current.updatedAt||current.createdAt||''))merged.set(row.id,row);}return [...merged.values()].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));};
   const remove=async(col,id)=>{let primaryError;try{await env.DB.prepare('DELETE FROM records WHERE collection=? AND id=?').bind(col,id).run();}catch(error){primaryError=error;}if(env.BACKUP&&backedUp.has(col))await env.BACKUP.delete(backupKey(col,id));else if(primaryError)throw primaryError;};
-  return {get,put,list,remove,statement,chatList,chatCount,chatImport};
+  return {get,put,list,remove,statement,chatList,chatCount,chatImport,chatMigrationComplete,chatMarkMigrationComplete};
 }
 const firebaseKeys=createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 async function identity(req,env,db,ctx){
@@ -430,16 +440,35 @@ export async function api(req,env,ctx={waitUntil(){}}){
       let messages=await db.chatList(convId,before,limit)||[];
       // Import legacy history one requested page at a time. Once a page is in
       // its room, following reads are local to that room and no longer touch D1.
-      if(messages.length<limit)try{const legacyBefore=messages[0]?.createdAt||before;const query=legacyBefore
+      const migrationComplete=await db.chatMigrationComplete(convId);
+      if(!migrationComplete&&messages.length<limit)try{const legacyBefore=messages[0]?.createdAt||before;const query=legacyBefore
         ? env.DB.prepare("SELECT data,id,version,created_at FROM records WHERE collection='dmsgs' AND json_extract(data,'$.convId')=? AND created_at<? ORDER BY created_at DESC LIMIT ?").bind(convId,legacyBefore,limit-messages.length)
         : env.DB.prepare("SELECT data,id,version,created_at FROM records WHERE collection='dmsgs' AND json_extract(data,'$.convId')=? ORDER BY created_at DESC LIMIT ?").bind(convId,limit);
         const result=await query.all(),legacy=result.results.map(row=>({...JSON.parse(row.data),id:row.id,_version:row.version})).reverse();
         await db.chatImport(convId,legacy);
+        if(legacy.length<limit-messages.length)await db.chatMarkMigrationComplete(convId);
         const merged=new Map([...legacy,...messages].map(row=>[row.id,row]));
         messages=[...merged.values()].sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||''))).slice(-limit);
-      }catch{if(!messages.length)messages=(await db.list('dmsgs')).filter(row=>row.convId===convId&&(!before||String(row.createdAt)<before)).slice(0,limit).reverse();}
+      }catch(error){console.warn(JSON.stringify({event:'legacy_chat_import_deferred',convId,error:String(error?.message||error).slice(0,160)}));}
       messages=messages.map(row=>safeRecord('dmsgs',row,u));
       return json({messages,hasMore:messages.length===limit});
+    }
+    const dmRecoverMatch=path.match(/^\/api\/dms\/([^/]+)\/recover$/);
+    if(dmRecoverMatch&&req.method==='POST'){
+      const convId=decodeURIComponent(dmRecoverMatch[1]),conv=await db.get('dms',convId);
+      requireThat(conv&&conv.members?.includes(u.id),403,'אין הרשאה לשחזר את השיחה הזו');
+      await limit(env,'dm-recover:'+u.id,8,3600);
+      const payload=await req.json(),candidates=Array.isArray(payload?.messages)?payload.messages.slice(-100):[];
+      const restored=[];
+      for(const cached of candidates){
+        if(!cached||cached.senderId!==u.id||cached.convId!==convId||typeof cached.id!=='string'||typeof cached.text!=='string')continue;
+        if(cached.id.length>100||cached.text.length<1||cached.text.length>12000||!Number.isFinite(Date.parse(cached.createdAt||'')))continue;
+        // Device recovery deliberately restores text only. Attachments and call
+        // links must always be created through their validated server routes.
+        restored.push({id:cached.id,convId,senderId:u.id,senderName:u.name||u.email,senderRank:u.rank,text:cached.text,createdAt:cached.createdAt,deliveredAt:cached.deliveredAt||cached.createdAt});
+      }
+      const count=restored.length?await db.chatImport(convId,restored):0;
+      return json({ok:true,count});
     }
     const dmReactionMatch=path.match(/^\/api\/dms\/([^/]+)\/messages\/([^/]+)\/reaction$/);
     if(dmReactionMatch&&req.method==='POST'){

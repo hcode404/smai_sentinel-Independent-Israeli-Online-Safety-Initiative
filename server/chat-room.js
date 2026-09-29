@@ -76,6 +76,15 @@ export class ChatRoom {
     return rows.length;
   }
 
+  async migrationState() {
+    return {complete: (await this.state.storage.get('legacy-import-complete')) === true};
+  }
+
+  async markMigrationComplete() {
+    await this.state.storage.put('legacy-import-complete', true);
+    return {ok: true};
+  }
+
   async fetch(request) {
     const url = new URL(request.url);
     try {
@@ -90,6 +99,12 @@ export class ChatRoom {
       }
       if (request.method === 'POST' && url.pathname === '/import') {
         return Response.json({count: await this.importMessages(await request.json())});
+      }
+      if (request.method === 'GET' && url.pathname === '/migration') {
+        return Response.json(await this.migrationState());
+      }
+      if (request.method === 'POST' && url.pathname === '/migration/complete') {
+        return Response.json(await this.markMigrationComplete());
       }
       return new Response('Not found', {status: 404});
     } catch (error) {
