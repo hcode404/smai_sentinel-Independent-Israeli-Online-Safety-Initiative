@@ -1205,19 +1205,19 @@ const SEED_MSGS = [
 const NAV = [
   { p:'/',          l:'ראשי',        ico:'home' },
   { p:'/report',    l:'פתיחת דיווח', ico:'shield-alert' },
+  { p:'/community', l:'קהילה',       ico:'message' },
+  { p:'/dm',        l:'הודעות פרטיות', ico:'send' },
+  { p:'/friends',   l:'חברים',       ico:'users' },
   { p:'/my',        l:'הפניות שלי',  ico:'file' },
   { p:'/track',     l:'מעקב פנייה',  ico:'search' },
   { p:'/articles',  l:'מדריכים ומאמרים', ico:'book' },
   { p:'/press',     l:'עובדות',      ico:'info' },
-  { p:'/dm',        l:'הודעות פרטיות', ico:'send' },
-  { p:'/friends',   l:'חברים',       ico:'users' },
   { p:'/games', l:'משחקים', ico:'grid' },
   { p:'/law-enforcement', l:'פניות גורמי אכיפה', ico:'shield' },
   { p:'/business', l:'פניות עסקיות', ico:'building' },
   { p:'/shop', l:'משימות וחנות', ico:'star' },
   { p:'/daily', l:'הכלים שלי', ico:'check' },
   { p:'/support', l:'תמיכה ביוזמה', ico:'heart' },
-  { p:'/community', l:'קהילה',       ico:'message' },
   { p:'/team-praise', l:'מילה טובה', ico:'heart' },
   { p:'/partners', l:'שיתופי פעולה', ico:'link' },
   { p:'/improve',   l:'באגים והצעות', ico:'sparkle' },
@@ -5241,6 +5241,7 @@ function initSfx(){
 }
 function initBurger(){
   const b = $('#burger'), nav = $('#nav');
+  const backdrop=document.createElement('button');backdrop.type='button';backdrop.className='mobile-nav-backdrop';backdrop.setAttribute('aria-label','סגירת התפריט');document.body.appendChild(backdrop);
   const desktop=()=>matchMedia('(min-width:761px)').matches;
   const paint=()=>{
     if(desktop()){
@@ -5251,17 +5252,21 @@ function initBurger(){
       b.setAttribute('aria-label',collapsed?'פתיחת סרגל הניווט':'כיווץ סרגל הניווט');
     }else{
       document.body.classList.remove('sidebar-collapsed');
+      document.body.classList.toggle('mobile-nav-open',nav.classList.contains('open'));
       b.setAttribute('aria-expanded',String(nav.classList.contains('open')));
       b.setAttribute('aria-label',nav.classList.contains('open')?'סגירת התפריט':'פתיחת התפריט');
     }
   };
+  const closeMobileNav=()=>{nav.classList.remove('open');document.body.classList.remove('mobile-nav-open');paint();};
+  backdrop.onclick=closeMobileNav;
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!desktop())closeMobileNav();});
   b.onclick=()=>{
     if(desktop())localStorage.setItem('smai_sidebar_collapsed',document.body.classList.contains('sidebar-collapsed')?'0':'1');
     else nav.classList.toggle('open');
     paint();
   };
-  nav.addEventListener('click',e=>{if(!desktop()&&e.target.closest('a')){nav.classList.remove('open');paint();}});
-  addEventListener('resize',paint,{passive:true});
+  nav.addEventListener('click',e=>{if(!desktop()&&e.target.closest('a'))closeMobileNav();});
+  addEventListener('resize',()=>{if(desktop()){nav.classList.remove('open');document.body.classList.remove('mobile-nav-open');}paint();},{passive:true});
   paint();
 }
 function initNotif(){
