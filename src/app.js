@@ -3213,7 +3213,7 @@ const openMessageMenu=(event,message)=>{
   menu.onclick=async click=>{const action=click.target.closest('[data-cm]')?.dataset.cm;if(!action)return;menu.remove();if(action==='reply')message.querySelector('.reply-btn')?.click();if(action==='report')(message.querySelector('[data-act="report"],[data-ticket-act="report"]'))?.click();if(action==='delete')await deleteMessage(message.dataset.mid,message.dataset.msgCol);if(action==='share'){const text=message.dataset.msgText||'';try{if(navigator.share)await navigator.share({title:'הודעה מ-SMAI',text});else{await navigator.clipboard.writeText(text);toast('ההודעה הועתקה');}}catch{}}if(action==='forward')await forwardMessageModal(message.dataset.msgText||'',message.dataset.msgName||'משתמש');};
   const close=click=>{if(!menu.contains(click.target))menu.remove();document.removeEventListener('click',close);};setTimeout(()=>document.addEventListener('click',close),0);
 };
-document.addEventListener('click',event=>{
+document.addEventListener('contextmenu',event=>{
   const message=event.target.closest('.dm-window .msg[data-mid][data-msg-col]');
   if(!message||event.target.closest('a,button,input,textarea,video,audio')||getSelection()?.toString())return;
   openMessageMenu(event,message);

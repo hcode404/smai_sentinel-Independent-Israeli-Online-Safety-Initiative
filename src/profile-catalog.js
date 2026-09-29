@@ -30,5 +30,5 @@ export const catalog=rows.map(([id,name,category,motion,symbol,a,b,price])=>({id
 export const cosmetic=id=>catalog.find(item=>item.id===id);
 export function profileScene(id,{compact=false}={}){
  const item=cosmetic(id);if(!item)return '<div class="profile-scene scene-default" aria-hidden="true"></div>';
- return `<div class="profile-scene scene-${item.motion} ${compact?'scene-compact':''}" style="--scene-a:${item.a};--scene-b:${item.b}" aria-hidden="true">${item.id==='football'?'<img class="stadium-art" src="/profile-stadium.jpg" alt="" loading="lazy" decoding="async"><span class="goal-ball">⚽</span><span class="goal-celebrate">GOAL!</span>':Array.from({length:8},(_,i)=>`<span class="scene-particle" style="--i:${i}">${item.symbol}</span>`).join('')}<span class="scene-shade"></span></div>`;
+ return `<div class="profile-scene scene-${item.motion} scene-item-${item.id} ${compact?'scene-compact':''}" style="--scene-a:${item.a};--scene-b:${item.b}" aria-hidden="true">${item.id==='football'?'<img class="stadium-art" src="/profile-stadium.jpg" alt="" loading="lazy" decoding="async"><span class="goal-ball">⚽</span><span class="goal-celebrate">GOAL!</span>':Array.from({length:8},(_,i)=>`<span class="scene-particle" style="--i:${i}"></span>`).join('')}<span class="scene-shade"></span></div>`;
 }
