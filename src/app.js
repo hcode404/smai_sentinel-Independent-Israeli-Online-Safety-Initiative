@@ -3198,13 +3198,21 @@ async function forwardMessageModal(text,sender){
   openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('send',18)}</span><h3>העברת הודעה</h3></div><div class="m-b"><div class="reply-quote">${esc(sender)}: ${esc(String(text||'').slice(0,220))}</div><div class="stack" style="margin-top:12px">${conversations.length?conversations.map(c=>`<button class="pick-row" data-forward="${c.id}">${ic('message',15)} ${esc(convTitle(c,me.id,[]))}</button>`).join(''):'<p class="small mute">אין שיחות שאפשר להעביר אליהן.</p>'}</div></div><div class="m-f"><button class="btn btn-g" onclick="closeModal()">ביטול</button></div>`);
   $$('[data-forward]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await Store.add('dmsgs',{convId:button.dataset.forward,text:`הועבר מאת ${sender}:\n${text}`,senderId:me.id,senderName:me.name||me.email,senderRank:me.rank,createdAt:nowISO()});closeModal();toast('ההודעה הועברה');}catch(error){toast(error.message,'err');button.disabled=false;}});
 }
-document.addEventListener('contextmenu',event=>{
-  const message=event.target.closest('.msg[data-mid][data-msg-col]');if(!message)return;event.preventDefault();document.querySelector('.message-context-menu')?.remove();
+const openMessageMenu=(event,message)=>{
+  event.preventDefault();event.stopPropagation();document.querySelector('.message-context-menu')?.remove();
   const mine=message.dataset.msgMine==='1',founder=Auth.user?.rank==='founder'||Auth.user?.isOwner;
   const menu=document.createElement('div');menu.className='message-context-menu';menu.style.left=`${Math.min(event.clientX,innerWidth-210)}px`;menu.style.top=`${Math.min(event.clientY,innerHeight-250)}px`;
-  menu.innerHTML=`<button data-cm="reply">↩ תגובה</button>${!mine?'<button data-cm="report">⚑ דיווח</button>':''}${mine||founder?'<button data-cm="delete">⌫ מחיקה</button>':''}<button data-cm="share">↗ שיתוף</button><button data-cm="forward">➜ העברה</button>`;document.body.appendChild(menu);
+  menu.innerHTML=`<div class="message-menu-head"><span>${ic('message',15)}</span><div><b>פעולות בהודעה</b><small>${esc(message.dataset.msgName||'משתמש')}</small></div></div><div class="message-menu-grid"><button data-cm="reply"><span class="message-menu-icon reply">${ic('message',17)}</span><b>תגובה</b></button>${!mine?`<button data-cm="report"><span class="message-menu-icon report">${ic('flag',17)}</span><b>דיווח</b></button>`:''}${mine||founder?`<button data-cm="delete"><span class="message-menu-icon delete">${ic('trash',17)}</span><b>מחיקה</b></button>`:''}<button data-cm="share"><span class="message-menu-icon share">${ic('send',17)}</span><b>שיתוף</b></button><button data-cm="forward"><span class="message-menu-icon forward">${ic('arrow',17)}</span><b>העברה</b></button></div>`;document.body.appendChild(menu);
   menu.onclick=async click=>{const action=click.target.closest('[data-cm]')?.dataset.cm;if(!action)return;menu.remove();if(action==='reply')message.querySelector('.reply-btn')?.click();if(action==='report')(message.querySelector('[data-act="report"],[data-ticket-act="report"]'))?.click();if(action==='delete')await deleteMessage(message.dataset.mid,message.dataset.msgCol);if(action==='share'){const text=message.dataset.msgText||'';try{if(navigator.share)await navigator.share({title:'הודעה מ-SMAI',text});else{await navigator.clipboard.writeText(text);toast('ההודעה הועתקה');}}catch{}}if(action==='forward')await forwardMessageModal(message.dataset.msgText||'',message.dataset.msgName||'משתמש');};
   const close=click=>{if(!menu.contains(click.target))menu.remove();document.removeEventListener('click',close);};setTimeout(()=>document.addEventListener('click',close),0);
+};
+document.addEventListener('contextmenu',event=>{
+  const message=event.target.closest('.msg[data-mid][data-msg-col]');if(!message)return;openMessageMenu(event,message);
+});
+document.addEventListener('click',event=>{
+  const message=event.target.closest('.dm-window .msg[data-mid][data-msg-col]');
+  if(!message||event.target.closest('a,button,input,textarea,video,audio')||getSelection()?.toString())return;
+  openMessageMenu(event,message);
 });
 
 /* ===================== ערוץ פורום ===================== */
@@ -3812,7 +3820,18 @@ function convTitle(c, meId, users){
   const o = (c.members||[]).find(x=>x!==meId);
   return (users.find(u=>u.id===o)||{}).name || c.names?.[o] || 'משתמש';
 }
-const lastSeenLabel=u=>u?.lastSeenAt?`נראה לאחרונה ${fmtDate(u.lastSeenAt)} · ${fmtTime(u.lastSeenAt)}`:'מצב פעילות מוסתר';
+const lastSeenLabel=u=>{
+  if(!u)return 'מצב פעילות מוסתר';
+  const mode=effectivePresence(u);
+  if(mode==='online')return 'אונליין';
+  if(mode==='afk')return 'לא פעיל/ה כרגע';
+  if(mode==='busy')return 'עסוק/ה';
+  if(!u.lastSeenAt)return 'מצב פעילות מוסתר';
+  const seen=new Date(u.lastSeenAt),today=new Date();
+  const day=new Date(seen.getFullYear(),seen.getMonth(),seen.getDate()),todayDay=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+  const days=Math.round((todayDay-day)/86400000),when=days===0?'היום':days===1?'אתמול':fmtDate(u.lastSeenAt);
+  return `נראה לאחרונה ${when} בשעה ${fmtTime(u.lastSeenAt)}`;
+};
 const DMCache={
   key:(userId,convId)=>`smai_dm_v1_${userId}_${convId}`,
   read(userId,convId){try{const row=JSON.parse(localStorage.getItem(this.key(userId,convId))||'null');if(!row||row.userId!==userId||row.convId!==convId||Date.now()-row.savedAt>30*86400000)return [];return Array.isArray(row.messages)?row.messages:[];}catch{return [];}}
@@ -3848,7 +3867,7 @@ route('/dm', async (app, id)=>{
   ${dmOffline?`<div class="callout c-warn anim-in" style="margin-bottom:12px"><span class="ic">${ic('clock',18)}</span><div><b>תקלה זמנית בשרתים</b><div class="small">מוצגות כרגע שיחות אחרונות שנשמרו במכשיר. נסו שוב מאוחר יותר.</div></div></div>`:''}
   <div class="hub dm-window ${cur?'has-chat':'no-chat'} anim-up">
     <div class="hub-side">
-      <div class="hs-h"><span>${ic('message',16)} שיחות</span>
+      <div class="hs-h"><span class="dm-brand-mark"><b>SMAI</b><small>שיחות</small></span>
         <span class="row" style="gap:4px">
           <button class="iconbtn dm-list-close" id="dmListClose" style="width:30px;height:30px" title="סגירת רשימת השיחות" aria-label="סגירת רשימת השיחות">${ic('x',15)}</button>
           <button class="iconbtn" id="dmGrp" style="width:30px;height:30px" title="קבוצה חדשה">${ic('users',15)}</button>
@@ -3861,11 +3880,11 @@ route('/dm', async (app, id)=>{
           const ou = users.find(u=>u.id===o) || { id:o, name:c.names?.[o]||'משתמש' };
           const av = g ? `<span class="grp-av">${ic('users',16)}</span>` : avatar(ou,'s');
           return `<a class="dm-item ${cur&&c.id===cur.id?'on':''}" href="/dm/${c.id}">
-            ${av}<div style="min-width:0">
-              <div class="nm">${esc(convTitle(c, me.id, users))}
+            ${av}<div class="dm-item-copy">
+              <div class="dm-item-title"><span class="nm">${esc(convTitle(c, me.id, users))}
                 ${g?`<span class="b b-gray" style="font-size:.6rem">${(c.members||[]).length}</span>`
-                   :(ou.verified&&ou.privacy?.showVerified!==false?`<span class="verified">${ic('check',9,3)}</span>`:'')}</div>
-              <div class="lst">${esc(c.lastText||'התחילו לשוחח')}</div>${g?'':`<div class="dm-presence-row">${presenceBadge(ou,true)}<span>${lastSeenLabel(ou)}</span></div>`}</div></a>`;
+                   :(ou.verified&&ou.privacy?.showVerified!==false?`<span class="verified">${ic('check',9,3)}</span>`:'')}</span><time>${c.lastAt?fmtTime(c.lastAt):''}</time></div>
+              <div class="dm-item-preview"><span>${esc(c.lastText||'התחילו לשוחח')}</span>${g?'':`<i class="dm-list-status ${effectivePresence(ou)}" title="${esc(lastSeenLabel(ou))}"></i>`}</div></div></a>`;
         }).join('') : `<div class="tiny mute" style="padding:14px">אין עדיין שיחות פרטיות. אפשר לפתוח שיחה מכל פרופיל בקהילה, או ליצור קבוצה.</div>`}
       </div>
     </div>
@@ -3878,7 +3897,7 @@ route('/dm', async (app, id)=>{
           ${isGroup(cur) ? `<span class="b b-brand" style="font-size:.62rem">קבוצה</span>` : (otherU?rankBadge(otherU.rank):'')}</div>
           <div class="tiny mute dm-chat-presence">${isGroup(cur)
             ? esc((cur.members||[]).map(m=>(users.find(u=>u.id===m)||{}).name || cur.names?.[m] || 'משתמש').join(' · ').slice(0,120))
-            : `${presenceBadge(otherU,true)}<span>שיחה פרטית · ${lastSeenLabel(otherU)}</span>`}</div><div id="dmSyncState" class="dm-sync-state">מתחבר…</div></div>
+            : `<span class="dm-header-status ${effectivePresence(otherU)}">${esc(lastSeenLabel(otherU))}</span>`}</div><div id="dmSyncState" class="dm-sync-state">מתחבר…</div></div>
         ${isGroup(cur)
           ? `<button class="btn btn-ghost btn-sm" id="dmMem">${ic('users',14)} משתתפים</button>`
           : `<button class="btn btn-ghost btn-sm" id="dmProf">${ic('user',14)} פרופיל</button>`}
@@ -3952,7 +3971,7 @@ route('/dm', async (app, id)=>{
         <div class="bub"><div class="who">${esc(m.senderName||'משתמש')} ${rankBadge(m.senderRank)}
           ${m.flagged?`<span class="b b-warn">${ic('flag',10)} נבדק</span>`:''}</div>
           ${m.replyTo?'<div class="reply-quote">↩ '+esc(m.replyTo.sender||'')+': '+esc((m.replyTo.text||'').substring(0,60))+'</div>':''}${attachmentHTML(m.attachment)}<div class="txt" data-translate-message="${esc(m.id)}">${linkify(m.text)}</div>${linkPreviewHTML(m.text)}${m.callUrl?`<a class="btn btn-p btn-sm" href="${esc(m.callUrl)}" target="_blank" rel="noopener noreferrer" style="margin-top:8px">${ic(m.callType==='video'?'camera':'phone',15)} הצטרפות לשיחה</a>`:''}<div class="tm">${fmtTime(m.createdAt)} ${isMine?`<span class="read-receipt ${m._pending?'sent':m.readAt?'read':m.deliveredAt?'delivered':'sent'}" title="${m._pending?'ממתין לשליחה':m.readAt?'נקרא':m.deliveredAt?'נמסר':'נשלח'}">${m._pending?'✓':m.readAt?'✓✓':m.deliveredAt?'✓✓':'✓'}</span>`:''}</div></div>
-        <div class="acts">${!isMine?`<button title="דיווח" data-act="report" data-id="${m.id}">${ic('flag',13)}</button>`:''}<button class="reply-btn" data-chat="d" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
+        <div class="acts">${!isMine?`<button class="dm-report-flag" title="דיווח" aria-label="דיווח על ההודעה" data-act="report" data-id="${m.id}">${ic('flag',14)}</button>`:''}<button class="reply-btn dm-hidden-action" data-chat="d" data-mid="${m.id}" data-mtxt="${esc((m.text||'').substring(0,80))}" data-mname="${esc(m.senderName||'')}">↩</button></div></div>`;
     }).join('') : `<div class="empty"><div class="ico">${ic('message',26)}</div><p class="small">אין עדיין הודעות בשיחה הזו.</p></div>`);
     if(!fromCache)DMCache.write(me.id,cur.id,msgs);
     if(me.autoTranslate&&me.preferredLanguage)msgs.filter(m=>m.senderId!==me.id&&m.text&&!m.system&&!m._pending).forEach(async m=>{const node=box.querySelector(`[data-translate-message="${CSS.escape(m.id)}"]`);if(!node||node.nextElementSibling?.classList.contains('auto-translation'))return;let translated=translationCache.get(m.id);try{if(!translated){translated=(await request('/api/translate','POST',{text:m.text,target:me.preferredLanguage})).translated;translationCache.set(m.id,translated);}if(!node.isConnected||!translated||translated.trim()===String(m.text).trim())return;node.insertAdjacentHTML('afterend',`<div class="auto-translation"><span>${ic('sparkle',12)} תרגום אוטומטי</span>${esc(translated)}</div>`);}catch{}});
