@@ -33,6 +33,10 @@
 			{
 				"name": "CHAT_ROOMS",
 				"class_name": "ChatRoom"
+			},
+			{
+				"name": "FALLBACK_STORE",
+				"class_name": "CollectionStore"
 			}
 		]
 	},
@@ -40,6 +44,10 @@
 		{
 			"tag": "v1-chat-rooms",
 			"new_sqlite_classes": ["ChatRoom"]
+		},
+		{
+			"tag": "v2-collection-store",
+			"new_sqlite_classes": ["CollectionStore"]
 		}
 	],
 	"observability": {

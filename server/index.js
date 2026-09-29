@@ -3,6 +3,7 @@ import {createRemoteJWKSet,jwtVerify} from 'jose';
 import {rewards} from './rewards.js';
 import {connect as tlsConnect} from 'node:tls';
 export {ChatRoom} from './chat-room.js';
+export {CollectionStore} from './collection-store.js';
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const nonce=()=>crypto.randomUUID().replaceAll('-','');
@@ -157,6 +158,11 @@ export function database(env){
     do{const page=await env.BACKUP.list({prefix:`record:${col}:`,...(cursor?{cursor}:{})});cursor=page.list_complete?undefined:page.cursor;const values=await Promise.all(page.keys.map(key=>env.BACKUP.get(key.name,'json')));rows.push(...values.filter(Boolean));}while(cursor&&rows.length<10000);
     return rows;
   };
+  const fallbackRoom=col=>env.FALLBACK_STORE?.getByName(String(col));
+  const fallbackGet=async(col,id)=>{const room=fallbackRoom(col);if(!room)return null;const response=await room.fetch(new Request(`https://collection-store/record/${encodeURIComponent(id)}`));if(!response.ok)throw new Error('fallback get failed');return response.json();};
+  const fallbackPut=async(col,row)=>{const room=fallbackRoom(col);if(!room)return false;const response=await room.fetch(new Request(`https://collection-store/record/${encodeURIComponent(row.id)}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(row)}));if(!response.ok)throw new Error('fallback put failed');return true;};
+  const fallbackList=async col=>{const room=fallbackRoom(col);if(!room)return [];const response=await room.fetch(new Request('https://collection-store/records'));if(!response.ok)throw new Error('fallback list failed');return response.json();};
+  const fallbackRemove=async(col,id)=>{const room=fallbackRoom(col);if(!room)return false;const response=await room.fetch(new Request(`https://collection-store/record/${encodeURIComponent(id)}`,{method:'DELETE'}));return response.ok;};
   const chatRoom=convId=>env.CHAT_ROOMS?.getByName(String(convId));
   const chatList=async(convId,before='',limit=80)=>{
     const room=chatRoom(convId);
@@ -193,6 +199,8 @@ export function database(env){
   };
   const get=async(col,id)=>{
     if(!id)return null;
+    const fallback=await fallbackGet(col,id).catch(()=>null);
+    if(fallback)return fallback;
     // New chat messages are indexed in KV by id so edits/deletes never need a
     // global D1 lookup. Existing pre-migration messages still fall through.
     if(col==='dmsgs'){
@@ -200,7 +208,7 @@ export function database(env){
       if(backup)return backup;
     }
     let row=null;try{row=await env.DB.prepare('SELECT data,version FROM records WHERE collection=? AND id=?').bind(col,id).first();}catch(error){const backup=await backupGet(col,id);if(backup)return backup;throw error;}
-    if(row)return {...JSON.parse(row.data),id,_version:row.version};
+    if(row){const record={...JSON.parse(row.data),id,_version:row.version};await fallbackPut(col,record).catch(()=>{});return record;}
     const backup=await backupGet(col,id);if(backup)return backup;
     if(col==='servers'&&officialIds.has(id))return {id,official:true,private:false,members:[],admins:[]};
     if(col==='channels'&&id.startsWith('gen:')&&await get('servers',id.slice(4)))return {id,server:id.slice(4),kind:'text',name:'כללי'};
@@ -218,10 +226,13 @@ export function database(env){
       await backupPut(col,r);
       return {...r,_chatStore:true};
     }
-    let primary=true;try{const result=await statement(col,r,old).run();requireThat(result.meta?.changes!==0,409,'הפריט השתנה בינתיים. רעננו ונסו שוב.');}catch(error){primary=false;if(!env.BACKUP||!backedUp.has(col))throw error;}await backupPut(col,r);return {...r,...(!primary?{_backup:true}:{})};
+    const durable=await fallbackPut(col,r).catch(()=>false);
+    let primary=true;try{const result=await statement(col,r,old).run();requireThat(result.meta?.changes!==0,409,'הפריט השתנה בינתיים. רעננו ונסו שוב.');}catch(error){primary=false;if(!durable&&(!env.BACKUP||!backedUp.has(col)))throw error;}
+    try{await backupPut(col,r);}catch(error){if(!durable&&!primary)throw error;}
+    return {...r,...(!primary?{_backup:true}:{})};
   };
-  const list=async col=>{let primary=[];try{const r=await env.DB.prepare('SELECT data,id,version FROM records WHERE collection=? ORDER BY created_at DESC LIMIT 10000').bind(col).all();primary=r.results.map(x=>({...JSON.parse(x.data),id:x.id,_version:x.version}));}catch(error){if(!env.BACKUP||!backedUp.has(col))throw error;}const backup=await backupList(col);const merged=new Map(primary.map(x=>[x.id,x]));for(const row of backup){const current=merged.get(row.id);if(!current||String(row.updatedAt||row.createdAt||'')>=String(current.updatedAt||current.createdAt||''))merged.set(row.id,row);}return [...merged.values()].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));};
-  const remove=async(col,id)=>{let primaryError;try{await env.DB.prepare('DELETE FROM records WHERE collection=? AND id=?').bind(col,id).run();}catch(error){primaryError=error;}if(env.BACKUP&&backedUp.has(col))await env.BACKUP.delete(backupKey(col,id));else if(primaryError)throw primaryError;};
+  const list=async col=>{const durable=await fallbackList(col).catch(()=>[]);let primary=[];try{const r=await env.DB.prepare('SELECT data,id,version FROM records WHERE collection=? ORDER BY created_at DESC LIMIT 10000').bind(col).all();primary=r.results.map(x=>({...JSON.parse(x.data),id:x.id,_version:x.version}));}catch(error){if(!durable.length&&(!env.BACKUP||!backedUp.has(col)))throw error;}let backup=[];try{backup=await backupList(col);}catch(error){if(!durable.length&&!primary.length)throw error;}const merged=new Map([...primary,...durable].map(x=>[x.id,x]));for(const row of backup){const current=merged.get(row.id);if(!current||String(row.updatedAt||row.createdAt||'')>=String(current.updatedAt||current.createdAt||''))merged.set(row.id,row);}const rows=[...merged.values()].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));if(!durable.length&&rows.length)await Promise.all(rows.slice(0,500).map(row=>fallbackPut(col,row).catch(()=>{})));return rows;};
+  const remove=async(col,id)=>{let primaryError;const durable=await fallbackRemove(col,id).catch(()=>false);try{await env.DB.prepare('DELETE FROM records WHERE collection=? AND id=?').bind(col,id).run();}catch(error){primaryError=error;}try{if(env.BACKUP&&backedUp.has(col))await env.BACKUP.delete(backupKey(col,id));else if(primaryError&&!durable)throw primaryError;}catch(error){if(!durable)throw error;}};
   return {get,put,list,remove,statement,chatList,chatCount,chatImport,chatMigrationComplete,chatMarkMigrationComplete};
 }
 const firebaseKeys=createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
