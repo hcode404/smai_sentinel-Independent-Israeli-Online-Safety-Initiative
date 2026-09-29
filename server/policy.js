@@ -166,8 +166,10 @@ export async function authorizeWrite(col,old,input,u,get,method='PATCH'){
     const p=pick(input,['title','body','mediaType','mediaUrl','linkUrl','audience','placement','startAt','endAt','seconds','active','frequency','notifyUsers']);
     requireThat(['text','image','video'].includes(p.mediaType),400,'סוג המדיה אינו תקין');
     requireThat(p.mediaType==='text'||/^https:\/\//.test(p.mediaUrl||''),400,'נדרשת כתובת HTTPS לתמונה או לסרטון');
-    requireThat(['all','members','staff'].includes(p.audience),400,'קהל היעד אינו תקין');
-    requireThat(!p.placement||['site','popup'].includes(p.placement),400,'מיקום ההודעה אינו תקין');
+    requireThat(['all','members','staff','active'].includes(p.audience),400,'קהל היעד אינו תקין');
+    requireThat(!p.placement||['site','popup','spotlight'].includes(p.placement),400,'מיקום ההודעה אינו תקין');
+    requireThat(!p.frequency||['once','session','daily','always'].includes(p.frequency),400,'תדירות ההודעה אינה תקינה');
+    p.seconds=Math.max(0,Math.min(300,Number(p.seconds)||0));
     return p;
   }
   if(col==='emergencyRequests'){

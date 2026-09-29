@@ -678,7 +678,8 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     if(col==='campaigns'&&!old&&rec.active&&rec.notifyUsers){
       const users=await db.list('users');
-      const recipients=users.filter(x=>rec.audience==='all'||rec.audience==='members'||rec.audience==='staff'&&rank(x)>=10);
+      const activeCutoff=Date.now()-5*60*1000;
+      const recipients=users.filter(x=>rec.audience==='all'||rec.audience==='members'||rec.audience==='staff'&&rank(x)>=10||rec.audience==='active'&&Date.parse(x.lastSeenAt||0)>=activeCutoff);
       await Promise.all(recipients.map(x=>db.put('notifications',{id:nonce(),userId:x.id,type:'founderAnnouncement',title:rec.title,text:rec.body||'פורסמה הודעה חדשה מטעם SMAI Sentinel',href:rec.linkUrl||'/',read:false,createdAt:now()})));
     }
     if(col==='tickets'&&!old){

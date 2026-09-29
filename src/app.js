@@ -1229,10 +1229,12 @@ function renderNav(){
   const cur = location.pathname.split('/')[1] || '';
   const items = NAV.map(n=>{
     const on = ('/'+cur) === n.p || (n.p==='/' && !cur);
-    const label=currentLang()==='en'?(NAV_EN[n.p]||n.l):n.l;return `<a href="${n.p}" class="${on?'on':''}" title="${label}" ${on?'aria-current="page"':''}>${ic(n.ico,18)}<span>${label}</span></a>`;
+    const label=currentLang()==='en'?(NAV_EN[n.p]||n.l):n.l;return `<a href="${n.p}" class="${on?'on':''}" title="${label}" ${on?'aria-current="page"':''}><span class="nav-art">${ic(n.ico,18)}</span><span>${label}</span></a>`;
   });
   if(Auth.isStaff()) items.push(`<a href="/admin" class="${cur==='admin'?'on':''}">${ic('shield',14)} פאנל צוות</a>`);
-  $('#nav').innerHTML = `<form id="userQuickSearch" class="nav-user-search" role="search"><input id="userQuickName" aria-label="חיפוש משתמש לפי שם מדויק" placeholder="חיפוש שם משתמש מדויק"><button class="iconbtn" aria-label="חיפוש">${ic('search',15)}</button></form>`+items.join('');
+  $('#nav').innerHTML = `<i class="nav-glider" aria-hidden="true"></i><form id="userQuickSearch" class="nav-user-search" role="search"><input id="userQuickName" aria-label="חיפוש משתמש לפי שם מדויק" placeholder="חיפוש שם משתמש מדויק"><button class="iconbtn" aria-label="חיפוש">${ic('search',15)}</button></form>`+items.join('');
+  const nav=$('#nav'),glider=$('.nav-glider',nav),active=$('a.on',nav);const placeGlider=el=>{if(!el||!glider)return;glider.style.transform=`translateY(${el.offsetTop}px)`;glider.style.height=el.offsetHeight+'px';glider.style.opacity='1';};requestAnimationFrame(()=>placeGlider(active));
+  $$('a[href]',nav).forEach(link=>link.addEventListener('click',event=>{if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||link.target)return;const href=link.getAttribute('href');if(!href||href.startsWith('#'))return;event.preventDefault();placeGlider(link);nav.classList.add('nav-switching');setTimeout(()=>{location.href=href;},150);}));
   $('#userQuickSearch').onsubmit=async e=>{e.preventDefault();const q=$('#userQuickName').value.trim().toLocaleLowerCase('he');if(!q||searchSurprise(q))return;const users=await Store.list('users');const found=users.find(x=>String(x.name||'').trim().toLocaleLowerCase('he')===q);if(!found)return toast('לא נמצא משתמש בשם המדויק הזה','warn');openProfile(found.id);};
   const u = Auth.user;
   $('#authSlot').innerHTML = u
@@ -3907,8 +3909,8 @@ route('/dm', async (app, id)=>{
           : `<button class="btn btn-ghost btn-sm" id="dmProf">${ic('user',14)} פרופיל</button>`}
         <button class="iconbtn dm-ai-head" id="dmAi" title="שאלת AI פרטית על השיחה" aria-label="שאלת AI פרטית"><img src="/assets/smai-ai-assistant.png" alt=""></button>
         <button class="iconbtn dm-jump-latest" id="dmLatest" title="להודעה האחרונה" aria-label="מעבר להודעה האחרונה">${ic('chevron',17)}</button>
-        <button class="iconbtn" id="dmVoice" title="שיחת קול" aria-label="התחלת שיחת קול">${ic('phone',17)}</button>
-        <button class="iconbtn" id="dmVideo" title="שיחת וידאו" aria-label="התחלת שיחת וידאו">${ic('camera',17)}</button>
+        <button class="iconbtn dm-media-action" id="dmVoice" title="שיחת קול" aria-label="התחלת שיחת קול"><img src="/assets/smai-call-voice.png" alt=""></button>
+        <button class="iconbtn dm-media-action" id="dmVideo" title="שיחת וידאו" aria-label="התחלת שיחת וידאו"><img src="/assets/smai-call-video.png" alt=""></button>
       </div>
       <div class="hm-b chat" id="dchat" style="max-height:none">${loader()}</div>
       <div class="hm-f">
@@ -4095,10 +4097,11 @@ route('/dm', async (app, id)=>{
   if(di){
     let lastTypingPing=0;di.addEventListener('input',()=>{if(!di.value.trim()||Date.now()-lastTypingPing<2500)return;lastTypingPing=Date.now();request('/api/presence/typing','POST',{convId:cur.id}).catch(()=>{});});
     const list=$('#dMentionList');let start=-1,items=[],selected=0;
-    const allowed=users.filter(user=>(cur.members||[]).includes(user.id)&&user.id!==me.id);
+    const aiMention={id:'smai-ai',name:'ai',email:'SMAI AI',_ai:true};
+    const allowed=[aiMention,...users.filter(user=>(cur.members||[]).includes(user.id)&&user.id!==me.id)];
     const closeMentions=()=>{if(list){list.style.display='none';list.classList.remove('open');list.innerHTML='';}items=[];};
-    const choose=index=>{const user=items[index];if(!user)return;const before=di.value.slice(0,start),after=di.value.slice(di.selectionStart),mention='@'+(user.name||user.email||user.id)+' ';di.value=before+mention+after;di.selectionStart=di.selectionEnd=before.length+mention.length;closeMentions();di.focus();};
-    const draw=()=>{if(!list)return;list.innerHTML=items.map((user,index)=>{const label=user.name||user.email||user.id;return `<div class="mention-item ${index===selected?'sel':''}" data-index="${index}" role="option" aria-selected="${index===selected}">${avatar(user,'s')}<div><div class="mnm">@${esc(label)}</div><div class="mrk">משתתף בשיחה</div></div></div>`;}).join('');list.style.display=items.length?'block':'none';list.classList.toggle('open',Boolean(items.length));list.querySelectorAll('[data-index]').forEach(row=>{row.onmousedown=event=>event.preventDefault();row.onclick=()=>choose(Number(row.dataset.index));});};
+    const choose=index=>{const user=items[index];if(!user)return;const before=di.value.slice(0,start),after=di.value.slice(di.selectionStart),mention='@'+(user._ai?'ai':(user.name||user.email||user.id))+' ';di.value=before+mention+after;di.selectionStart=di.selectionEnd=before.length+mention.length;closeMentions();di.focus();};
+    const draw=()=>{if(!list)return;list.innerHTML=items.map((user,index)=>{const label=user._ai?'ai':(user.name||user.email||user.id);return `<div class="mention-item ${index===selected?'sel':''}" data-index="${index}" role="option" aria-selected="${index===selected}">${user._ai?'<img class="mention-ai-avatar" src="/assets/smai-ai-assistant.png" alt="">':avatar(user,'s')}<div><div class="mnm">@${esc(label)}</div><div class="mrk">${user._ai?'עוזר SMAI · התשובה תופיע לכולם':'משתתף בשיחה'}</div></div></div>`;}).join('');list.style.display=items.length?'block':'none';list.classList.toggle('open',Boolean(items.length));list.querySelectorAll('[data-index]').forEach(row=>{row.onmousedown=event=>event.preventDefault();row.onclick=()=>choose(Number(row.dataset.index));});};
     di.addEventListener('input',()=>{
       const cursor=di.selectionStart;
       const beforeCursor=di.value.slice(0,cursor);
@@ -4106,7 +4109,7 @@ route('/dm', async (app, id)=>{
       if(!match)return closeMentions();
       start=beforeCursor.lastIndexOf('@');
       const query=match[1].toLocaleLowerCase('he');
-      items=allowed.filter(user=>String(user.name||user.email||user.id||'').toLocaleLowerCase('he').startsWith(query)).slice(0,8);
+      items=allowed.filter(user=>String(user._ai?'ai':(user.name||user.email||user.id||'')).toLocaleLowerCase('he').startsWith(query)).slice(0,8);
       selected=0;draw();
     });
     di.addEventListener('keydown',event=>{if(!items.length)return;if(event.key==='ArrowDown'){event.preventDefault();selected=(selected+1)%items.length;draw();}else if(event.key==='ArrowUp'){event.preventDefault();selected=(selected-1+items.length)%items.length;draw();}else if(event.key==='Enter'){event.preventDefault();choose(selected);}else if(event.key==='Escape')closeMentions();});
@@ -4810,8 +4813,17 @@ route('/admin', async (app)=>{
   }
   function tCampaigns(){
     if(Auth.user?.rank!=='founder')return '<div class="err">ניהול קמפיינים זמין למייסד בלבד.</div>';
-    const audience={all:'כולם',members:'משתמשים מחוברים',staff:'צוות בלבד'};
-    return `<div class="grid g2"><form id="campaignForm" class="card stack"><div><span class="eyebrow">FOUNDER ONLY</span><h2>הודעה או קמפיין חדש</h2><p class="small mute">אפשר לפרסם הודעת מערכת קופצת שנשארת עד לחיצה על ×, או באנר רגיל עם תמונה או סרטון.</p></div><div class="field"><label>כותרת</label><input id="campaignTitle" required maxlength="90"></div><div class="field"><label>תיאור</label><textarea id="campaignBody" maxlength="1000"></textarea></div><div class="grid g2"><div class="field"><label>סוג תוכן</label><select id="campaignType"><option value="text">טקסט בלבד</option><option value="image">תמונה</option><option value="video">סרטון</option></select></div><div class="field"><label>אופן הצגה</label><select id="campaignPlacement"><option value="popup">חלון קופץ עד סגירה</option><option value="site">באנר בראש העמוד</option></select></div></div><div class="field"><label>קהל יעד</label><select id="campaignAudience"><option value="all">כולם</option><option value="members">משתמשים מחוברים</option><option value="staff">צוות בלבד</option></select></div><div class="field"><label>כתובת המדיה (לתמונה או סרטון)</label><input id="campaignMedia" type="url" placeholder="https://..."></div><div class="field"><label>קישור בלחיצה (רשות)</label><input id="campaignLink" type="url" placeholder="https://..."></div><div class="grid g2"><div class="field"><label>מתאריך</label><input id="campaignStart" type="datetime-local"></div><div class="field"><label>עד תאריך</label><input id="campaignEnd" type="datetime-local"></div></div><div class="grid g2"><div class="field"><label>משך בכל הופעה</label><select id="campaignSeconds"><option value="0" selected>עד שהמשתמש סוגר</option><option value="5">5 שניות</option><option value="10">10 שניות</option><option value="20">20 שניות</option></select></div><div class="field"><label>תדירות</label><select id="campaignFrequency"><option value="session">פעם בביקור</option><option value="daily">פעם ביום</option><option value="always">בכל כניסה</option></select></div></div><label class="check"><input id="campaignActive" type="checkbox" checked><span><span class="t">ההודעה פעילה</span><span class="d">תוצג רק בתוך טווח התאריכים שנבחר.</span></span></label><label class="check"><input id="campaignNotify" type="checkbox" checked><span><span class="t">שליחה גם כהתראה</span><span class="d">ההתראה תופיע למשתמשים בקהל היעד.</span></span></label><button class="btn btn-p">פרסום ההודעה</button></form><div class="stack"><div class="page-h"><h2>הודעות קיימות</h2><p>${campaigns.length} פרסומים</p></div>${campaigns.length?campaigns.map(c=>`<article class="card"><div class="row between"><div><span class="b ${c.active?'b-ok':'b-warn'}">${c.active?'פעיל':'מושהה'}</span> <span class="b">${audience[c.audience]||c.audience}</span> <span class="b b-gray">${c.placement==='popup'?'חלון קופץ':'באנר'}</span><h3>${esc(c.title)}</h3></div><button class="btn btn-g btn-sm" data-campaign-toggle="${c.id}" data-active="${c.active?'1':'0'}">${c.active?'השהיה':'הפעלה'}</button></div><p class="small mute">${esc(c.body||'')} · ${Number(c.seconds)>0?c.seconds+' שניות':'עד סגירה'} · ${esc(c.frequency||'session')}</p></article>`).join(''):'<div class="card center mute">עדיין אין הודעות</div>'}</div></div>`;
+    const audience={all:'כולם',members:'משתמשים מחוברים',staff:'צוות בלבד',active:'משתמשים פעילים עכשיו'};
+    const form=`<form id="campaignForm" class="card stack"><div><span class="eyebrow">FOUNDER ONLY</span><h2>הודעה חדשה</h2><p class="small mute">הודעה חד־פעמית גדולה ומונפשת, או באנר רגיל — לפי הקהל והזמן שתבחרו.</p></div>
+      <div class="field"><label>כותרת</label><input id="campaignTitle" required maxlength="90"></div><div class="field"><label>תיאור</label><textarea id="campaignBody" maxlength="1000"></textarea></div>
+      <div class="grid g2"><div class="field"><label>סוג תוכן</label><select id="campaignType"><option value="text">טקסט בלבד</option><option value="image">תמונה</option><option value="video">סרטון</option></select></div><div class="field"><label>אופן הצגה</label><select id="campaignPlacement"><option value="spotlight">הודעה גדולה ומונפשת למעלה</option><option value="popup">חלון קופץ</option><option value="site">באנר בראש העמוד</option></select></div></div>
+      <div class="field"><label>קהל יעד</label><select id="campaignAudience"><option value="all">כל המשתמשים בכניסה הבאה</option><option value="active">רק משתמשים פעילים עכשיו</option><option value="members">משתמשים מחוברים</option><option value="staff">צוות בלבד</option></select></div>
+      <div class="field"><label>כתובת מדיה</label><input id="campaignMedia" type="url" placeholder="https://..."></div><div class="field"><label>קישור בלחיצה</label><input id="campaignLink" type="url" placeholder="https://..."></div>
+      <div class="grid g2"><div class="field"><label>מתאריך</label><input id="campaignStart" type="datetime-local"></div><div class="field"><label>עד תאריך</label><input id="campaignEnd" type="datetime-local"></div></div>
+      <div class="grid g2"><div class="field"><label>משך בשניות</label><input id="campaignSeconds" type="number" min="0" max="300" value="8"><small class="mute">0 = עד לסגירה</small></div><div class="field"><label>תדירות</label><select id="campaignFrequency"><option value="once">חד־פעמי לכל משתמש</option><option value="session">פעם בביקור</option><option value="daily">פעם ביום</option><option value="always">בכל כניסה</option></select></div></div>
+      <label class="check"><input id="campaignActive" type="checkbox" checked><span><span class="t">ההודעה פעילה</span></span></label><label class="check"><input id="campaignNotify" type="checkbox" checked><span><span class="t">שליחה גם כהתראה</span></span></label><button class="btn btn-p">פרסום ההודעה</button></form>`;
+    const list=`<div class="stack"><div class="page-h"><h2>הודעות קיימות</h2><p>${campaigns.length} פרסומים</p></div>${campaigns.length?campaigns.map(c=>`<article class="card"><div class="row between"><div><span class="b ${c.active?'b-ok':'b-warn'}">${c.active?'פעיל':'מושהה'}</span> <span class="b">${audience[c.audience]||c.audience}</span> <span class="b b-gray">${c.placement==='popup'?'חלון':c.placement==='spotlight'?'הודעה גדולה':'באנר'}</span><h3>${esc(c.title)}</h3></div><button class="btn btn-g btn-sm" data-campaign-toggle="${c.id}" data-active="${c.active?'1':'0'}">${c.active?'השהיה':'הפעלה'}</button></div><p class="small mute">${esc(c.body||'')} · ${Number(c.seconds)>0?c.seconds+' שניות':'עד סגירה'} · ${esc(c.frequency||'once')}</p></article>`).join(''):'<div class="card center mute">עדיין אין הודעות</div>'}</div>`;
+    return `<div class="grid g2">${form}${list}</div>`;
   }
 
   function tPraise(){
@@ -5133,13 +5145,13 @@ async function renderCampaign(app,path){
   if(['/login','/admin','/setup'].includes(path))return;
   try{
     const at=Date.now(),rows=await Store.list('campaigns');
-    const eligible=rows.filter(c=>c.active&&(!c.startAt||Date.parse(c.startAt)<=at)&&(!c.endAt||Date.parse(c.endAt)>=at)&&(c.audience==='all'||c.audience==='members'&&Auth.user||c.audience==='staff'&&lvl(Auth.user)>=10));
+    const eligible=rows.filter(c=>c.active&&(!c.startAt||Date.parse(c.startAt)<=at)&&(!c.endAt||Date.parse(c.endAt)>=at)&&(c.audience==='all'||c.audience==='members'&&Auth.user||c.audience==='active'&&Auth.user||c.audience==='staff'&&lvl(Auth.user)>=10));
     const c=eligible.find(x=>{const key='smai_campaign_'+x.id;return x.frequency==='always'||!localStorage.getItem(key)||(x.frequency==='daily'&&at-Number(localStorage.getItem(key))>86400000);});
     if(!c)return;
     localStorage.setItem('smai_campaign_'+c.id,String(at));
     const media=c.mediaType==='video'?`<video class="campaign-media" src="${esc(c.mediaUrl)}" autoplay muted loop playsinline></video>`:c.mediaType==='image'?`<img class="campaign-media" src="${esc(c.mediaUrl)}" alt="">`:'';
-    const popup=c.placement==='popup';
-    app.insertAdjacentHTML('afterbegin',`${popup?'<div id="campaignBackdrop" class="campaign-backdrop">':''}<aside id="siteCampaign" role="dialog" aria-modal="${popup?'true':'false'}" aria-labelledby="campaignTitle" class="site-campaign anim-up ${popup?'campaign-popup':''} ${media?'':'campaign-text-only'}"><div class="campaign-copy"><span class="eyebrow">הודעה מ־SMAI SENTINEL</span><h2 id="campaignTitle">${esc(c.title)}</h2><p>${campaignRichText(c.body||'')}</p>${c.linkUrl?`<a class="btn btn-p btn-sm" href="${esc(c.linkUrl)}" target="_blank" rel="noopener">למידע נוסף</a>`:''}</div>${media}<button class="campaign-close" aria-label="סגירת ההודעה">×</button></aside>${popup?'</div>':''}`);
+    const popup=c.placement==='popup',spotlight=c.placement==='spotlight';
+    app.insertAdjacentHTML('afterbegin',`${popup?'<div id="campaignBackdrop" class="campaign-backdrop">':''}<aside id="siteCampaign" role="dialog" aria-modal="${popup?'true':'false'}" aria-labelledby="campaignTitle" class="site-campaign anim-up ${popup?'campaign-popup':''} ${spotlight?'campaign-spotlight':''} ${media?'':'campaign-text-only'}"><span class="campaign-spark s1"></span><span class="campaign-spark s2"></span><div class="campaign-copy"><span class="eyebrow">הודעה מ־SMAI SENTINEL</span><h2 id="campaignTitle">${esc(c.title)}</h2><p>${campaignRichText(c.body||'')}</p>${c.linkUrl?`<a class="btn btn-p btn-sm" href="${esc(c.linkUrl)}" target="_blank" rel="noopener">למידע נוסף</a>`:''}</div>${media}<button class="campaign-close" aria-label="סגירת ההודעה">×</button></aside>${popup?'</div>':''}`);
     const closeCampaign=()=>{$('#campaignBackdrop')?.remove();$('#siteCampaign')?.remove();};
     $('.campaign-close').onclick=closeCampaign;
     if(Number(c.seconds)>0)setTimeout(closeCampaign,Number(c.seconds)*1000);
@@ -5318,15 +5330,19 @@ function initInstallApp(){
   let promptEvent=null;
   const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
   const button=document.createElement('button');
-  button.type='button';button.className='install-app-button';button.hidden=true;
-  button.innerHTML=`${ic('download',18)}<span>התקנת האפליקציה</span>`;
+  button.type='button';button.className='install-app-button install-nudge';button.hidden=true;
+  button.innerHTML=`<span class="install-nudge-close" role="button" aria-label="סגירה">×</span><span class="install-nudge-art">${ic('download',20)}</span><span><b>להתקין את SMAI?</b><small>גישה מהירה ממסך הבית</small></span><strong>התקנה</strong>`;
   document.body.append(button);
-  addEventListener('beforeinstallprompt',event=>{event.preventDefault();promptEvent=event;button.hidden=false;});
-  if(isIOS)button.hidden=false;
-  setTimeout(()=>{if(button.isConnected&&!installed)button.hidden=false;},1800);
-  button.onclick=async()=>{
+  const threeDays=3*24*60*60*1000,lastNudge=Number(localStorage.getItem('smai_install_nudge')||0);
+  const canNudge=()=>Date.now()-lastNudge>=threeDays;
+  const reveal=()=>{if(button.isConnected&&!installed&&canNudge()){button.hidden=false;localStorage.setItem('smai_install_nudge',String(Date.now()));}};
+  addEventListener('beforeinstallprompt',event=>{event.preventDefault();promptEvent=event;setTimeout(reveal,1800);});
+  setTimeout(reveal,2200);
+  $('.install-nudge-close',button).onclick=event=>{event.stopPropagation();button.hidden=true;};
+  button.onclick=async event=>{
+    if(event.target.closest('.install-nudge-close'))return;
     if(promptEvent){promptEvent.prompt();const choice=await promptEvent.userChoice;promptEvent=null;if(choice.outcome==='accepted')button.hidden=true;return;}
-    if(isIOS){openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('download',20)}</span><h3>התקנת SMAI ב־iPhone או iPad</h3></div><div class="m-b install-guide"><span>1</span><p>לחצו על כפתור השיתוף בתחתית Safari.</p><span>2</span><p>בחרו „הוספה למסך הבית”.</p><span>3</span><p>לחצו „הוספה”. האפליקציה תופיע לצד שאר האפליקציות.</p></div><div class="m-f"><button class="btn btn-p" onclick="closeModal()">הבנתי</button></div>`);return;}
+    if(isIOS){button.hidden=true;openModal(`<div class="m-h"><span class="ico-tile i-brand">${ic('download',20)}</span><h3>התקנת SMAI ב־iPhone או iPad</h3></div><div class="m-b install-guide"><span>1</span><p>לחצו על כפתור השיתוף בתחתית Safari.</p><span>2</span><p>בחרו „הוספה למסך הבית”.</p><span>3</span><p>לחצו „הוספה”. האפליקציה תופיע לצד שאר האפליקציות.</p></div><div class="m-f"><button class="btn btn-p" onclick="closeModal()">הבנתי</button></div>`);return;}
     toast('פתחו את תפריט הדפדפן ובחרו „התקנת SMAI Sentinel” או „הוספה למסך הבית”','warn');
   };
   addEventListener('appinstalled',()=>{button.remove();toast('SMAI Sentinel הותקנה בהצלחה','ok');});
