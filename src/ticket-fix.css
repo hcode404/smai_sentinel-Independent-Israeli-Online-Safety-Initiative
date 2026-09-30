@@ -203,11 +203,12 @@
   .topin .logo{min-width:0;max-width:calc(100vw - 88px)}
   .topin .logo>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
   .topin .logo small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  html .mainnav{height:100vh!important;height:100dvh!important;width:min(92vw,390px)!important;padding:max(76px,calc(env(safe-area-inset-top) + 68px)) 12px max(20px,env(safe-area-inset-bottom))!important;scroll-padding-block:76px 20px}
+  html .mainnav{height:100vh!important;height:100dvh!important;width:min(92vw,390px)!important;padding:max(76px,calc(env(safe-area-inset-top) + 68px)) 12px max(20px,env(safe-area-inset-bottom))!important;scroll-padding-block:76px 20px;background:var(--surface)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;filter:none!important;opacity:1!important;isolation:isolate}
   html .mainnav::before{top:max(20px,env(safe-area-inset-top))}
-  html .mainnav .nav-user-search{top:-2px;flex:0 0 auto}
+  html .mainnav .nav-user-search{top:-2px;flex:0 0 auto;background:var(--surface)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
   .mobile-nav-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;width:100%;margin:0 0 9px;padding:0 0 11px;border-bottom:1px solid var(--line)}
-  .mobile-nav-tools>a,.mobile-nav-tools>button{position:relative;display:flex;align-items:center;justify-content:flex-start;gap:8px;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);color:var(--ink2);font:700 12px/1.2 inherit;text-decoration:none;cursor:pointer}
+  .mobile-nav-tools>a,.mobile-nav-tools>button{position:relative;display:flex;align-items:center;justify-content:flex-start;gap:8px;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);color:var(--ink2);font:700 12px/1.2 inherit;text-decoration:none;cursor:pointer;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;filter:none!important}
+  html .mainnav>a,html .mainnav>a .nav-art{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;filter:none!important}
   .mobile-nav-tools>a:active,.mobile-nav-tools>button:active{background:var(--surface3);transform:scale(.98)}
   .mobile-nav-tools span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .mobile-nav-tools .av{width:24px!important;height:24px!important;flex:0 0 24px;font-size:10px}
