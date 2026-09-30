@@ -1232,10 +1232,25 @@ function renderNav(){
     const label=currentLang()==='en'?(NAV_EN[n.p]||n.l):n.l;return `<a href="${n.p}" data-nav="${n.ico}" class="${on?'on':''}" title="${label}" ${on?'aria-current="page"':''}><span class="nav-art">${ic(n.ico,19)}</span><span class="nav-label">${label}</span><i class="nav-arrow">${ic('chevron',12)}</i></a>`;
   });
   if(Auth.isStaff()) items.push(`<a href="/admin" data-nav="admin" class="${cur==='admin'?'on':''}"><span class="nav-art">${ic('shield',19)}</span><span class="nav-label">פאנל צוות</span><i class="nav-arrow">${ic('chevron',12)}</i></a>`);
-  $('#nav').innerHTML = `<i class="nav-glider" aria-hidden="true"></i><form id="userQuickSearch" class="nav-user-search" role="search"><input id="userQuickName" aria-label="חיפוש משתמש לפי שם מדויק" placeholder="חיפוש שם משתמש מדויק"><button class="iconbtn" aria-label="חיפוש">${ic('search',15)}</button></form>`+items.join('');
+  const mobileTools=`<div class="mobile-nav-tools" aria-label="פעולות חשבון">
+    <button type="button" data-mobile-action="notifications">${ic('bell',17)}<span>${currentLang()==='en'?'Notifications':'התראות'}</span><i class="mobile-notif-count" hidden></i></button>
+    <a href="/account">${ic('settings',17)}<span>${currentLang()==='en'?'Settings':'הגדרות'}</span></a>
+    <button type="button" data-mobile-action="language">${ic('globe',17)}<span>${currentLang()==='en'?'עברית':'English'}</span></button>
+    <button type="button" data-mobile-action="theme">${ic('moon',17)}<span>${currentLang()==='en'?'Appearance':'תצוגה'}</span></button>
+    ${Auth.user?`<button type="button" data-mobile-action="profile">${avatar(Auth.user,'s')}<span>${esc((Auth.user.name||Auth.user.email).split(' ')[0])}</span></button>`:`<a href="/login">${ic('login',17)}<span>${currentLang()==='en'?'Sign in':'כניסה'}</span></a>`}
+  </div>`;
+  $('#nav').innerHTML = `<i class="nav-glider" aria-hidden="true"></i><form id="userQuickSearch" class="nav-user-search" role="search"><input id="userQuickName" aria-label="חיפוש משתמש לפי שם מדויק" placeholder="חיפוש שם משתמש מדויק"><button class="iconbtn" aria-label="חיפוש">${ic('search',15)}</button></form>${mobileTools}`+items.join('');
   const nav=$('#nav'),glider=$('.nav-glider',nav),active=$('a.on',nav);const placeGlider=el=>{if(!el||!glider)return;glider.style.transform=`translateY(${el.offsetTop}px)`;glider.style.height=el.offsetHeight+'px';glider.style.opacity='1';};requestAnimationFrame(()=>placeGlider(active));
   $$('a[href]',nav).forEach(link=>link.addEventListener('click',event=>{if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||link.target)return;const href=link.getAttribute('href');if(!href||href.startsWith('#'))return;event.preventDefault();placeGlider(link);nav.classList.add('nav-switching');setTimeout(()=>{location.href=href;},150);}));
   $('#userQuickSearch').onsubmit=async e=>{e.preventDefault();const q=$('#userQuickName').value.trim().toLocaleLowerCase('he');if(!q||searchSurprise(q))return;const users=await Store.list('users');const found=users.find(x=>String(x.name||'').trim().toLocaleLowerCase('he')===q);if(!found)return toast('לא נמצא משתמש בשם המדויק הזה','warn');openProfile(found.id);};
+  $$('[data-mobile-action]',nav).forEach(button=>button.onclick=event=>{
+    event.preventDefault();
+    const action=button.dataset.mobileAction;
+    if(action==='notifications') $('#notifBtn')?.click();
+    if(action==='language') $('#languageToggle')?.click();
+    if(action==='theme') $('#themeBtn')?.click();
+    if(action==='profile') userMenu();
+  });
   const u = Auth.user;
   $('#authSlot').innerHTML = u
     ? `<button class="iconbtn" id="meBtn" title="${esc(u.name||u.email)}" style="width:auto;padding:0 6px;gap:7px;display:flex">
@@ -1247,6 +1262,8 @@ function renderNav(){
   const mb = $('#meBtn'); if(mb) mb.onclick = userMenu;
   const notifications=$('#notifBtn');
   if(notifications)notifications.classList.toggle('hide',!u);
+  const mobileCount=$('.mobile-notif-count',nav);
+  if(mobileCount){mobileCount.hidden=!notificationUnreadCount;mobileCount.textContent=String(Math.min(notificationUnreadCount,99));}
   syncNotificationBadge();
 }
 function openStatusMenu(anchor){
@@ -5321,7 +5338,7 @@ function initNotif(){
   $('#notifBtn').onclick=openNotifications;
   const topShortcut=$('#topNotifShortcut');if(topShortcut)topShortcut.onclick=openNotifications;
 }
-let notificationWatchStop=null,notificationWatchUser='';
+let notificationWatchStop=null,notificationWatchUser='',notificationUnreadCount=0;
 function syncNotificationBadge(){
   const button=$('#notifBtn'),user=Auth.user;
   if(!button||!user){notificationWatchStop?.();notificationWatchStop=null;notificationWatchUser='';return;}
@@ -5333,11 +5350,13 @@ function syncNotificationBadge(){
     seenNotices=new Set(rows.map(n=>n.id));
     if(incoming)Sfx.play('msgIn');
     const count=rows.filter(n=>!n.read).length;
+    notificationUnreadCount=count;
     button.innerHTML=`${ic('bell',18)}${count?`<span class="notif-badge">${Math.min(count,99)}</span>`:''}`;
     button.setAttribute('aria-label',count?`${count} התראות שלא נקראו`:'התראות');
     button.classList.toggle('has-notifications',count>0);
     const topShortcut=$('#topNotifShortcut');
     if(topShortcut){const label=currentLang()==='en'?'Notifications':'התראות';topShortcut.innerHTML=count?`${label}<span class="top-notif-count">${Math.min(count,99)}</span>`:label;topShortcut.classList.toggle('has-notifications',count>0);}
+    const mobileCount=$('.mobile-notif-count');if(mobileCount){mobileCount.hidden=!count;mobileCount.textContent=String(Math.min(count,99));}
     showNativeNotices(rows).catch(()=>{});
   });
 }
