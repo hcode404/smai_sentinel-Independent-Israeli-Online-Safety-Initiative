@@ -182,10 +182,10 @@
 @media (max-width: 760px) {
   .top-utility { display: none; }
   body.mobile-nav-open{overflow:hidden!important;touch-action:none}
-  .mobile-nav-backdrop{display:block;position:fixed;z-index:10038;inset:0;border:0;background:#02090c99;opacity:0;visibility:hidden;pointer-events:none;backdrop-filter:blur(3px);transition:opacity .24s ease,visibility .24s}
+  .mobile-nav-backdrop{display:block;position:fixed;z-index:10038;inset:0;border:0;background:#02090cb8;opacity:0;visibility:hidden;pointer-events:none;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;filter:none!important;transition:opacity .2s ease,visibility .2s}
   body.mobile-nav-open .mobile-nav-backdrop{opacity:1;visibility:visible;pointer-events:auto}
   html .mainnav{display:flex!important;position:fixed!important;z-index:10040!important;inset:0 0 0 auto!important;width:min(88vw,370px)!important;height:100dvh!important;max-height:none!important;margin:0!important;padding:max(82px,calc(env(safe-area-inset-top) + 72px)) 12px max(22px,env(safe-area-inset-bottom))!important;gap:3px!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain;background:linear-gradient(180deg,color-mix(in srgb,var(--surface) 96%,#0d8cff 4%),var(--surface))!important;border:0!important;border-left:1px solid var(--line)!important;border-radius:0!important;box-shadow:-24px 0 70px #0009!important;transform:translateX(105%)!important;visibility:hidden;pointer-events:none;transition:transform .28s cubic-bezier(.2,.8,.2,1),visibility .28s!important;-webkit-overflow-scrolling:touch}
-  html .mainnav.open{transform:translateX(0)!important;visibility:visible;pointer-events:auto;animation:none!important}
+  html .mainnav.open,body.mobile-nav-open html .mainnav,body.mobile-nav-open .mainnav{transform:none!important;translate:none!important;visibility:visible!important;pointer-events:auto!important;animation:none!important}
   html .mainnav::before{content:'מרכז הפעולות';position:absolute;top:max(24px,env(safe-area-inset-top));right:20px;padding:0!important;color:var(--ink)!important;font-size:17px!important;font-weight:900;letter-spacing:0!important}
   html .mainnav::after{display:none!important}
   html .mainnav .nav-user-search{position:sticky;z-index:3;top:-4px;order:-1;display:flex!important;width:100%!important;margin:0 0 8px!important;padding:6px!important;border:1px solid var(--line);border-radius:15px;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(15px)}
