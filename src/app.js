@@ -1247,7 +1247,7 @@ function renderNav(){
     event.preventDefault();
     const action=button.dataset.mobileAction;
     if(action==='notifications') $('#notifBtn')?.click();
-    if(action==='language') $('#languageToggle')?.click();
+    if(action==='language') switchSiteLanguage();
     if(action==='theme') $('#themeBtn')?.click();
     if(action==='profile') userMenu();
   });
@@ -5266,19 +5266,40 @@ function initTheme(){
   set(saved || 'dark');
   $('#themeBtn').onclick = ()=>set(document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark');
 }
+function translationCookieTargets(){
+  const host=location.hostname,parts=host.split('.'),base=parts.length>1?parts.slice(-2).join('.'):host;
+  return [...new Set(['',host,'.'+host,base,'.'+base])];
+}
+function setSiteTranslationCookie(lang){
+  const expires='Thu, 01 Jan 1970 00:00:00 GMT';
+  translationCookieTargets().forEach(domain=>{
+    const domainPart=domain?`; Domain=${domain}`:'';
+    if(lang==='en')document.cookie=`googtrans=/he/en; Path=/${domainPart}; SameSite=Lax`;
+    else{
+      document.cookie=`googtrans=; Path=/${domainPart}; Expires=${expires}; Max-Age=0; SameSite=Lax`;
+      document.cookie=`googtrans=; Path=${location.pathname||'/'}${domainPart}; Expires=${expires}; Max-Age=0; SameSite=Lax`;
+    }
+  });
+}
+function switchSiteLanguage(){
+  const next=currentLang()==='en'?'he':'en';
+  localStorage.setItem('smai_lang',next);
+  setSiteTranslationCookie(next);
+  sessionStorage.setItem('smai_language_switch',String(Date.now()));
+  const url=new URL(location.href);url.searchParams.set('lang',next);url.searchParams.set('v',String(Date.now()));
+  location.replace(url.toString());
+}
 function initLanguage(){
   const protectChats=()=>{$$('.chat .txt,.chat .reply-quote,.assistant-message>div,.dm-item .nm,.dm-item .lst,.auto-translation').forEach(el=>{el.classList.add('notranslate');el.setAttribute('translate','no');});};
-  const cookieDomains=()=>{const host=location.hostname;const parts=host.split('.');return ['',host,...(parts.length>1?[`.${parts.slice(-2).join('.')}`]:[])];};
-  const setTranslationCookie=lang=>{cookieDomains().forEach(domain=>{const domainPart=domain?`;domain=${domain}`:'';if(lang==='en')document.cookie=`googtrans=/he/en;path=/${domainPart};SameSite=Lax`;else document.cookie=`googtrans=;path=/${domainPart};expires=Thu, 01 Jan 1970 00:00:00 GMT;SameSite=Lax`;});};
-  const loadEnglishTranslation=()=>{protectChats();setTranslationCookie('en');if(!document.querySelector('#google_translate_element')){const host=document.createElement('div');host.id='google_translate_element';host.hidden=true;document.body.appendChild(host);}const choose=()=>{const select=document.querySelector('.goog-te-combo');if(!select)return;select.value='en';select.dispatchEvent(new Event('change',{bubbles:true}));};window.smaiGoogleTranslateReady=()=>{new google.translate.TranslateElement({pageLanguage:'he',includedLanguages:'en',autoDisplay:false},'google_translate_element');setTimeout(choose,250);};if(!document.querySelector('script[data-smai-translate]')){const script=document.createElement('script');script.dataset.smaiTranslate='1';script.src='https://translate.google.com/translate_a/element.js?cb=smaiGoogleTranslateReady';script.async=true;document.head.appendChild(script);}else setTimeout(choose,350);};
+  const loadEnglishTranslation=()=>{protectChats();setSiteTranslationCookie('en');if(!document.querySelector('#google_translate_element')){const host=document.createElement('div');host.id='google_translate_element';host.hidden=true;document.body.appendChild(host);}const choose=()=>{const select=document.querySelector('.goog-te-combo');if(!select)return;select.value='en';select.dispatchEvent(new Event('change',{bubbles:true}));};window.smaiGoogleTranslateReady=()=>{new google.translate.TranslateElement({pageLanguage:'he',includedLanguages:'en',autoDisplay:false},'google_translate_element');setTimeout(choose,250);};if(!document.querySelector('script[data-smai-translate]')){const script=document.createElement('script');script.dataset.smaiTranslate='1';script.src='https://translate.google.com/translate_a/element.js?cb=smaiGoogleTranslateReady';script.async=true;document.head.appendChild(script);}else setTimeout(choose,350);};
   const lang=currentLang();
   localStorage.setItem('smai_lang',lang);
   document.documentElement.lang=lang;
   document.documentElement.dir=lang==='en'?'ltr':'rtl';
-  if(lang==='he')setTranslationCookie('he');
+  if(lang==='he')setSiteTranslationCookie('he');
   renderNav();
   const b=$('#languageToggle');
-  if(b){b.textContent=lang==='en'?'עב':'EN';b.setAttribute('aria-label',lang==='en'?'Switch to Hebrew':'מעבר לאנגלית');b.onclick=()=>{const next=lang==='en'?'he':'en';localStorage.setItem('smai_lang',next);setTranslationCookie(next);location.reload();};}
+  if(b){b.textContent=lang==='en'?'עב':'EN';b.setAttribute('aria-label',lang==='en'?'Switch to Hebrew':'מעבר לאנגלית');b.onclick=switchSiteLanguage;}
   const settings=document.querySelector('.top-utility a[href="/account"]');if(settings)settings.textContent=lang==='en'?'Settings':'הגדרות';
   const notices=$('#topNotifShortcut');if(notices&&!notices.querySelector('.top-notif-count'))notices.textContent=lang==='en'?'Notifications':'התראות';
   if(lang==='en')loadEnglishTranslation();
