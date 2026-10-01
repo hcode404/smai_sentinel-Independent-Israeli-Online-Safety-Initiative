@@ -2480,11 +2480,20 @@ route('/track', (app)=>{
 });
 
 /* ===================== פנייה בודדת ===================== */
+async function dismissReadMessageNotifications(href){
+  if(!Auth.user||!href)return;
+  try{
+    const rows=await Store.list('notifications');
+    const removable=rows.filter(n=>n.href===href&&['directMessage','ticketReply','mention'].includes(n.type));
+    if(removable.length)await Promise.all(removable.map(n=>Store.remove('notifications',n.id).catch(()=>{})));
+  }catch{}
+}
 route('/ticket', async (app, id)=>{
   app.innerHTML = loader();
   const t = await Store.get('tickets', id);
   if(!t){ app.innerHTML = emptyState('alert','הפנייה לא נמצאה','ייתכן שהקישור שגוי או שהפנייה נמחקה.',
     `<a class="btn btn-g" href="/track">חזרה למעקב</a>`); return; }
+  void dismissReadMessageNotifications(`/ticket/${id}`);
   const staff = Auth.isStaff();
   const d = DEPT_BY[t.dept] || DEPT_BY.other;
   const users = staff ? await Store.list('users') : [];
@@ -3886,6 +3895,7 @@ route('/dm', async (app, id)=>{
   const cur = id ? mine.find(c=>c.id===id) : mine[0];
   const other = cur ? (cur.members||[]).find(x=>x!==me.id) : null;
   const otherU = users.find(u=>u.id===other);
+  if(cur)void dismissReadMessageNotifications(`/dm/${cur.id}`);
 
   app.innerHTML = `
   <div class="crumb anim-in"><a href="/community">קהילה</a> ← הודעות פרטיות</div>

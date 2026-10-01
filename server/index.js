@@ -689,8 +689,16 @@ export async function api(req,env,ctx={waitUntil(){}}){
     }
     const patch=await authorizeWrite(col,old,body,u,db.get,req.method);
     if(req.method==='DELETE'){
-      if(['cmsgs','threads','tmsgs','dmsgs'].includes(col))await db.put(col,{...old,deleted:true,text:'ההודעה הוסרה',body:'',updatedAt:now()},old);
-      else await db.remove(col,id);return json({ok:true});
+      if(['cmsgs','threads','tmsgs','dmsgs'].includes(col)){
+        await db.put(col,{...old,deleted:true,text:'ההודעה הוסרה',body:'',updatedAt:now()},old);
+      }else await db.remove(col,id);
+      if(['dmsgs','messages','cmsgs','tmsgs'].includes(col)){
+        const notifications=await db.list('notifications');
+        const href=col==='dmsgs'?`/dm/${old.convId}`:col==='messages'?`/ticket/${old.ticketId}`:'';
+        const stale=notifications.filter(item=>item.messageId===old.id||!item.messageId&&href&&item.href===href&&['directMessage','mention','ticketReply'].includes(item.type)&&String(item.text||'').includes(String(old.text||'').slice(0,120)));
+        await Promise.all(stale.map(item=>db.remove('notifications',item.id)));
+      }
+      return json({ok:true});
     }
     if('text' in patch)requireThat(typeof patch.text==='string'&&patch.text.trim().length>0&&patch.text.length<=12000,400,'נא להזין טקסט עד 12,000 תווים');
     const rec={...old,...patch,id:old?.id||(col==='config'?id:null)||nonce(),createdAt:old?.createdAt||now(),updatedAt:now()};

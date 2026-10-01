@@ -281,6 +281,14 @@ test('direct messages and call invitations notify the other participant',async()
  const notices=(await f.call('records/notifications','GET',null,'bob')).data;
  assert.equal(notices.length,1);assert.equal(notices[0].type,'callInvite');assert.equal(notices[0].href,`/dm/${conv.data.id}`);f.DB.close();
 });
+test('deleting a private message also removes its notification preview',async()=>{
+ const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'bob');
+ const conv=await f.call('records/dms','POST',{members:['alice','bob']});
+ const sent=await f.call('records/dmsgs','POST',{convId:conv.data.id,text:'הודעה שלא צריכה להישאר בהתראות'});
+ assert.equal((await f.call('records/notifications','GET',null,'bob')).data.filter(n=>n.messageId===sent.data.id).length,1);
+ const removed=await f.call('records/dmsgs/'+sent.data.id,'PATCH',{deleted:true});assert.equal(removed.status,200);
+ assert.equal((await f.call('records/notifications','GET',null,'bob')).data.filter(n=>n.messageId===sent.data.id).length,0);f.DB.close();
+});
 test('private messages persist validated media attachments',async()=>{
  const f=fixture();await f.call('session','GET',null,'alice');await f.call('session','GET',null,'bob');
  const conv=await f.call('records/dms','POST',{members:['alice','bob']});
